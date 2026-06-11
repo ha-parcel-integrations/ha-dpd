@@ -71,6 +71,13 @@ The raw payload is only logged when there is at least one incoming or outgoing s
 | Re-authentication prompt appears | DPD session expired and could not be refreshed silently; log in again |
 | Sensors not updating | Check **Settings → System → Logs** for `dpd` entries |
 
+## Related integrations
+
+Tracking parcels from other Dutch carriers:
+
+- [ha-dhl-nl](https://github.com/peternijssen/ha-dhl-nl) — DHL eCommerce NL parcel tracker
+- [ha-postnl](https://github.com/arjenbos/ha-postnl) — PostNL parcel tracker
+
 ## Disclaimer
 
 This is an independent, community-built project with no affiliation, endorsement, or connection to DPD or any of its subsidiaries. The DPD API used here is undocumented (reverse-engineered from the mobile app) and may change without notice.
