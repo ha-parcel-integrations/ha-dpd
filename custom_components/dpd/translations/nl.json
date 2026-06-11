@@ -1,0 +1,30 @@
+{
+  "title": "DPD",
+  "config": {
+    "step": {
+      "user": {
+        "title": "DPD",
+        "data": {
+          "email": "E-mailadres",
+          "password": "Wachtwoord",
+          "bu": "Land"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Opnieuw inloggen bij DPD",
+        "data": {
+          "email": "E-mailadres",
+          "password": "Wachtwoord"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan DPD niet bereiken. Controleer je netwerkverbinding.",
+      "invalid_auth": "Ongeldig e-mailadres of wachtwoord."
+    },
+    "abort": {
+      "already_configured": "Dit DPD-account is al geconfigureerd.",
+      "reauth_successful": "Opnieuw inloggen geslaagd."
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "title": "DPD",
+  "config": {
+    "step": {
+      "user": {
+        "title": "DPD",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "bu": "Country"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate DPD",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to reach DPD. Check your network.",
+      "invalid_auth": "Invalid email or password."
+    },
+    "abort": {
+      "already_configured": "This DPD account is already configured.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  }
+}
