@@ -23,7 +23,7 @@ def _make_entry(entry_id: str = "test_entry", title: str = "user@example.com") -
 
 
 def _shipment(
-    parcel_number: str = "01668235086385",
+    parcel_number: str = "01XXXXXXXXXXXX",
     description: str = "ORDER_CREATED",
     sender: str = "Test Sender",
     delivery_date: str | None = None,

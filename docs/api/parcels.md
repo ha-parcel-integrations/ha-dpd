@@ -52,9 +52,9 @@ The endpoint is a `POST` rather than a `GET` because the client tells the server
 
 ```json
 {
-  "parcelNumber": "01668235086385",
-  "shipmentId": "01668235086385",
-  "shipmentOriginalCode": "B2C0166823508638520260612",
+  "parcelNumber": "01XXXXXXXXXXXX",
+  "shipmentId": "01XXXXXXXXXXXX",
+  "shipmentOriginalCode": "B2CXXXXXXXXXXXXXXXXXXXXX",
   "senderName": "Ha-Ra GmbH",
   "status": {
     "status": 0,
@@ -62,8 +62,8 @@ The endpoint is a `POST` rather than a `GET` because the client tells the server
     "deliveryType": "HOME",
     "eventDateAndTime": "2026-06-12T10:24:18",
     "eventDateAndTimeZoneId": "Europe/Amsterdam",
-    "city": "St. Ingbert",
-    "countryCode": "DE",
+    "city": "Origin City",
+    "countryCode": "NL",
     "homeDelivery": true
   },
   "deliveryDate": "2026-06-05",

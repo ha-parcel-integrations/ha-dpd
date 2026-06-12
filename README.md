@@ -88,6 +88,7 @@ Tracking parcels from other Dutch carriers:
 
 - [ha-dhl-nl](https://github.com/peternijssen/ha-dhl-nl) — DHL eCommerce NL parcel tracker
 - [ha-postnl](https://github.com/arjenbos/ha-postnl) — PostNL parcel tracker
+- [ha-parcel-aggregator](https://github.com/peternijssen/ha-parcel-aggregator) — rolls up counts and next-delivery timestamps from all installed carrier integrations into a single set of sensors
 
 ## Disclaimer
 

@@ -28,7 +28,7 @@ def _mock_entry(filter_type: str = "days", filter_amount: int = 7) -> MagicMock:
 
 def _shipment(
     description: str = "DELIVERED",
-    parcel_number: str = "01668235086385",
+    parcel_number: str = "01XXXXXXXXXXXX",
     event_dt: str | None = None,
     tz_id: str | None = "Europe/Amsterdam",
     delivery_date: str | None = None,
