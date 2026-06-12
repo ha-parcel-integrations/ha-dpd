@@ -32,3 +32,12 @@ BUSINESS_UNITS = [
 ]
 
 DEFAULT_BU = "DPD-NL"
+
+# Terminal status — every other status.description is treated as "active".
+# Other values seen so far: ORDER_CREATED. More TBD once we observe in-transit parcels.
+DELIVERED_DESCRIPTION = "DELIVERED"
+
+CONF_DELIVERED_FILTER_TYPE = "delivered_filter_type"
+CONF_DELIVERED_FILTER_AMOUNT = "delivered_filter_amount"
+DEFAULT_DELIVERED_FILTER_TYPE = "days"
+DEFAULT_DELIVERED_FILTER_AMOUNT = 7

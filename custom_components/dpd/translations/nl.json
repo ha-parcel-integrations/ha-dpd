@@ -10,6 +10,17 @@
           "bu": "Land"
         }
       },
+      "delivered": {
+        "title": "Bezorgde pakketten",
+        "data": {
+          "delivered_filter_type": "Filteren op",
+          "delivered_filter_amount": "Aantal"
+        },
+        "data_description": {
+          "delivered_filter_type": "Toon bezorgde pakketten van de afgelopen X dagen, of beperk tot de X meest recente.",
+          "delivered_filter_amount": "Aantal dagen of pakketten om weer te geven."
+        }
+      },
       "reauth_confirm": {
         "title": "Opnieuw inloggen bij DPD",
         "data": {
@@ -25,6 +36,21 @@
     "abort": {
       "already_configured": "Dit DPD-account is al geconfigureerd.",
       "reauth_successful": "Opnieuw inloggen geslaagd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bezorgde pakketten",
+        "data": {
+          "delivered_filter_type": "Filteren op",
+          "delivered_filter_amount": "Aantal"
+        },
+        "data_description": {
+          "delivered_filter_type": "Toon bezorgde pakketten van de afgelopen X dagen, of beperk tot de X meest recente.",
+          "delivered_filter_amount": "Aantal dagen of pakketten om weer te geven."
+        }
+      }
     }
   }
 }

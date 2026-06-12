@@ -7,13 +7,28 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import DpdApiClient, DpdAuthError
-from .const import BUSINESS_UNITS, CONF_BU, DEFAULT_BU, DOMAIN
+from .const import (
+    BUSINESS_UNITS,
+    CONF_BU,
+    CONF_DELIVERED_FILTER_AMOUNT,
+    CONF_DELIVERED_FILTER_TYPE,
+    DEFAULT_BU,
+    DEFAULT_DELIVERED_FILTER_AMOUNT,
+    DEFAULT_DELIVERED_FILTER_TYPE,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +36,25 @@ _BU_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
         options=[selector.SelectOptionDict(**bu) for bu in BUSINESS_UNITS],
         mode=selector.SelectSelectorMode.DROPDOWN,
+    )
+)
+
+_FILTER_TYPE_SELECTOR = selector.SelectSelector(
+    selector.SelectSelectorConfig(
+        options=[
+            selector.SelectOptionDict(value="days", label="Days"),
+            selector.SelectOptionDict(value="parcels", label="Number of parcels"),
+        ],
+        mode=selector.SelectSelectorMode.LIST,
+    )
+)
+
+_FILTER_AMOUNT_SELECTOR = selector.NumberSelector(
+    selector.NumberSelectorConfig(
+        min=1,
+        max=365,
+        step=1,
+        mode=selector.NumberSelectorMode.BOX,
     )
 )
 
@@ -39,11 +73,33 @@ _REAUTH_SCHEMA = vol.Schema(
     }
 )
 
+_DELIVERED_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            CONF_DELIVERED_FILTER_TYPE, default=DEFAULT_DELIVERED_FILTER_TYPE
+        ): _FILTER_TYPE_SELECTOR,
+        vol.Required(
+            CONF_DELIVERED_FILTER_AMOUNT, default=DEFAULT_DELIVERED_FILTER_AMOUNT
+        ): _FILTER_AMOUNT_SELECTOR,
+    }
+)
+
 
 class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the UI-driven configuration flow for the DPD integration."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._email: str = ""
+        self._password: str = ""
+        self._bu: str = DEFAULT_BU
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> DpdOptionsFlowHandler:
+        """Return the options flow handler."""
+        return DpdOptionsFlowHandler(config_entry)
 
     async def _validate_credentials(self, email: str, password: str, bu: str) -> None:
         """Validate credentials against the live DPD auth flow."""
@@ -71,19 +127,40 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 await self.async_set_unique_id(f"{bu}:{email}")
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=email,
-                    data={
-                        CONF_EMAIL: email,
-                        CONF_PASSWORD: password,
-                        CONF_BU: bu,
-                    },
-                )
+                self._email = email
+                self._password = password
+                self._bu = bu
+                return await self.async_step_delivered()
 
         return self.async_show_form(
             step_id="user",
             data_schema=_USER_SCHEMA,
             errors=errors,
+        )
+
+    async def async_step_delivered(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the delivered-parcels filter form."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=self._email,
+                data={
+                    CONF_EMAIL: self._email,
+                    CONF_PASSWORD: self._password,
+                    CONF_BU: self._bu,
+                },
+                options={
+                    CONF_DELIVERED_FILTER_TYPE: user_input[CONF_DELIVERED_FILTER_TYPE],
+                    CONF_DELIVERED_FILTER_AMOUNT: int(
+                        user_input[CONF_DELIVERED_FILTER_AMOUNT]
+                    ),
+                },
+            )
+
+        return self.async_show_form(
+            step_id="delivered",
+            data_schema=_DELIVERED_SCHEMA,
         )
 
     async def async_step_reauth(
@@ -125,4 +202,48 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=_REAUTH_SCHEMA,
             errors=errors,
+        )
+
+
+class DpdOptionsFlowHandler(OptionsFlow):
+    """Handle DPD options (delivered parcels filter)."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the options form."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_DELIVERED_FILTER_TYPE: user_input[CONF_DELIVERED_FILTER_TYPE],
+                    CONF_DELIVERED_FILTER_AMOUNT: int(
+                        user_input[CONF_DELIVERED_FILTER_AMOUNT]
+                    ),
+                },
+            )
+
+        current = self._config_entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_DELIVERED_FILTER_TYPE,
+                        default=current.get(
+                            CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
+                        ),
+                    ): _FILTER_TYPE_SELECTOR,
+                    vol.Required(
+                        CONF_DELIVERED_FILTER_AMOUNT,
+                        default=current.get(
+                            CONF_DELIVERED_FILTER_AMOUNT,
+                            DEFAULT_DELIVERED_FILTER_AMOUNT,
+                        ),
+                    ): _FILTER_AMOUNT_SELECTOR,
+                }
+            ),
         )

@@ -10,6 +10,17 @@
           "bu": "Country"
         }
       },
+      "delivered": {
+        "title": "Delivered parcels",
+        "data": {
+          "delivered_filter_type": "Filter by",
+          "delivered_filter_amount": "Amount"
+        },
+        "data_description": {
+          "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
+          "delivered_filter_amount": "Number of days or parcels to show."
+        }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate DPD",
         "data": {
@@ -25,6 +36,21 @@
     "abort": {
       "already_configured": "This DPD account is already configured.",
       "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Delivered parcels",
+        "data": {
+          "delivered_filter_type": "Filter by",
+          "delivered_filter_amount": "Amount"
+        },
+        "data_description": {
+          "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
+          "delivered_filter_amount": "Number of days or parcels to show."
+        }
+      }
     }
   }
 }

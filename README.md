@@ -2,11 +2,12 @@
 
 A custom Home Assistant integration that tracks your DPD shipments.
 
-> **Status:** early development. The parcels endpoint is wired up but the parcel object structure is not yet fully known, so per-parcel and delivery-time sensors will be added once the response shape is mapped out.
-
 ## Features
 
-- Incoming and outgoing parcel count sensors
+- Incoming and outgoing active-parcel count sensors
+- Per-parcel sensor per active incoming shipment, with full status details as attributes
+- Configurable delivered-parcels sensor (last N days, or N most recent)
+- Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
 - Country (business unit) selection during setup — Netherlands available today, more to come
 
@@ -34,16 +35,26 @@ A custom Home Assistant integration that tracks your DPD shipments.
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **DPD**
 3. Enter your DPD **email**, **password**, and pick your **country**
-4. Click **Submit**
+4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
+5. Click **Submit**
+
+The delivered-parcels filter can be changed later via **Settings → Devices & Services → DPD → Configure**. Changes take effect on the next refresh — no reload required.
 
 ## Sensors
 
 | Entity | Description |
 |--------|-------------|
-| `sensor.<account>_dpd_incoming_parcels` | Number of incoming parcels; full list exposed as the `parcels` attribute |
-| `sensor.<account>_dpd_outgoing_parcels` | Number of outgoing shipments; full list exposed as the `shipments` attribute |
+| `sensor.<account>_dpd_incoming_parcels` | Number of active incoming parcels; full list on the `parcels` attribute |
+| `sensor.<account>_dpd_parcel_<number>` | Status of a single active incoming shipment, with the full DPD object on the attributes |
+| `sensor.<account>_dpd_delivered_parcels` | Recently delivered parcels (configurable window) |
+| `sensor.<account>_dpd_outgoing_parcels` | Number of active outgoing shipments; full list on the `shipments` attribute |
 
-More sensors (per-parcel status, next-delivery datetime, ServicePoint en-route/awaiting-pickup, delivered) will be added once the parcel object shape is mapped.
+Coming next (blocked on an in-transit data sample):
+
+- A next-delivery timestamp sensor
+- Separate sensors for ParcelShop-en-route and awaiting-pickup parcels
+
+See [issue #1](https://github.com/peternijssen/ha-dpd/issues/1) — extra data is very welcome.
 
 ## Debugging
 
