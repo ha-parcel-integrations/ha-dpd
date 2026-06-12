@@ -41,10 +41,8 @@ _BU_SELECTOR = selector.SelectSelector(
 
 _FILTER_TYPE_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
-        options=[
-            selector.SelectOptionDict(value="days", label="Days"),
-            selector.SelectOptionDict(value="parcels", label="Number of parcels"),
-        ],
+        options=["days", "parcels"],
+        translation_key=CONF_DELIVERED_FILTER_TYPE,
         mode=selector.SelectSelectorMode.LIST,
     )
 )

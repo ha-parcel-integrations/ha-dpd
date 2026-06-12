@@ -52,5 +52,13 @@
         }
       }
     }
+  },
+  "selector": {
+    "delivered_filter_type": {
+      "options": {
+        "days": "Days",
+        "parcels": "Number of parcels"
+      }
+    }
   }
 }
