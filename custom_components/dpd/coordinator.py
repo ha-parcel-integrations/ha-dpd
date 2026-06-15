@@ -40,6 +40,31 @@ def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
 
 
+def shipment_planned_dt(shipment: dict) -> datetime | None:
+    """Return the planned delivery datetime for an active shipment, or ``None``.
+
+    Uses ``deliveryDate`` (a ``YYYY-MM-DD`` string with no time component)
+    interpreted as midnight in the timezone reported by
+    ``status.eventDateAndTimeZoneId`` (falling back to UTC).
+    """
+    date_str = shipment.get("deliveryDate")
+    if not date_str:
+        return None
+    try:
+        d = datetime.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+    tz_id = (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
+    tz: timezone | ZoneInfo = timezone.utc
+    if tz_id:
+        try:
+            tz = ZoneInfo(tz_id)
+        except Exception:  # noqa: BLE001 - bad tz string from API
+            tz = timezone.utc
+    return d.replace(tzinfo=tz)
+
+
 def shipment_delivery_dt(shipment: dict) -> datetime | None:
     """Return the delivery datetime of a shipment, or ``None`` if unknown.
 

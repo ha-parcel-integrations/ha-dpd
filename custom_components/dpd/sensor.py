@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -14,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import DpdCoordinator
+from .coordinator import DpdCoordinator, shipment_planned_dt
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +46,8 @@ async def async_setup_entry(
         f"{entry_id}_incoming_parcels",
         f"{entry_id}_outgoing_parcels",
         f"{entry_id}_delivered_parcels",
+        f"{entry_id}_next_delivery",
+        f"{entry_id}_en_route_to_parcel_shop",
     }
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if (
@@ -57,6 +64,8 @@ async def async_setup_entry(
         ),
         DpdOutgoingParcelsSensor(coordinator, entry),
         DpdDeliveredParcelsSensor(coordinator, entry),
+        DpdNextDeliverySensor(coordinator, entry),
+        DpdEnRouteToParcelShopSensor(coordinator, entry),
     ]
     for parcel in current_parcels:
         parcel_number = parcel.get("parcelNumber", "")
@@ -244,3 +253,79 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
                 for p in self._parcels
             ]
         }
+
+
+class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Earliest expected delivery datetime across all active incoming DPD parcels.
+
+    DPD only exposes a delivery **date** (no time) for active parcels, so the
+    timestamp is midnight in the parcel's reported timezone — useful for
+    "delivery is today/tomorrow" automations rather than precise hour windows.
+    """
+
+    _attr_name = "DPD Next Delivery"
+    _attr_icon = "mdi:clock-fast"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_next_delivery"
+        self._attr_device_info = _build_device_info(entry)
+
+    def _delivery_moments(self) -> list[tuple[datetime, dict]]:
+        result: list[tuple[datetime, dict]] = []
+        for parcel in (self.coordinator.data or {}).get("incoming_active", []):
+            dt = shipment_planned_dt(parcel)
+            if dt is not None:
+                result.append((dt, parcel))
+        return result
+
+    @property
+    def native_value(self) -> datetime | None:
+        moments = self._delivery_moments()
+        return min(dt for dt, _ in moments) if moments else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        moments = self._delivery_moments()
+        if not moments:
+            return {}
+        _, earliest = min(moments, key=lambda x: x[0])
+        return {
+            "barcode": earliest.get("parcelNumber"),
+            "sender": earliest.get("senderName"),
+        }
+
+
+class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Active incoming DPD parcels destined for a ParcelShop pickup point.
+
+    Counts all non-delivered parcels with ``status.deliveryType == "PARCELSHOP"``.
+    DPD does not yet expose a distinct "arrived at ParcelShop" status, so this
+    sensor cannot separate in-transit from awaiting-collection parcels — a
+    separate awaiting-pickup sensor will be added once that status is mapped.
+    """
+
+    _attr_name = "DPD Parcels En Route to ParcelShop"
+    _attr_icon = "mdi:truck-delivery"
+    _attr_native_unit_of_measurement = "parcels"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_en_route_to_parcel_shop"
+        self._attr_device_info = _build_device_info(entry)
+
+    def _get_parcelshop_parcels(self) -> list[dict]:
+        return [
+            p for p in (self.coordinator.data or {}).get("incoming_active", [])
+            if (p.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+        ]
+
+    @property
+    def native_value(self) -> int:
+        return len(self._get_parcelshop_parcels())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"parcels": self._get_parcelshop_parcels()}

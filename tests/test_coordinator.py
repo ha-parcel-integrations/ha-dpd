@@ -14,6 +14,7 @@ from custom_components.dpd.coordinator import (
     filter_active_shipments,
     filter_delivered_shipments,
     shipment_delivery_dt,
+    shipment_planned_dt,
 )
 
 
@@ -100,6 +101,39 @@ def test_delivery_dt_returns_none_when_unknown():
 def test_delivery_dt_invalid_tz_falls_back_to_utc():
     dt = shipment_delivery_dt(
         _shipment(event_dt="2026-06-05T21:50:30", tz_id="Not/A/Zone")
+    )
+    assert dt is not None
+    assert dt.tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
+# shipment_planned_dt
+# ---------------------------------------------------------------------------
+
+
+def test_planned_dt_parses_delivery_date_at_local_midnight():
+    dt = shipment_planned_dt(
+        _shipment(event_dt=None, tz_id="Europe/Amsterdam", delivery_date="2026-06-17")
+    )
+    assert dt is not None
+    assert (dt.year, dt.month, dt.day) == (2026, 6, 17)
+    assert (dt.hour, dt.minute) == (0, 0)
+    assert dt.tzinfo is not None
+    # 00:00 Europe/Amsterdam is offset from UTC
+    assert dt.utcoffset() is not None
+
+
+def test_planned_dt_returns_none_when_no_date():
+    assert shipment_planned_dt(_shipment(event_dt=None, tz_id=None)) is None
+
+
+def test_planned_dt_returns_none_for_garbage_date():
+    assert shipment_planned_dt({"deliveryDate": "not a date"}) is None
+
+
+def test_planned_dt_falls_back_to_utc_for_bad_tz():
+    dt = shipment_planned_dt(
+        _shipment(event_dt=None, tz_id="Not/A/Zone", delivery_date="2026-06-17")
     )
     assert dt is not None
     assert dt.tzinfo is not None

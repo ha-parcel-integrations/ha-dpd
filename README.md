@@ -46,13 +46,14 @@ The delivered-parcels filter can be changed later via **Settings → Devices & S
 |--------|-------------|
 | `sensor.<account>_dpd_incoming_parcels` | Number of active incoming parcels; full list on the `parcels` attribute |
 | `sensor.<account>_dpd_parcel_<number>` | Status of a single active incoming shipment, with the full DPD object on the attributes |
+| `sensor.<account>_dpd_next_delivery` | Earliest expected delivery datetime across all active incoming parcels (date only — midnight in the parcel's timezone) |
+| `sensor.<account>_dpd_en_route_to_parcel_shop` | Active incoming parcels destined for a ParcelShop pickup point |
 | `sensor.<account>_dpd_delivered_parcels` | Recently delivered parcels (configurable window) |
 | `sensor.<account>_dpd_outgoing_parcels` | Number of active outgoing shipments; full list on the `shipments` attribute |
 
-Coming next (blocked on an in-transit data sample):
+Coming next (blocked on additional data):
 
-- A next-delivery timestamp sensor
-- Separate sensors for ParcelShop-en-route and awaiting-pickup parcels
+- A separate **awaiting-pickup** sensor — needs the DPD status value that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor.
 
 See [issue #1](https://github.com/peternijssen/ha-dpd/issues/1) — extra data is very welcome.
 
