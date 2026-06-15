@@ -80,23 +80,23 @@ The endpoint is a `POST` rather than a `GET` because the client tells the server
 | `shipmentId` | string | Appears identical to `parcelNumber` in samples seen |
 | `shipmentOriginalCode` | string | Internal sender code; not always present |
 | `senderName` | string | |
-| `status.status` | int | Numeric code: `0` = `ORDER_CREATED`, `5` = `DELIVERED`. Other values TBD. |
-| `status.description` | string | Enum; only `ORDER_CREATED` and `DELIVERED` observed so far |
+| `status.status` | int | Numeric code paired with `description`. Observed: `0` = `ORDER_CREATED`, `1` = `PARCEL_HANDED`, `5` = `DELIVERED`. |
+| `status.description` | string | Enum. Observed values: `ORDER_CREATED`, `PARCEL_HANDED`, `DELIVERED`. More likely exist (out-for-delivery, parcelshop arrival, etc.) — contributions welcome. |
 | `status.deliveryType` | string | `HOME` or `PARCELSHOP` |
 | `status.eventDateAndTime` | string | Naive ISO 8601 timestamp of the most recent status event |
 | `status.eventDateAndTimeZoneId` | string | IANA timezone identifier for `eventDateAndTime` |
 | `status.city` / `status.countryCode` | string | Location of the most recent event |
 | `status.homeDelivery` | bool | |
-| `deliveryDate` | string | `YYYY-MM-DD`. Only observed on delivered parcels — TBD whether it appears for in-transit parcels as the planned date |
+| `deliveryDate` | string | `YYYY-MM-DD`. For active parcels this is the **planned** delivery date (no time component). For delivered parcels it is the actual delivery date. |
 | `shipmentBUCode` | string | E.g. `"001"`, `"010"` — meaning TBD |
 | `shipmentType` | string | `SHIPMENT` observed |
 
 ### What we still need
 
-We have not yet observed a parcel in the in-transit states. Once one is captured we can confirm:
+We have partial in-transit data (`ORDER_CREATED` and `PARCEL_HANDED`). Still TBD:
 
-- The full set of `status.description` values (likely `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `AT_PARCELSHOP`, etc.)
-- Whether a planned-delivery date or window field exists for in-transit parcels
+- The remaining `status.description` values (out-for-delivery, parcelshop arrival, etc.)
+- Whether a finer-grained delivery time (window/hours) exists for in-transit parcels — so far only the calendar date is exposed
 - The shipment fields that identify a target parcelshop (name/address)
 
 Contributions welcome — see [issue #1](https://github.com/peternijssen/ha-dpd/issues/1).
