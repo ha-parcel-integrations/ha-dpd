@@ -102,6 +102,8 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_icon = "mdi:package-variant-closed"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(
         self,
@@ -151,6 +153,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Per-parcel sensor reporting the status of a single active incoming shipment."""
 
     _attr_icon = "mdi:package-variant-closed"
+    _attr_attribution = "Data provided by DPD"
 
     def __init__(
         self,
@@ -197,6 +200,8 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_icon = "mdi:package-variant-closed"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"shipments"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -223,6 +228,8 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
     _attr_icon = "mdi:package-variant"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -263,6 +270,7 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_name = "DPD Next Delivery"
     _attr_icon = "mdi:clock-fast"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_attribution = "Data provided by DPD"
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -307,6 +315,8 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     _attr_icon = "mdi:truck-delivery"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
