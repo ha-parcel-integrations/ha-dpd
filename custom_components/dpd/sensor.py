@@ -18,19 +18,23 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import DpdConfigEntry
 from .const import DOMAIN
 from .coordinator import DpdCoordinator, shipment_planned_dt
 
 _LOGGER = logging.getLogger(__name__)
 
+# The DataUpdateCoordinator handles fan-out; HA's per-entity throttling adds nothing.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: DpdConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DPD sensor entities from a config entry."""
-    coordinator: DpdCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = entry.runtime_data.coordinator
     await coordinator.async_config_entry_first_refresh()
 
     current_parcels: list[dict] = (coordinator.data or {}).get("incoming_active", [])
@@ -89,9 +93,9 @@ def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
 class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Summary sensor reporting the count of active incoming DPD parcels.
 
-    Also manages the lifecycle of per-parcel :class:`DpdParcelSensor` entities:
-    new parcel numbers are added and stale ones are removed from the entity
-    registry whenever the coordinator data changes.
+    Spawns a per-parcel :class:`DpdParcelSensor` whenever a new parcel number
+    appears. Stale per-parcel sensors remove themselves once their number
+    drops out of the coordinator data — see ``DpdParcelSensor``.
     """
 
     _attr_name = "DPD Incoming Parcels"
@@ -126,32 +130,18 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         return {"parcels": self._parcels}
 
     def _handle_coordinator_update(self) -> None:
-        current_parcels = self._parcels
         current_numbers = {
             p.get("parcelNumber", "")
-            for p in current_parcels
+            for p in self._parcels
             if p.get("parcelNumber")
         }
 
         new_numbers = current_numbers - self._known_parcel_numbers
         if new_numbers:
             self._async_add_entities(
-                [
-                    DpdParcelSensor(self.coordinator, self._entry, n)
-                    for n in new_numbers
-                ]
+                DpdParcelSensor(self.coordinator, self._entry, n)
+                for n in new_numbers
             )
-
-        stale_numbers = self._known_parcel_numbers - current_numbers
-        if stale_numbers and self.hass is not None:
-            registry = er.async_get(self.hass)
-            entry_id = self._entry.entry_id
-            for number in stale_numbers:
-                entity_id = registry.async_get_entity_id(
-                    "sensor", DOMAIN, f"{entry_id}_{number}"
-                )
-                if entity_id:
-                    registry.async_remove(entity_id)
 
         self._known_parcel_numbers = current_numbers
         super()._handle_coordinator_update()
@@ -191,6 +181,13 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         parcel = self._get_parcel()
         return dict(parcel) if parcel else {}
+
+    def _handle_coordinator_update(self) -> None:
+        """Self-remove once this parcel falls out of the coordinator data."""
+        if self._get_parcel() is None and self.hass is not None:
+            self.hass.async_create_task(self.async_remove(force_remove=True))
+            return
+        super()._handle_coordinator_update()
 
 
 class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):

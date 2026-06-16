@@ -194,6 +194,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PASSWORD: password,
                     },
                 )
+                await self.hass.config_entries.async_reload(reauth_entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
 
         return self.async_show_form(

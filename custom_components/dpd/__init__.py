@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import aiohttp
 
@@ -12,13 +13,24 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import DpdApiClient, DpdAuthError
-from .const import CONF_BU, DEFAULT_BU, DOMAIN, PLATFORMS
+from .const import CONF_BU, DEFAULT_BU, PLATFORMS
 from .coordinator import DpdCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+@dataclass
+class DpdData:
+    """Runtime data attached to a DPD config entry."""
+
+    client: DpdApiClient
+    coordinator: DpdCoordinator
+
+
+type DpdConfigEntry = ConfigEntry[DpdData]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     """Set up DPD from a config entry."""
     session = async_get_clientsession(hass)
     client = DpdApiClient(
@@ -36,28 +48,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc
 
     coordinator = DpdCoordinator(hass, client, entry)
-
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "client": client,
-        "coordinator": coordinator,
-    }
+    entry.runtime_data = DpdData(client=client, coordinator=coordinator)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     entry.async_on_unload(entry.add_update_listener(_async_update_options))
-
     return True
 
 
-async def _async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_update_options(hass: HomeAssistant, entry: DpdConfigEntry) -> None:
     """Refresh the coordinator immediately when options are changed."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    await coordinator.async_request_refresh()
+    await entry.runtime_data.coordinator.async_request_refresh()
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     """Unload a DPD config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -120,8 +120,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         try:
             payload = await self._client.async_get_parcels()
         except DpdAuthError as err:
+            _LOGGER.error("DPD authentication failed: %s", err)
             raise ConfigEntryAuthFailed("DPD authentication failed") from err
         except (DpdApiError, aiohttp.ClientError) as err:
+            _LOGGER.warning("DPD parcels endpoint unreachable: %s", err)
             raise UpdateFailed(f"DPD error: {err}") from err
 
         incoming = payload.get("incomingShipments") or []
