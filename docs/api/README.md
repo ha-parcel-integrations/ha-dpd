@@ -6,6 +6,7 @@ The DPD endpoints used by this integration are reverse-engineered from the **myD
 |----------|-------------|
 | [auth.md](auth.md) | Three-step authentication: Keycloak login → mobile-app guest token → consignee SSO exchange |
 | [parcels.md](parcels.md) | Polled endpoint that returns the user's incoming and outgoing shipments |
+| [fmp.md](fmp.md) | Follow My Parcel — per-parcel sub-API for the precise delivery-window (`from` / `to` time range) on the day of delivery |
 
 ## Common conventions
 
