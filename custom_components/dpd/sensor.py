@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import DpdConfigEntry
 from .const import DOMAIN
-from .coordinator import DpdCoordinator, shipment_planned_dt
+from .coordinator import DpdCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ async def async_setup_entry(
 
     current_parcels: list[dict] = (coordinator.data or {}).get("incoming_active", [])
     current_numbers: set[str] = {
-        p.get("parcelNumber", "") for p in current_parcels if p.get("parcelNumber")
+        p.get("barcode", "") for p in current_parcels if p.get("barcode")
     }
 
     # Drop per-parcel entries from the registry that are no longer active —
@@ -72,9 +72,9 @@ async def async_setup_entry(
         DpdEnRouteToParcelShopSensor(coordinator, entry),
     ]
     for parcel in current_parcels:
-        parcel_number = parcel.get("parcelNumber", "")
-        if parcel_number:
-            entities.append(DpdParcelSensor(coordinator, entry, parcel_number))
+        barcode = parcel.get("barcode", "")
+        if barcode:
+            entities.append(DpdParcelSensor(coordinator, entry, barcode))
 
     async_add_entities(entities)
 
@@ -133,9 +133,9 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     def _handle_coordinator_update(self) -> None:
         current_numbers = {
-            p.get("parcelNumber", "")
+            p.get("barcode", "")
             for p in self._parcels
-            if p.get("parcelNumber")
+            if p.get("barcode")
         }
 
         new_numbers = current_numbers - self._known_parcel_numbers
@@ -150,26 +150,27 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
 
 class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
-    """Per-parcel sensor reporting the status of a single active incoming shipment."""
+    """Per-parcel sensor reporting the canonical ParcelStatus of a single active incoming shipment."""
 
     _attr_icon = "mdi:package-variant-closed"
     _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"raw"})
 
     def __init__(
         self,
         coordinator: DpdCoordinator,
         entry: ConfigEntry,
-        parcel_number: str,
+        barcode: str,
     ) -> None:
         super().__init__(coordinator)
-        self._parcel_number = parcel_number
-        self._attr_unique_id = f"{entry.entry_id}_{parcel_number}"
-        self._attr_name = f"DPD Parcel {parcel_number}"
+        self._barcode = barcode
+        self._attr_unique_id = f"{entry.entry_id}_{barcode}"
+        self._attr_name = f"DPD Parcel {barcode}"
         self._attr_device_info = _build_device_info(entry)
 
     def _get_parcel(self) -> dict[str, Any] | None:
         for parcel in (self.coordinator.data or {}).get("incoming_active", []):
-            if parcel.get("parcelNumber") == self._parcel_number:
+            if parcel.get("barcode") == self._barcode:
                 return parcel
         return None
 
@@ -178,7 +179,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         parcel = self._get_parcel()
         if not parcel:
             return None
-        return (parcel.get("status") or {}).get("description")
+        return parcel.get("status")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -246,27 +247,15 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "parcels": [
-                {
-                    "parcelNumber": p.get("parcelNumber"),
-                    "sender": p.get("senderName"),
-                    "status": (p.get("status") or {}).get("description"),
-                    "delivery_date": p.get("deliveryDate"),
-                    "plannedDeliveryFrom": p.get("plannedDeliveryFrom"),
-                    "plannedDeliveryTo": p.get("plannedDeliveryTo"),
-                }
-                for p in self._parcels
-            ]
-        }
+        return {"parcels": self._parcels}
 
 
 class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Earliest expected delivery datetime across all active incoming DPD parcels.
 
-    DPD only exposes a delivery **date** (no time) for active parcels, so the
-    timestamp is midnight in the parcel's reported timezone — useful for
-    "delivery is today/tomorrow" automations rather than precise hour windows.
+    Reads each parcel's ``planned_from`` (set by the coordinator's
+    normalisation step from the Follow My Parcel window when available
+    and the calendar-day midnight otherwise) and picks the earliest.
     """
 
     _attr_name = "DPD Next Delivery"
@@ -282,9 +271,14 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def _delivery_moments(self) -> list[tuple[datetime, dict]]:
         result: list[tuple[datetime, dict]] = []
         for parcel in (self.coordinator.data or {}).get("incoming_active", []):
-            dt = shipment_planned_dt(parcel)
-            if dt is not None:
-                result.append((dt, parcel))
+            iso = parcel.get("planned_from")
+            if not iso:
+                continue
+            try:
+                dt = datetime.fromisoformat(iso)
+            except ValueError:
+                continue
+            result.append((dt, parcel))
         return result
 
     @property
@@ -299,8 +293,8 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
             return {}
         _, earliest = min(moments, key=lambda x: x[0])
         return {
-            "barcode": earliest.get("parcelNumber"),
-            "sender": earliest.get("senderName"),
+            "barcode": earliest.get("barcode"),
+            "sender": earliest.get("sender"),
         }
 
 
@@ -328,7 +322,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     def _get_parcelshop_parcels(self) -> list[dict]:
         return [
             p for p in (self.coordinator.data or {}).get("incoming_active", [])
-            if (p.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+            if p.get("pickup")
         ]
 
     @property

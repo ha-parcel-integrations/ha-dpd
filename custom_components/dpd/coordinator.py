@@ -100,6 +100,60 @@ def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
 
 
+def _tracking_url(parcel: dict) -> str | None:
+    """Build the DPD tracking URL for a parcel, or ``None`` when no parcelNumber.
+
+    The ``/nl/`` segment is hardcoded while only DPD-NL is supported as
+    a business unit — see CLAUDE.md. When more BUs are added, map each
+    to its tracking-page country code.
+    """
+    parcel_number = parcel.get("parcelNumber")
+    if not parcel_number:
+        return None
+    return (
+        f"https://www.dpdgroup.com/nl/mydpd/my-parcels/search?"
+        f"parcelNumber={parcel_number}"
+    )
+
+
+def normalize_parcel(parcel: dict) -> dict:
+    """Return a carrier-agnostic parcel dict with the DPD payload under ``raw``.
+
+    Mirrors the shape every other carrier integration (DHL, PostNL)
+    publishes, so the parcel aggregator and cross-carrier dashboards
+    can read parcels the same way regardless of source. The original
+    DPD shipment object stays available under ``raw``.
+
+    ``planned_from`` / ``planned_to`` are read from the
+    ``plannedDeliveryFrom`` / ``plannedDeliveryTo`` annotations added
+    by :func:`annotate_planned_delivery` (FMP window when available,
+    full-day fallback otherwise), and cleared for delivered parcels
+    where ``delivered_at`` carries the actual moment instead.
+    """
+    description = _description(parcel)
+    delivered = description == DELIVERED_DESCRIPTION
+    delivered_at: str | None = None
+    if delivered:
+        dt = shipment_delivery_dt(parcel)
+        delivered_at = dt.isoformat() if dt else None
+    is_pickup = (parcel.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+    return {
+        "carrier": "DPD",
+        "barcode": parcel.get("parcelNumber"),
+        "sender": parcel.get("senderName"),
+        "status": map_parcel_status(parcel),
+        "raw_status": description,
+        "delivered": delivered,
+        "delivered_at": delivered_at,
+        "planned_from": None if delivered else parcel.get("plannedDeliveryFrom"),
+        "planned_to": None if delivered else parcel.get("plannedDeliveryTo"),
+        "pickup": is_pickup,
+        "pickup_point": None,
+        "url": _tracking_url(parcel),
+        "raw": parcel,
+    }
+
+
 def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime | None]:
     """Return the planned ``(from, to)`` delivery window for a shipment.
 
@@ -278,9 +332,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             _LOGGER.debug("DPD raw parcels payload: %s", payload)
 
         return {
-            "incoming_active": incoming_active,
-            "incoming_delivered": incoming_delivered,
-            "outgoing_active": outgoing_active,
+            "incoming_active": [normalize_parcel(p) for p in incoming_active],
+            "incoming_delivered": [normalize_parcel(p) for p in incoming_delivered],
+            "outgoing_active": [normalize_parcel(p) for p in outgoing_active],
         }
 
     async def _enrich_with_fmp(self, shipments: list[dict]) -> None:

@@ -1,7 +1,16 @@
-"""Tests for DPD sensor property logic."""
+"""Tests for DPD sensor property logic.
+
+The sensors read from ``coordinator.data``, which after the 1.x → 2.0
+normalisation now carries carrier-agnostic parcel dicts (``barcode``,
+``status`` enum, ``planned_from`` / ``planned_to`` ISO strings,
+``pickup`` bool, etc.). The ``_parcel`` helper here builds that
+shape directly — bypassing the coordinator's raw-to-normalised
+transformation tested in ``test_coordinator.py``.
+"""
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.sensor import (
     DpdDeliveredParcelsSensor,
     DpdEnRouteToParcelShopSensor,
@@ -25,24 +34,31 @@ def _make_entry(entry_id: str = "test_entry", title: str = "user@example.com") -
     return entry
 
 
-def _shipment(
-    parcel_number: str = "01XXXXXXXXXXXX",
-    description: str = "ORDER_CREATED",
+def _parcel(
+    barcode: str = "01XXXXXXXXXXXX",
+    status: ParcelStatus = ParcelStatus.REGISTERED,
     sender: str = "Test Sender",
-    delivery_date: str | None = None,
-    delivery_type: str = "HOME",
-    tz_id: str = "Europe/Amsterdam",
+    pickup: bool = False,
+    planned_from: str | None = None,
+    planned_to: str | None = None,
+    delivered: bool = False,
+    delivered_at: str | None = None,
+    raw: dict | None = None,
 ) -> dict:
     return {
-        "parcelNumber": parcel_number,
-        "shipmentId": parcel_number,
-        "senderName": sender,
-        "status": {
-            "description": description,
-            "deliveryType": delivery_type,
-            "eventDateAndTimeZoneId": tz_id,
-        },
-        "deliveryDate": delivery_date,
+        "carrier": "DPD",
+        "barcode": barcode,
+        "sender": sender,
+        "status": status,
+        "raw_status": "ORDER_CREATED",
+        "delivered": delivered,
+        "delivered_at": delivered_at,
+        "planned_from": planned_from,
+        "planned_to": planned_to,
+        "pickup": pickup,
+        "pickup_point": None,
+        "url": f"https://www.dpdgroup.com/nl/mydpd/my-parcels/search?parcelNumber={barcode}",
+        "raw": raw if raw is not None else {"_": "raw payload"},
     }
 
 
@@ -53,7 +69,7 @@ def _shipment(
 
 def test_incoming_sensor_counts_active_parcels():
     coordinator = _make_coordinator({
-        "incoming_active": [_shipment("A"), _shipment("B")],
+        "incoming_active": [_parcel("A"), _parcel("B")],
         "incoming_delivered": [],
         "outgoing_active": [],
     })
@@ -79,23 +95,36 @@ def test_incoming_sensor_unique_id_uses_entry_id():
 # ---------------------------------------------------------------------------
 
 
-def test_parcel_sensor_returns_status_description():
-    parcel = _shipment("X1", description="OUT_FOR_DELIVERY")
-    coordinator = _make_coordinator({"incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": []})
+def test_parcel_sensor_returns_parcel_status_enum_value():
+    parcel = _parcel("X1", status=ParcelStatus.OUT_FOR_DELIVERY)
+    coordinator = _make_coordinator({
+        "incoming_active": [parcel],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+    })
     sensor = DpdParcelSensor(coordinator, _make_entry(), "X1")
-    assert sensor.native_value == "OUT_FOR_DELIVERY"
+    assert sensor.native_value == ParcelStatus.OUT_FOR_DELIVERY
+    assert sensor.native_value == "out_for_delivery"
 
 
 def test_parcel_sensor_returns_none_when_missing():
-    coordinator = _make_coordinator({"incoming_active": [_shipment("A")], "incoming_delivered": [], "outgoing_active": []})
+    coordinator = _make_coordinator({
+        "incoming_active": [_parcel("A")],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+    })
     sensor = DpdParcelSensor(coordinator, _make_entry(), "MISSING")
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
 
 
 def test_parcel_sensor_attributes_contain_full_parcel():
-    parcel = _shipment("A")
-    coordinator = _make_coordinator({"incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": []})
+    parcel = _parcel("A")
+    coordinator = _make_coordinator({
+        "incoming_active": [parcel],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+    })
     sensor = DpdParcelSensor(coordinator, _make_entry(), "A")
     assert sensor.extra_state_attributes == parcel
 
@@ -115,7 +144,7 @@ def test_outgoing_sensor_counts_active_shipments():
     coordinator = _make_coordinator({
         "incoming_active": [],
         "incoming_delivered": [],
-        "outgoing_active": [_shipment("X"), _shipment("Y")],
+        "outgoing_active": [_parcel("X"), _parcel("Y")],
     })
     sensor = DpdOutgoingParcelsSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
@@ -135,7 +164,10 @@ def test_outgoing_sensor_zero_when_no_data():
 def test_delivered_sensor_count_matches_coordinator():
     coordinator = _make_coordinator({
         "incoming_active": [],
-        "incoming_delivered": [_shipment("A", "DELIVERED"), _shipment("B", "DELIVERED")],
+        "incoming_delivered": [
+            _parcel("A", status=ParcelStatus.DELIVERED, delivered=True),
+            _parcel("B", status=ParcelStatus.DELIVERED, delivered=True),
+        ],
         "outgoing_active": [],
     })
     sensor = DpdDeliveredParcelsSensor(coordinator, _make_entry())
@@ -148,29 +180,21 @@ def test_delivered_sensor_zero_when_no_data():
     assert sensor.extra_state_attributes == {"parcels": []}
 
 
-def test_delivered_sensor_attributes_summarise_parcels():
-    parcel = _shipment("A", "DELIVERED", sender="Ha-Ra GmbH", delivery_date="2026-06-05")
-    parcel["plannedDeliveryFrom"] = "2026-06-05T00:00:00+02:00"
-    parcel["plannedDeliveryTo"] = "2026-06-05T23:59:59+02:00"
+def test_delivered_sensor_attributes_pass_through_normalized_parcels():
+    parcel = _parcel(
+        "A",
+        status=ParcelStatus.DELIVERED,
+        sender="Ha-Ra GmbH",
+        delivered=True,
+        delivered_at="2026-06-05T14:23:12+02:00",
+    )
     coordinator = _make_coordinator({
         "incoming_active": [],
         "incoming_delivered": [parcel],
         "outgoing_active": [],
     })
     sensor = DpdDeliveredParcelsSensor(coordinator, _make_entry())
-    attrs = sensor.extra_state_attributes
-    assert attrs == {
-        "parcels": [
-            {
-                "parcelNumber": "A",
-                "sender": "Ha-Ra GmbH",
-                "status": "DELIVERED",
-                "delivery_date": "2026-06-05",
-                "plannedDeliveryFrom": "2026-06-05T00:00:00+02:00",
-                "plannedDeliveryTo": "2026-06-05T23:59:59+02:00",
-            }
-        ]
-    }
+    assert sensor.extra_state_attributes == {"parcels": [parcel]}
 
 
 # ---------------------------------------------------------------------------
@@ -178,11 +202,11 @@ def test_delivered_sensor_attributes_summarise_parcels():
 # ---------------------------------------------------------------------------
 
 
-def test_next_delivery_picks_earliest_planned_date():
+def test_next_delivery_picks_earliest_planned_from():
     parcels = [
-        _shipment(parcel_number="A", delivery_date="2026-06-20"),
-        _shipment(parcel_number="B", delivery_date="2026-06-17"),
-        _shipment(parcel_number="C", delivery_date="2026-06-19"),
+        _parcel("A", planned_from="2026-06-20T10:00:00+02:00"),
+        _parcel("B", planned_from="2026-06-17T08:00:00+02:00"),
+        _parcel("C", planned_from="2026-06-19T15:00:00+02:00"),
     ]
     coordinator = _make_coordinator({
         "incoming_active": parcels,
@@ -192,27 +216,31 @@ def test_next_delivery_picks_earliest_planned_date():
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     result = sensor.native_value
     assert result is not None
-    assert (result.year, result.month, result.day) == (2026, 6, 17)
+    assert (result.year, result.month, result.day, result.hour) == (2026, 6, 17, 8)
 
 
 def test_next_delivery_attributes_describe_earliest_parcel():
     parcels = [
-        _shipment(parcel_number="A", sender="Sender A", delivery_date="2026-06-17"),
-        _shipment(parcel_number="B", sender="Sender B", delivery_date="2026-06-20"),
+        _parcel("A", sender="Sender A", planned_from="2026-06-17T10:00:00+02:00"),
+        _parcel("B", sender="Sender B", planned_from="2026-06-20T10:00:00+02:00"),
     ]
-    coordinator = _make_coordinator({"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []})
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     attrs = sensor.extra_state_attributes
     assert attrs["barcode"] == "A"
     assert attrs["sender"] == "Sender A"
 
 
-def test_next_delivery_skips_parcels_without_date():
+def test_next_delivery_skips_parcels_without_planned_from():
     parcels = [
-        _shipment(parcel_number="A", delivery_date=None),
-        _shipment(parcel_number="B", delivery_date="2026-06-17"),
+        _parcel("A", planned_from=None),
+        _parcel("B", planned_from="2026-06-17T10:00:00+02:00"),
     ]
-    coordinator = _make_coordinator({"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []})
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     assert sensor.native_value is not None
     assert sensor.extra_state_attributes["barcode"] == "B"
@@ -224,9 +252,11 @@ def test_next_delivery_none_when_no_parcels():
     assert sensor.extra_state_attributes == {}
 
 
-def test_next_delivery_none_when_no_dates():
-    parcels = [_shipment(parcel_number="A", delivery_date=None)]
-    coordinator = _make_coordinator({"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []})
+def test_next_delivery_none_when_no_planned_from():
+    parcels = [_parcel("A", planned_from=None)]
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     assert sensor.native_value is None
 
@@ -236,20 +266,24 @@ def test_next_delivery_none_when_no_dates():
 # ---------------------------------------------------------------------------
 
 
-def test_en_route_counts_parcelshop_parcels():
+def test_en_route_counts_pickup_parcels():
     parcels = [
-        _shipment(parcel_number="A", delivery_type="PARCELSHOP"),
-        _shipment(parcel_number="B", delivery_type="HOME"),
-        _shipment(parcel_number="C", delivery_type="PARCELSHOP"),
+        _parcel("A", pickup=True),
+        _parcel("B", pickup=False),
+        _parcel("C", pickup=True),
     ]
-    coordinator = _make_coordinator({"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []})
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
 
 def test_en_route_excludes_home_delivery():
-    parcels = [_shipment(parcel_number="A", delivery_type="HOME")]
-    coordinator = _make_coordinator({"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []})
+    parcels = [_parcel("A", pickup=False)]
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
     assert sensor.native_value == 0
 
@@ -260,7 +294,9 @@ def test_en_route_zero_when_no_parcels():
 
 
 def test_en_route_attribute_lists_parcels():
-    parcel = _shipment(parcel_number="A", delivery_type="PARCELSHOP")
-    coordinator = _make_coordinator({"incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": []})
+    parcel = _parcel("A", pickup=True)
+    coordinator = _make_coordinator({
+        "incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": [],
+    })
     sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
     assert sensor.extra_state_attributes == {"parcels": [parcel]}

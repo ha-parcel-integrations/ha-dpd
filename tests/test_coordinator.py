@@ -200,8 +200,8 @@ async def test_coordinator_splits_active_and_delivered(hass):
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
     result = await coordinator._async_update_data()
 
-    assert [s["parcelNumber"] for s in result["incoming_active"]] == ["A"]
-    assert [s["parcelNumber"] for s in result["incoming_delivered"]] == ["B"]
+    assert [s["barcode"] for s in result["incoming_active"]] == ["A"]
+    assert [s["barcode"] for s in result["incoming_delivered"]] == ["B"]
     # Outgoing delivered shipments are dropped entirely.
     assert result["outgoing_active"] == []
 
@@ -508,10 +508,16 @@ async def test_coordinator_annotates_all_buckets_with_planned_window(hass):
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
     result = await coordinator._async_update_data()
 
-    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active"):
-        for shipment in result[bucket]:
-            assert shipment["plannedDeliveryFrom"] is not None
-            assert shipment["plannedDeliveryTo"] is not None
+    # Active buckets carry the from/to on top-level normalised fields;
+    # delivered parcels expose them under `raw` only (planned_* is None
+    # because delivered_at carries the truth instead).
+    for parcel in result["incoming_active"] + result["outgoing_active"]:
+        assert parcel["planned_from"] is not None
+        assert parcel["planned_to"] is not None
+    for parcel in result["incoming_delivered"]:
+        assert parcel["planned_from"] is None
+        assert parcel["planned_to"] is None
+        assert parcel["raw"]["plannedDeliveryFrom"] is not None
 
 
 async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
@@ -533,5 +539,6 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
     result = await coordinator._async_update_data()
 
     client.async_fmp_delivery_window.assert_awaited_once_with("hashA")
-    assert result["incoming_active"][0]["fmpDeliveryDateAndTime"] == window
-    assert "fmpDeliveryDateAndTime" not in result["incoming_active"][1]
+    # FMP window lives under the preserved `raw` payload after normalisation.
+    assert result["incoming_active"][0]["raw"]["fmpDeliveryDateAndTime"] == window
+    assert "fmpDeliveryDateAndTime" not in result["incoming_active"][1]["raw"]
