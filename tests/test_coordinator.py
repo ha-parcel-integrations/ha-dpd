@@ -11,8 +11,11 @@ from custom_components.dpd.const import (
 )
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
+    _unknown_descriptions_logged,
     filter_active_shipments,
     filter_delivered_shipments,
+    fmp_hashcode,
+    log_unknown_descriptions,
     shipment_delivery_dt,
     shipment_planned_dt,
 )
@@ -33,15 +36,21 @@ def _shipment(
     event_dt: str | None = None,
     tz_id: str | None = "Europe/Amsterdam",
     delivery_date: str | None = None,
+    fmp_hashcode: str | None = None,
+    fmp_window: dict | None = None,
 ) -> dict:
     status: dict = {"description": description}
     if event_dt is not None:
         status["eventDateAndTime"] = event_dt
     if tz_id is not None:
         status["eventDateAndTimeZoneId"] = tz_id
-    out = {"parcelNumber": parcel_number, "status": status}
+    out: dict = {"parcelNumber": parcel_number, "status": status}
     if delivery_date is not None:
         out["deliveryDate"] = delivery_date
+    if fmp_hashcode is not None:
+        out["availableActions"] = {"FOLLOW_MY_PARCEL": [{"hashcode": fmp_hashcode}]}
+    if fmp_window is not None:
+        out["fmpDeliveryDateAndTime"] = fmp_window
     return out
 
 
@@ -232,3 +241,183 @@ async def test_coordinator_raises_update_failed_on_api_error(hass):
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
+
+
+# ---------------------------------------------------------------------------
+# log_unknown_descriptions
+# ---------------------------------------------------------------------------
+
+
+def test_known_descriptions_are_not_logged(caplog):
+    _unknown_descriptions_logged.clear()
+    caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
+    log_unknown_descriptions([
+        _shipment("ORDER_CREATED"),
+        _shipment("PARCEL_OUT_FOR_DELIVERY"),
+        _shipment("DELIVERED"),
+    ])
+    assert "not yet catalogued" not in caplog.text
+
+
+def test_unknown_description_is_logged_once(caplog):
+    _unknown_descriptions_logged.clear()
+    caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
+    log_unknown_descriptions([_shipment("TIME_TRAVELLING")])
+    log_unknown_descriptions([_shipment("TIME_TRAVELLING")])
+    log_unknown_descriptions([_shipment("TIME_TRAVELLING")])
+    assert caplog.text.count("TIME_TRAVELLING") == 1
+
+
+def test_unknown_descriptions_each_logged_once(caplog):
+    _unknown_descriptions_logged.clear()
+    caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
+    log_unknown_descriptions([
+        _shipment("MYSTERY_ONE"),
+        _shipment("MYSTERY_TWO"),
+        _shipment("MYSTERY_ONE"),  # repeat — should not log again
+    ])
+    assert caplog.text.count("MYSTERY_ONE") == 1
+    assert caplog.text.count("MYSTERY_TWO") == 1
+
+
+def test_missing_description_is_ignored(caplog):
+    _unknown_descriptions_logged.clear()
+    caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
+    log_unknown_descriptions([{"parcelNumber": "X"}, {"parcelNumber": "Y", "status": {}}])
+    assert "not yet catalogued" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# fmp_hashcode
+# ---------------------------------------------------------------------------
+
+
+def test_fmp_hashcode_picks_from_available_actions():
+    assert fmp_hashcode(_shipment(fmp_hashcode="abc")) == "abc"
+
+
+def test_fmp_hashcode_returns_none_when_action_missing():
+    assert fmp_hashcode(_shipment()) is None
+
+
+def test_fmp_hashcode_returns_none_when_actions_empty():
+    shipment = _shipment()
+    shipment["availableActions"] = {"FOLLOW_MY_PARCEL": []}
+    assert fmp_hashcode(shipment) is None
+
+
+def test_fmp_hashcode_returns_none_when_action_has_no_hashcode():
+    shipment = _shipment()
+    shipment["availableActions"] = {"FOLLOW_MY_PARCEL": [{}]}
+    assert fmp_hashcode(shipment) is None
+
+
+def test_fmp_hashcode_returns_none_for_empty_string():
+    assert fmp_hashcode(_shipment(fmp_hashcode="")) is None
+
+
+# ---------------------------------------------------------------------------
+# shipment_planned_dt with Follow My Parcel window
+# ---------------------------------------------------------------------------
+
+
+def test_planned_dt_prefers_fmp_window_over_date_midnight():
+    fmp = {
+        "deliveryDate": "2026-06-17",
+        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+    }
+    dt = shipment_planned_dt(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    ))
+    assert dt is not None
+    assert (dt.hour, dt.minute, dt.second) == (10, 34, 0)
+    assert dt.tzinfo is not None
+
+
+def test_planned_dt_falls_back_to_midnight_when_fmp_window_lacks_from():
+    fmp = {"deliveryDate": "2026-06-17", "timeRange": {}}
+    dt = shipment_planned_dt(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    ))
+    assert dt is not None
+    assert (dt.hour, dt.minute) == (0, 0)
+
+
+def test_planned_dt_falls_back_to_midnight_when_fmp_from_is_garbage():
+    fmp = {"deliveryDate": "2026-06-17", "timeRange": {"from": "not-a-time"}}
+    dt = shipment_planned_dt(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    ))
+    assert dt is not None
+    assert (dt.hour, dt.minute) == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# DpdCoordinator._enrich_with_fmp
+# ---------------------------------------------------------------------------
+
+
+async def test_enrich_with_fmp_skips_shipments_without_hashcode(hass):
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value={"deliveryDate": "x"})
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    await coordinator._enrich_with_fmp([_shipment("PARCEL_HANDED")])
+
+    client.async_fmp_delivery_window.assert_not_called()
+
+
+async def test_enrich_with_fmp_stores_window_on_shipment(hass):
+    window = {
+        "deliveryDate": "2026-06-17",
+        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+    }
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=window)
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", fmp_hashcode="xyz123")
+    await coordinator._enrich_with_fmp([shipment])
+
+    client.async_fmp_delivery_window.assert_awaited_once_with("xyz123")
+    assert shipment["fmpDeliveryDateAndTime"] == window
+
+
+async def test_enrich_with_fmp_leaves_shipment_alone_when_window_unavailable(hass):
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", fmp_hashcode="xyz123")
+    await coordinator._enrich_with_fmp([shipment])
+
+    assert "fmpDeliveryDateAndTime" not in shipment
+
+
+async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
+    window = {
+        "deliveryDate": "2026-06-17",
+        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+    }
+    client = MagicMock()
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [
+            _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="A", fmp_hashcode="hashA"),
+            _shipment("PARCEL_HANDED", parcel_number="B"),
+        ],
+        "sendingShipments": [],
+    })
+    client.async_fmp_delivery_window = AsyncMock(return_value=window)
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    result = await coordinator._async_update_data()
+
+    client.async_fmp_delivery_window.assert_awaited_once_with("hashA")
+    assert result["incoming_active"][0]["fmpDeliveryDateAndTime"] == window
+    assert "fmpDeliveryDateAndTime" not in result["incoming_active"][1]
