@@ -150,13 +150,6 @@ for a carrier-agnostic re-emit layer that fires
 `parcel_aggregator_parcel_*` events covering every installed carrier
 in one go.
 
-## Roadmap
-
-Blocked on additional data — see [issue #1](https://github.com/peternijssen/ha-dpd/issues/1):
-
-- A separate **awaiting-pickup** sensor + `at_pickup_point` status mapping — needs the DPD status that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor and surface as `out_for_delivery` on delivery day.
-- A real **`pickup_point`** value — DPD has not exposed the ParcelShop name/address field yet, so the field is always `null` today.
-
 ## Examples
 
 The [`examples/`](examples/) folder ships ready-to-paste snippets for
