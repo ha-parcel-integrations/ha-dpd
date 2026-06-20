@@ -109,7 +109,6 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "incoming_parcels"
-    _attr_icon = "mdi:package-variant-closed"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
@@ -163,7 +162,6 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "parcel"
-    _attr_icon = "mdi:package-variant-closed"
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"raw"})
 
@@ -210,7 +208,6 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "outgoing_parcels"
-    _attr_icon = "mdi:package-variant-closed"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"shipments"})
@@ -238,7 +235,6 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
 
     _attr_has_entity_name = True
     _attr_translation_key = "delivered_parcels"
-    _attr_icon = "mdi:package-variant"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
@@ -271,7 +267,6 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "next_delivery"
-    _attr_icon = "mdi:clock-fast"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_attribution = "Data provided by DPD"
 
@@ -321,7 +316,6 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
 
     _attr_has_entity_name = True
     _attr_translation_key = "en_route_to_parcel_shop"
-    _attr_icon = "mdi:truck-delivery"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
