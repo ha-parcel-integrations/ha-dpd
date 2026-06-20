@@ -38,7 +38,32 @@ A custom Home Assistant integration that tracks your DPD shipments.
 4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
 5. Click **Submit**
 
-The delivered-parcels filter can be changed later via **Settings → Devices & Services → DPD → Configure**. Changes take effect on the next refresh — no reload required.
+### Setup parameters
+
+| Field | Description |
+|---|---|
+| Email | The email address of your DPD consumer account (the one you use in the myDPD mobile app). |
+| Password | The password for that account. Stored in the HA config entry and refreshed automatically when the integration triggers a re-authentication. |
+| Country | The DPD business unit to query. Only **Netherlands** (`DPD-NL`) is mapped today; more land once contributors share parcel-payload samples. |
+
+## Options
+
+Click **Configure** on the integration card to change the delivered-parcels filter:
+
+| Option | Description |
+|---|---|
+| Filter by | `Days` keeps delivered parcels visible for the last N days. `Number of parcels` keeps only the N most recent regardless of age. |
+| Amount | The N used by the filter above. |
+
+Changes take effect on the next refresh — no reload required.
+
+## Removal
+
+Standard HA removal applies: **Settings → Devices & Services →
+DPD → ⋮ → Delete**. No DPD-side cleanup is needed; deleting the
+config entry stops the polling. To revoke API access entirely, change
+your DPD account password — the integration will trigger a re-auth
+notification, which you can then ignore.
 
 ## Sensors
 
