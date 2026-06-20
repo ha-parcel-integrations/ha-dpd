@@ -97,7 +97,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> DpdOptionsFlowHandler:
         """Return the options flow handler."""
-        return DpdOptionsFlowHandler(config_entry)
+        return DpdOptionsFlowHandler()
 
     async def _validate_credentials(self, email: str, password: str, bu: str) -> None:
         """Validate credentials against the live DPD auth flow."""
@@ -207,9 +207,6 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
 class DpdOptionsFlowHandler(OptionsFlow):
     """Handle DPD options (delivered parcels filter)."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self._config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -225,7 +222,7 @@ class DpdOptionsFlowHandler(OptionsFlow):
                 },
             )
 
-        current = self._config_entry.options
+        current = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
