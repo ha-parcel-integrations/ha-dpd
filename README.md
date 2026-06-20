@@ -46,12 +46,43 @@ The delivered-parcels filter can be changed later via **Settings → Devices & S
 |--------|-------------|
 | `sensor.<account>_dpd_incoming_parcels` | Number of active incoming parcels; full list on the `parcels` attribute |
 | `sensor.<account>_dpd_parcel_<number>` | Status of a single active incoming shipment, with the full DPD object on the attributes |
-| `sensor.<account>_dpd_next_delivery` | Earliest expected delivery datetime across all active incoming parcels (date only — midnight in the parcel's timezone) |
+| `sensor.<account>_dpd_next_delivery` | Earliest expected delivery datetime across all active incoming parcels. Uses DPD's Follow My Parcel hour-window (`from` time) on the day a parcel is out for delivery; falls back to the calendar date at midnight for parcels not yet scheduled. |
 | `sensor.<account>_dpd_en_route_to_parcel_shop` | Active incoming parcels destined for a ParcelShop pickup point |
 | `sensor.<account>_dpd_delivered_parcels` | Recently delivered parcels (configurable window) |
 | `sensor.<account>_dpd_outgoing_parcels` | Number of active outgoing shipments; full list on the `shipments` attribute |
 
-Coming next (blocked on additional data):
+### Parcel statuses
+
+DPD's `status.description` moves through six stages, mapped 1-to-1 to
+the numeric `status.status` code. The integration recognises all of
+them today; any new value DPD introduces is info-logged once per HA
+session so it can be added to the catalogue.
+
+| `status.status` | `status.description` | When it appears |
+|---|---|---|
+| `0` | `ORDER_CREATED` | Label printed; not yet handed to DPD |
+| `1` | `PARCEL_HANDED` | Sender has handed the parcel to DPD |
+| `2` | `IN_TRANSIT` | In DPD's network |
+| `3` | `AT_DELIVERY_CENTER` | At the regional sorting hub the morning of delivery |
+| `4` | `PARCEL_OUT_FOR_DELIVERY` | On the delivery vehicle today |
+| `5` | `DELIVERED` | Terminal |
+
+See [`docs/api/parcels.md`](docs/api/parcels.md#status-lifecycle) for the canonical reference.
+
+### Delivery-time window
+
+On the day a parcel is out for delivery (status `4`), DPD exposes a
+precise one-hour `from` / `to` window via its
+[Follow My Parcel](docs/api/fmp.md) sub-API. The integration fetches
+this automatically for every FMP-eligible parcel each poll, so
+`sensor.<account>_dpd_next_delivery` reports the **actual** hour the
+driver is expected — not just midnight of the delivery date. Parcels
+without an FMP window (anything before the day of delivery) keep using
+the calendar-date midnight as a "today / tomorrow" timestamp.
+
+### Coming next
+
+Blocked on additional data:
 
 - A separate **awaiting-pickup** sensor — needs the DPD status value that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor.
 
