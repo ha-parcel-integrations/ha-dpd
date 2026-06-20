@@ -69,18 +69,15 @@ def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
 def shipment_planned_dt(shipment: dict) -> datetime | None:
     """Return the planned delivery datetime for an active shipment, or ``None``.
 
-    Uses ``deliveryDate`` (a ``YYYY-MM-DD`` string with no time component)
-    interpreted as midnight in the timezone reported by
-    ``status.eventDateAndTimeZoneId`` (falling back to UTC).
-    """
-    date_str = shipment.get("deliveryDate")
-    if not date_str:
-        return None
-    try:
-        d = datetime.fromisoformat(date_str)
-    except ValueError:
-        return None
+    Prefers the Follow My Parcel window when the coordinator has
+    enriched the shipment with it (``fmpDeliveryDateAndTime.deliveryDate``
+    combined with ``timeRange.from``) — this is the precise hour window
+    DPD shows on its tracking page on the day of delivery.
 
+    Falls back to plain ``deliveryDate`` at midnight in the timezone
+    reported by ``status.eventDateAndTimeZoneId`` (or UTC) — the only
+    information available before a delivery window is scheduled.
+    """
     tz_id = (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
     tz: timezone | ZoneInfo = timezone.utc
     if tz_id:
@@ -88,7 +85,41 @@ def shipment_planned_dt(shipment: dict) -> datetime | None:
             tz = ZoneInfo(tz_id)
         except Exception:  # noqa: BLE001 - bad tz string from API
             tz = timezone.utc
+
+    fmp = shipment.get("fmpDeliveryDateAndTime") or {}
+    fmp_date = fmp.get("deliveryDate")
+    fmp_from = (fmp.get("timeRange") or {}).get("from")
+    if fmp_date and fmp_from:
+        try:
+            return datetime.fromisoformat(f"{fmp_date}T{fmp_from}").replace(tzinfo=tz)
+        except ValueError:
+            pass
+
+    date_str = shipment.get("deliveryDate")
+    if not date_str:
+        return None
+    try:
+        d = datetime.fromisoformat(date_str)
+    except ValueError:
+        return None
     return d.replace(tzinfo=tz)
+
+
+def fmp_hashcode(shipment: dict) -> str | None:
+    """Pluck the Follow My Parcel hashcode off a shipment, when present.
+
+    DPD lists ``availableActions.FOLLOW_MY_PARCEL`` as an array with at
+    most one entry; the hashcode is what the FMP authenticate endpoint
+    expects as credentials. Returns ``None`` for shipments that have not
+    yet been scheduled into the FMP system (typically anything before
+    the day of delivery).
+    """
+    actions = shipment.get("availableActions") or {}
+    fmp_actions = actions.get("FOLLOW_MY_PARCEL") or []
+    if not fmp_actions:
+        return None
+    hashcode = fmp_actions[0].get("hashcode")
+    return hashcode if isinstance(hashcode, str) and hashcode else None
 
 
 def shipment_delivery_dt(shipment: dict) -> datetime | None:
@@ -163,6 +194,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         )
         outgoing_active = filter_active_shipments(outgoing)
 
+        await self._enrich_with_fmp(incoming_active)
+
         _LOGGER.debug(
             "DPD shipments fetched: %d incoming (%d active, %d delivered shown), "
             "%d outgoing (%d active)",
@@ -180,6 +213,22 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             "incoming_delivered": incoming_delivered,
             "outgoing_active": outgoing_active,
         }
+
+    async def _enrich_with_fmp(self, shipments: list[dict]) -> None:
+        """In-place: add ``fmpDeliveryDateAndTime`` to shipments that expose FMP.
+
+        Only shipments with an ``availableActions.FOLLOW_MY_PARCEL`` action
+        are queried — typically those out for delivery today. Failures are
+        swallowed by the API client (returns ``None``) so a broken FMP
+        call never breaks the parcels poll.
+        """
+        for shipment in shipments:
+            hashcode = fmp_hashcode(shipment)
+            if not hashcode:
+                continue
+            window = await self._client.async_fmp_delivery_window(hashcode)
+            if window:
+                shipment["fmpDeliveryDateAndTime"] = window
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:
         """Trim the delivered list according to the configured options."""
