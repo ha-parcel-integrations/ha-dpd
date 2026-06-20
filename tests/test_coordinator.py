@@ -9,14 +9,18 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
 )
+from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
+    _tracking_url,
     _unknown_descriptions_logged,
     annotate_planned_delivery,
     filter_active_shipments,
     filter_delivered_shipments,
     fmp_hashcode,
     log_unknown_descriptions,
+    map_parcel_status,
+    normalize_parcel,
     shipment_delivery_dt,
     shipment_planned_dt,
     shipment_planned_window,
@@ -400,6 +404,116 @@ async def test_enrich_with_fmp_leaves_shipment_alone_when_window_unavailable(has
     await coordinator._enrich_with_fmp([shipment])
 
     assert "fmpDeliveryDateAndTime" not in shipment
+
+
+# ---------------------------------------------------------------------------
+# map_parcel_status
+# ---------------------------------------------------------------------------
+
+
+def test_map_status_order_created_is_registered():
+    assert map_parcel_status(_shipment("ORDER_CREATED")) == ParcelStatus.REGISTERED
+
+
+def test_map_status_handed_in_transit_at_center_all_map_to_in_transit():
+    assert map_parcel_status(_shipment("PARCEL_HANDED")) == ParcelStatus.IN_TRANSIT
+    assert map_parcel_status(_shipment("IN_TRANSIT")) == ParcelStatus.IN_TRANSIT
+    assert map_parcel_status(_shipment("AT_DELIVERY_CENTER")) == ParcelStatus.IN_TRANSIT
+
+
+def test_map_status_parcel_out_for_delivery_is_out_for_delivery():
+    assert (
+        map_parcel_status(_shipment("PARCEL_OUT_FOR_DELIVERY"))
+        == ParcelStatus.OUT_FOR_DELIVERY
+    )
+
+
+def test_map_status_delivered_is_delivered():
+    assert map_parcel_status(_shipment("DELIVERED")) == ParcelStatus.DELIVERED
+
+
+def test_map_status_unknown_description_falls_back_to_unknown():
+    assert map_parcel_status(_shipment("INVENTED_BY_DPD")) == ParcelStatus.UNKNOWN
+
+
+def test_map_status_missing_status_field_falls_back_to_unknown():
+    assert map_parcel_status({"parcelNumber": "X"}) == ParcelStatus.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# _tracking_url
+# ---------------------------------------------------------------------------
+
+
+def test_tracking_url_built_from_parcel_number():
+    assert _tracking_url({"parcelNumber": "01ABC"}) == (
+        "https://www.dpdgroup.com/nl/mydpd/my-parcels/search?parcelNumber=01ABC"
+    )
+
+
+def test_tracking_url_returns_none_without_parcel_number():
+    assert _tracking_url({}) is None
+    assert _tracking_url({"parcelNumber": ""}) is None
+
+
+# ---------------------------------------------------------------------------
+# normalize_parcel
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_returns_carrier_agnostic_keys():
+    raw = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01XYZ")
+    raw["senderName"] = "Acme Webshop"
+    raw["status"]["deliveryType"] = "HOME"
+    normalized = normalize_parcel(raw)
+    assert normalized["carrier"] == "DPD"
+    assert normalized["barcode"] == "01XYZ"
+    assert normalized["sender"] == "Acme Webshop"
+    assert normalized["status"] == ParcelStatus.OUT_FOR_DELIVERY
+    assert normalized["raw_status"] == "PARCEL_OUT_FOR_DELIVERY"
+    assert normalized["delivered"] is False
+    assert normalized["pickup"] is False
+    assert normalized["pickup_point"] is None
+    assert normalized["url"].endswith("parcelNumber=01XYZ")
+    assert normalized["raw"] is raw  # original payload preserved by identity
+
+
+def test_normalize_marks_pickup_for_parcelshop_delivery():
+    raw = _shipment("PARCEL_OUT_FOR_DELIVERY")
+    raw["status"]["deliveryType"] = "PARCELSHOP"
+    assert normalize_parcel(raw)["pickup"] is True
+
+
+def test_normalize_delivered_parcel_carries_delivered_at_not_planned_window():
+    raw = _shipment(
+        "DELIVERED",
+        delivery_date="2026-06-05",
+        event_dt="2026-06-05T14:23:12",
+        tz_id="Europe/Amsterdam",
+    )
+    annotate_planned_delivery(raw)
+    normalized = normalize_parcel(raw)
+    assert normalized["delivered"] is True
+    assert normalized["delivered_at"] is not None
+    assert "2026-06-05T14:23:12" in normalized["delivered_at"]
+    assert normalized["planned_from"] is None
+    assert normalized["planned_to"] is None
+
+
+def test_normalize_active_parcel_carries_planned_window_from_annotation():
+    raw = _shipment(
+        "PARCEL_OUT_FOR_DELIVERY",
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window={
+            "deliveryDate": "2026-06-17",
+            "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+        },
+    )
+    annotate_planned_delivery(raw)
+    normalized = normalize_parcel(raw)
+    assert normalized["planned_from"].startswith("2026-06-17T10:34:00")
+    assert normalized["planned_to"].startswith("2026-06-17T11:34:00")
 
 
 # ---------------------------------------------------------------------------
