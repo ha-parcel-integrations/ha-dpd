@@ -33,9 +33,35 @@ BUSINESS_UNITS = [
 
 DEFAULT_BU = "DPD-NL"
 
+# Known DPD `status.description` strings, in roughly the order a parcel
+# moves through. The numeric `status.status` follows the same 0 → 5
+# progression in samples we have seen.
+#
+# These constants are descriptive — the only filter we apply today is
+# "delivered vs everything-else" (using `DELIVERED_DESCRIPTION`). The
+# 2.0.0 normalization layer will map each value onto the canonical
+# `ParcelStatus` enum used by the other carriers.
+STATUS_ORDER_CREATED = "ORDER_CREATED"                  # 0 — label printed; not yet collected
+STATUS_PARCEL_HANDED = "PARCEL_HANDED"                  # 1 — handed to DPD by the sender
+STATUS_IN_TRANSIT = "IN_TRANSIT"                        # 2 — in DPD's network
+STATUS_AT_DELIVERY_CENTER = "AT_DELIVERY_CENTER"        # 3 — at the regional sorting hub the morning of delivery
+STATUS_PARCEL_OUT_FOR_DELIVERY = "PARCEL_OUT_FOR_DELIVERY"  # 4 — on the delivery vehicle today
+STATUS_DELIVERED = "DELIVERED"                          # 5 — terminal
+
 # Terminal status — every other status.description is treated as "active".
-# Other values seen so far: ORDER_CREATED. More TBD once we observe in-transit parcels.
-DELIVERED_DESCRIPTION = "DELIVERED"
+DELIVERED_DESCRIPTION = STATUS_DELIVERED
+
+# All description values the integration recognises. Anything outside this
+# set is still treated as "active" (so we never accidentally swallow a
+# parcel) and surfaced via a one-shot info log so we can grow the list.
+KNOWN_DESCRIPTIONS: frozenset[str] = frozenset({
+    STATUS_ORDER_CREATED,
+    STATUS_PARCEL_HANDED,
+    STATUS_IN_TRANSIT,
+    STATUS_AT_DELIVERY_CENTER,
+    STATUS_PARCEL_OUT_FOR_DELIVERY,
+    STATUS_DELIVERED,
+})
 
 CONF_DELIVERED_FILTER_TYPE = "delivered_filter_type"
 CONF_DELIVERED_FILTER_AMOUNT = "delivered_filter_amount"

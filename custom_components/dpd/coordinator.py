@@ -20,14 +20,40 @@ from .const import (
     DEFAULT_DELIVERED_FILTER_TYPE,
     DELIVERED_DESCRIPTION,
     DOMAIN,
+    KNOWN_DESCRIPTIONS,
     POLL_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+# Descriptions we have already info-logged once in this HA session, so
+# repeated polls do not flood the log with the same "new status" message.
+_unknown_descriptions_logged: set[str] = set()
+
 
 def _description(shipment: dict) -> str | None:
     return (shipment.get("status") or {}).get("description")
+
+
+def log_unknown_descriptions(shipments: list[dict]) -> None:
+    """Info-log any status.description we have not catalogued yet, once per value.
+
+    Lets us extend ``KNOWN_DESCRIPTIONS`` as new lifecycle stages surface
+    in real accounts without spamming the log on every poll.
+    """
+    for shipment in shipments:
+        description = _description(shipment)
+        if (
+            description
+            and description not in KNOWN_DESCRIPTIONS
+            and description not in _unknown_descriptions_logged
+        ):
+            _unknown_descriptions_logged.add(description)
+            _LOGGER.info(
+                "DPD parcel status.description not yet catalogued: %r. "
+                "Please open an issue so we can add it to KNOWN_DESCRIPTIONS.",
+                description,
+            )
 
 
 def filter_active_shipments(shipments: list[dict]) -> list[dict]:
@@ -128,6 +154,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
 
         incoming = payload.get("incomingShipments") or []
         outgoing = payload.get("sendingShipments") or []
+
+        log_unknown_descriptions(incoming + outgoing)
 
         incoming_active = filter_active_shipments(incoming)
         incoming_delivered = self._apply_delivered_filter(
