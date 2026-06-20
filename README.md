@@ -157,6 +157,19 @@ Blocked on additional data — see [issue #1](https://github.com/peternijssen/ha
 - A separate **awaiting-pickup** sensor + `at_pickup_point` status mapping — needs the DPD status that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor and surface as `out_for_delivery` on delivery day.
 - A real **`pickup_point`** value — DPD has not exposed the ParcelShop name/address field yet, so the field is always `null` today.
 
+## Examples
+
+The [`examples/`](examples/) folder ships ready-to-paste snippets for
+both automations and dashboards. Highlights:
+
+- [`examples/automations/notify_when_parcel_registered.yaml`](examples/automations/notify_when_parcel_registered.yaml) — push when DPD announces a new parcel.
+- [`examples/automations/notify_when_out_for_delivery.yaml`](examples/automations/notify_when_out_for_delivery.yaml) — alert once per parcel when it's on the truck today; uses the FMP hour window when available.
+- [`examples/automations/notify_when_at_parcelshop.yaml`](examples/automations/notify_when_at_parcelshop.yaml) — alert when a parcel is routed to a DPD ParcelShop.
+- [`examples/automations/announce_delivery_window.yaml`](examples/automations/announce_delivery_window.yaml) — TTS announcement an hour before the next planned delivery.
+- [`examples/dashboards/active_parcels_grid.yaml`](examples/dashboards/active_parcels_grid.yaml) — markdown card listing every active parcel with sender, canonical status and tracking link.
+- [`examples/dashboards/summary_glance.yaml`](examples/dashboards/summary_glance.yaml) — compact glance row with the day-to-day counters.
+- [`examples/dashboards/next_delivery_countdown.yaml`](examples/dashboards/next_delivery_countdown.yaml) — entities card showing the next expected delivery and details.
+
 ## Debugging
 
 To capture the raw DPD API response (useful when reporting a bug or helping map the shipment object structure), enable debug logging for the integration:
