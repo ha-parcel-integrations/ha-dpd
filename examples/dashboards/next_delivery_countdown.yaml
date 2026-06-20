@@ -1,0 +1,23 @@
+# Single-entity card showing when the next DPD parcel is expected, with
+# a relative-time chip. The native_value of sensor.dpd_next_delivery is
+# a timezone-aware datetime, so HA renders it as "in 3 hours" or
+# "tomorrow at 14:00" automatically.
+#
+# On the day of delivery the timestamp is the Follow My Parcel hour
+# window's `from` time (the driver's expected arrival start). Before
+# that day it falls back to midnight of the planned delivery date.
+
+type: entities
+title: Eerstvolgende bezorging
+entities:
+  - entity: sensor.dpd_next_delivery
+    name: Verwacht
+    secondary_info: last-updated
+  - type: attribute
+    entity: sensor.dpd_next_delivery
+    attribute: barcode
+    name: Barcode
+  - type: attribute
+    entity: sensor.dpd_next_delivery
+    attribute: sender
+    name: Afzender
