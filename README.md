@@ -13,7 +13,7 @@ A custom Home Assistant integration that tracks your DPD shipments.
 
 ## Requirements
 
-- Home Assistant 2024.1 or newer
+- Home Assistant 2024.7 or newer
 - A DPD account (the same credentials you use in the myDPD mobile app)
 
 ## Installation
