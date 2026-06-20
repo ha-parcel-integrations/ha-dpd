@@ -103,31 +103,34 @@ same `ParcelStatus` values with their own raw-status mappings, so a
 single event-driven automation can act on `status` regardless of
 carrier.
 
-### Delivery-time window
+## Events
 
-Every parcel exposes a planned delivery window as two top-level
-attributes — `plannedDeliveryFrom` and `plannedDeliveryTo` — both
-ISO 8601 strings with timezone offset, visible on the per-parcel
-sensor and inside the `parcels` / `shipments` attribute of every
-summary sensor.
+The coordinator fires events on the HA event bus when something
+interesting happens to a parcel, so automations can react without
+polling per-parcel sensors.
 
-| When | `plannedDeliveryFrom` / `plannedDeliveryTo` |
-|---|---|
-| On the day a parcel is out for delivery | The precise one-hour window DPD shows on its tracking page (e.g. `10:34` – `11:34`), fetched from the [Follow My Parcel](docs/api/fmp.md) sub-API. |
-| Before the day of delivery | The full calendar day in the parcel's local timezone (`00:00:00` – `23:59:59` on the planned `deliveryDate`). |
-| No delivery date known yet | `null` for both. |
+| Event | When | Payload |
+|---|---|---|
+| `dpd_parcel_registered` | A new barcode appears in the active list | The full normalised parcel dict (`carrier`, `barcode`, `sender`, `status`, `raw_status`, `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`, `raw`) |
+| `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes | Same payload plus `old_status` and `new_status` |
 
-`sensor.<account>_dpd_next_delivery` uses `plannedDeliveryFrom` as the
-sort key, so it reports the actual hour the driver is expected — not
-just midnight — on the day of delivery.
+The coordinator suppresses events on the very first refresh after
+start-up so you don't get a stampede of "registered" events for
+parcels that were already in your account before HA started.
 
-### Coming next
+See [`examples/automations/`](examples/automations/) for ready-to-paste
+event-driven automations, or the
+[parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
+for a carrier-agnostic re-emit layer that fires
+`parcel_aggregator_parcel_*` events covering every installed carrier
+in one go.
 
-Blocked on additional data:
+## Roadmap
 
-- A separate **awaiting-pickup** sensor — needs the DPD status value that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor.
+Blocked on additional data — see [issue #1](https://github.com/peternijssen/ha-dpd/issues/1):
 
-See [issue #1](https://github.com/peternijssen/ha-dpd/issues/1) — extra data is very welcome.
+- A separate **awaiting-pickup** sensor + `at_pickup_point` status mapping — needs the DPD status that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor and surface as `out_for_delivery` on delivery day.
+- A real **`pickup_point`** value — DPD has not exposed the ParcelShop name/address field yet, so the field is always `null` today.
 
 ## Debugging
 
