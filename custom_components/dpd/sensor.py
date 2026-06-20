@@ -110,7 +110,6 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "incoming_parcels"
     _attr_icon = "mdi:package-variant-closed"
-    _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
@@ -212,7 +211,6 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "outgoing_parcels"
     _attr_icon = "mdi:package-variant-closed"
-    _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"shipments"})
@@ -241,7 +239,6 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
     _attr_has_entity_name = True
     _attr_translation_key = "delivered_parcels"
     _attr_icon = "mdi:package-variant"
-    _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
@@ -325,7 +322,6 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     _attr_has_entity_name = True
     _attr_translation_key = "en_route_to_parcel_shop"
     _attr_icon = "mdi:truck-delivery"
-    _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"parcels"})
