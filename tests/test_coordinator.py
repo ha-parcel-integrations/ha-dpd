@@ -12,12 +12,14 @@ from custom_components.dpd.const import (
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
     _unknown_descriptions_logged,
+    annotate_planned_delivery,
     filter_active_shipments,
     filter_delivered_shipments,
     fmp_hashcode,
     log_unknown_descriptions,
     shipment_delivery_dt,
     shipment_planned_dt,
+    shipment_planned_window,
 )
 
 
@@ -398,6 +400,118 @@ async def test_enrich_with_fmp_leaves_shipment_alone_when_window_unavailable(has
     await coordinator._enrich_with_fmp([shipment])
 
     assert "fmpDeliveryDateAndTime" not in shipment
+
+
+# ---------------------------------------------------------------------------
+# shipment_planned_window (from, to)
+# ---------------------------------------------------------------------------
+
+
+def test_planned_window_returns_fmp_range_when_available():
+    fmp = {
+        "deliveryDate": "2026-06-17",
+        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+    }
+    start, end = shipment_planned_window(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    ))
+    assert start is not None and end is not None
+    assert (start.hour, start.minute) == (10, 34)
+    assert (end.hour, end.minute) == (11, 34)
+    assert start.tzinfo is not None
+    assert end.tzinfo is not None
+
+
+def test_planned_window_full_day_when_only_date_known():
+    start, end = shipment_planned_window(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+    ))
+    assert start is not None and end is not None
+    assert (start.hour, start.minute, start.second) == (0, 0, 0)
+    assert (end.hour, end.minute, end.second) == (23, 59, 59)
+    assert start.date() == end.date()
+
+
+def test_planned_window_returns_none_when_no_date():
+    assert shipment_planned_window({}) == (None, None)
+
+
+def test_planned_window_full_day_when_fmp_lacks_from_or_to():
+    fmp = {"deliveryDate": "2026-06-17", "timeRange": {"from": "10:34:00"}}
+    start, end = shipment_planned_window(_shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    ))
+    # No `to` in FMP → fall back to the full-day window
+    assert (start.hour, end.hour) == (0, 23)
+
+
+# ---------------------------------------------------------------------------
+# annotate_planned_delivery
+# ---------------------------------------------------------------------------
+
+
+def test_annotate_writes_iso_strings_with_tz():
+    shipment = _shipment(delivery_date="2026-06-17", tz_id="Europe/Amsterdam")
+    annotate_planned_delivery(shipment)
+    assert shipment["plannedDeliveryFrom"].startswith("2026-06-17T00:00:00")
+    assert shipment["plannedDeliveryTo"].startswith("2026-06-17T23:59:59")
+    # Both carry an offset (not bare naive iso)
+    assert "+" in shipment["plannedDeliveryFrom"]
+    assert "+" in shipment["plannedDeliveryTo"]
+
+
+def test_annotate_uses_fmp_window_when_present():
+    fmp = {
+        "deliveryDate": "2026-06-17",
+        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
+    }
+    shipment = _shipment(
+        delivery_date="2026-06-17",
+        tz_id="Europe/Amsterdam",
+        fmp_window=fmp,
+    )
+    annotate_planned_delivery(shipment)
+    assert shipment["plannedDeliveryFrom"].startswith("2026-06-17T10:34:00")
+    assert shipment["plannedDeliveryTo"].startswith("2026-06-17T11:34:00")
+
+
+def test_annotate_sets_none_when_no_date():
+    shipment = {"parcelNumber": "X", "status": {"description": "ORDER_CREATED"}}
+    annotate_planned_delivery(shipment)
+    assert shipment["plannedDeliveryFrom"] is None
+    assert shipment["plannedDeliveryTo"] is None
+
+
+# ---------------------------------------------------------------------------
+# Coordinator wires annotation onto every bucket
+# ---------------------------------------------------------------------------
+
+
+async def test_coordinator_annotates_all_buckets_with_planned_window(hass):
+    client = MagicMock()
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [
+            _shipment("ORDER_CREATED", parcel_number="A", delivery_date="2026-06-17"),
+            _shipment("DELIVERED", parcel_number="B", delivery_date="2026-06-10"),
+        ],
+        "sendingShipments": [
+            _shipment("PARCEL_HANDED", parcel_number="C", delivery_date="2026-06-18"),
+        ],
+    })
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
+    result = await coordinator._async_update_data()
+
+    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active"):
+        for shipment in result[bucket]:
+            assert shipment["plannedDeliveryFrom"] is not None
+            assert shipment["plannedDeliveryTo"] is not None
 
 
 async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
