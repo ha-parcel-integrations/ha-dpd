@@ -68,15 +68,15 @@ notification, which you can then ignore.
 ## Sensors
 
 The integration creates one device per DPD account, named
-**`DPD (<your-email>)`**. With multiple accounts each gets its own
-device named after its email. The entities below show the friendly-name
-pattern; their entity IDs carry the same account slug:
+**`DPD (<your-email>)`**. With multiple accounts each gets its own device
+named after its email. The entities below show the friendly-name pattern;
+their entity_ids carry the same account suffix:
 
 | Friendly name pattern | Description |
 |---|---|
 | `DPD (account) Incoming parcels` | Number of active incoming parcels |
-| `DPD (account) Parcel <barcode>` | Canonical status of a single active incoming shipment |
-| `DPD (account) Next delivery` | Earliest expected delivery datetime. Uses Follow My Parcel's hour-window (`from` time) on the day a parcel is out for delivery; falls back to the calendar date at midnight for parcels not yet scheduled. |
+| `DPD (account) Parcel <barcode>` | Canonical status of a single incoming shipment |
+| `DPD (account) Next delivery` | Earliest expected delivery datetime |
 | `DPD (account) En route to ParcelShop` | Active incoming parcels destined for a DPD ParcelShop pickup point |
 | `DPD (account) Delivered parcels` | Recently delivered parcels (configurable window) |
 | `DPD (account) Outgoing parcels` | Number of active outgoing parcels |
@@ -94,15 +94,20 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `delivered_at` | ISO 8601 \| null | Delivery moment, if known |
 | `planned_from` | ISO 8601 \| null | Expected delivery window start (Follow My Parcel hour on the day of delivery, else midnight on the planned date) |
 | `planned_to` | ISO 8601 \| null | Expected delivery window end (Follow My Parcel hour, else 23:59:59 on the planned date) |
-| `pickup` | bool | Destined for a ParcelShop rather than a home address |
-| `pickup_point` | string \| null | Always `null` for now — DPD has not yet exposed the ParcelShop name field |
-| `url` | string \| null | Deep link to the parcel's `www.dpdgroup.com/nl/mydpd/my-parcels` tracking page |
-| `raw` | dict | The full original DPD shipment payload |
+| `pickup` | bool | Destined for a pickup point rather than a home address |
+| `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD has not yet exposed the field) |
+| `url` | string \| null | Deep link to the parcel's tracking page |
+| `raw` | dict | The full original DPD API payload |
 
-This is the same shape DHL and PostNL use, so the
+This is the same shape that DHL and PostNL use, so the
 [parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
 and any cross-carrier dashboard can read parcels from all three
 integrations the same way.
+
+For full attribute reference and example automations see
+[docs/sensors.md](docs/sensors.md) — or the
+[examples folder](examples/) for ready-to-paste automation and
+dashboard snippets.
 
 ## Parcel status reference
 
