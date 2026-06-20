@@ -5,8 +5,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-import aiohttp
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -303,9 +301,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         except DpdAuthError as err:
             _LOGGER.error("DPD authentication failed: %s", err)
             raise ConfigEntryAuthFailed("DPD authentication failed") from err
-        except (DpdApiError, aiohttp.ClientError) as err:
+        except DpdApiError as err:
             _LOGGER.warning("DPD parcels endpoint unreachable: %s", err)
             raise UpdateFailed(f"DPD error: {err}") from err
+        # aiohttp.ClientError is wrapped automatically by DataUpdateCoordinator.
 
         incoming = payload.get("incomingShipments") or []
         outgoing = payload.get("sendingShipments") or []
