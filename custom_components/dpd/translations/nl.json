@@ -60,5 +60,27 @@
         "parcels": "Aantal pakketten"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "incoming_parcels": {
+        "name": "Binnenkomende pakketten"
+      },
+      "parcel": {
+        "name": "Pakket {barcode}"
+      },
+      "outgoing_parcels": {
+        "name": "Uitgaande pakketten"
+      },
+      "delivered_parcels": {
+        "name": "Bezorgde pakketten"
+      },
+      "next_delivery": {
+        "name": "Eerstvolgende bezorging"
+      },
+      "en_route_to_parcel_shop": {
+        "name": "Onderweg naar ParcelShop"
+      }
+    }
   }
 }

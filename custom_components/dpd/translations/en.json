@@ -60,5 +60,27 @@
         "parcels": "Number of parcels"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "incoming_parcels": {
+        "name": "Incoming parcels"
+      },
+      "parcel": {
+        "name": "Parcel {barcode}"
+      },
+      "outgoing_parcels": {
+        "name": "Outgoing parcels"
+      },
+      "delivered_parcels": {
+        "name": "Delivered parcels"
+      },
+      "next_delivery": {
+        "name": "Next delivery"
+      },
+      "en_route_to_parcel_shop": {
+        "name": "En route to ParcelShop"
+      }
+    }
   }
 }
