@@ -186,16 +186,13 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             except aiohttp.ClientError:
                 errors["base"] = "cannot_connect"
             else:
-                self.hass.config_entries.async_update_entry(
+                return self.async_update_reload_and_abort(
                     reauth_entry,
-                    data={
-                        **reauth_entry.data,
+                    data_updates={
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
                     },
                 )
-                await self.hass.config_entries.async_reload(reauth_entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
 
         return self.async_show_form(
             step_id="reauth_confirm",
