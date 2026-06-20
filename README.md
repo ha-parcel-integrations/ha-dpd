@@ -79,23 +79,29 @@ This is the same shape DHL and PostNL use, so the
 and any cross-carrier dashboard can read parcels from all three
 integrations the same way.
 
-### Parcel statuses
+## Parcel status reference
 
-DPD's `status.description` moves through six stages, mapped 1-to-1 to
-the numeric `status.status` code. The integration recognises all of
-them today; any new value DPD introduces is info-logged once per HA
-session so it can be added to the catalogue.
+`status` on every parcel is one of the canonical `ParcelStatus` values
+below. Use these in your automations rather than DPD's raw description
+strings — the raw value stays available on `raw_status` for power
+users, and the [DPD status lifecycle](docs/api/parcels.md#status-lifecycle)
+documents the source mapping in full.
 
-| `status.status` | `status.description` | When it appears |
+| `status` | Meaning | DPD raw description that maps here |
 |---|---|---|
-| `0` | `ORDER_CREATED` | Label printed; not yet handed to DPD |
-| `1` | `PARCEL_HANDED` | Sender has handed the parcel to DPD |
-| `2` | `IN_TRANSIT` | In DPD's network |
-| `3` | `AT_DELIVERY_CENTER` | At the regional sorting hub the morning of delivery |
-| `4` | `PARCEL_OUT_FOR_DELIVERY` | On the delivery vehicle today |
-| `5` | `DELIVERED` | Terminal |
+| `registered` | DPD knows about the label but the parcel is not yet in transit | `ORDER_CREATED` |
+| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER` |
+| `out_for_delivery` | On the delivery vehicle today | `PARCEL_OUT_FOR_DELIVERY` |
+| `at_pickup_point` | Arrived at the ParcelShop, ready to collect | (not yet observed — DPD has no distinct "arrived at ParcelShop" status; ParcelShop-bound parcels surface as `out_for_delivery` on delivery day) |
+| `delivered` | Handed over (mailbox, recipient, neighbour, picked up) | `DELIVERED` |
+| `returning` | Failed delivery, on the way back to the sender | (not yet observed) |
+| `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
+| `unknown` | Raw description we have not mapped yet | anything else — logged once at info level so it can be added to the map |
 
-See [`docs/api/parcels.md`](docs/api/parcels.md#status-lifecycle) for the canonical reference.
+This mapping is shared across the carriers: DHL and PostNL use the
+same `ParcelStatus` values with their own raw-status mappings, so a
+single event-driven automation can act on `status` regardless of
+carrier.
 
 ### Delivery-time window
 
