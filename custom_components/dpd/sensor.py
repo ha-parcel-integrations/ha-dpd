@@ -253,6 +253,8 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
                     "sender": p.get("senderName"),
                     "status": (p.get("status") or {}).get("description"),
                     "delivery_date": p.get("deliveryDate"),
+                    "plannedDeliveryFrom": p.get("plannedDeliveryFrom"),
+                    "plannedDeliveryTo": p.get("plannedDeliveryTo"),
                 }
                 for p in self._parcels
             ]

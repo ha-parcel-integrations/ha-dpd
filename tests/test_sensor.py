@@ -150,6 +150,8 @@ def test_delivered_sensor_zero_when_no_data():
 
 def test_delivered_sensor_attributes_summarise_parcels():
     parcel = _shipment("A", "DELIVERED", sender="Ha-Ra GmbH", delivery_date="2026-06-05")
+    parcel["plannedDeliveryFrom"] = "2026-06-05T00:00:00+02:00"
+    parcel["plannedDeliveryTo"] = "2026-06-05T23:59:59+02:00"
     coordinator = _make_coordinator({
         "incoming_active": [],
         "incoming_delivered": [parcel],
@@ -164,6 +166,8 @@ def test_delivered_sensor_attributes_summarise_parcels():
                 "sender": "Ha-Ra GmbH",
                 "status": "DELIVERED",
                 "delivery_date": "2026-06-05",
+                "plannedDeliveryFrom": "2026-06-05T00:00:00+02:00",
+                "plannedDeliveryTo": "2026-06-05T23:59:59+02:00",
             }
         ]
     }

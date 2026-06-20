@@ -66,17 +66,17 @@ def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
 
 
-def shipment_planned_dt(shipment: dict) -> datetime | None:
-    """Return the planned delivery datetime for an active shipment, or ``None``.
+def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime | None]:
+    """Return the planned ``(from, to)`` delivery window for a shipment.
 
-    Prefers the Follow My Parcel window when the coordinator has
-    enriched the shipment with it (``fmpDeliveryDateAndTime.deliveryDate``
-    combined with ``timeRange.from``) — this is the precise hour window
-    DPD shows on its tracking page on the day of delivery.
+    When DPD has scheduled a precise Follow My Parcel window (typically on
+    the day a parcel is out for delivery) both bounds carry the hour
+    range, e.g. ``(10:34, 11:34)`` on the delivery date.
 
-    Falls back to plain ``deliveryDate`` at midnight in the timezone
-    reported by ``status.eventDateAndTimeZoneId`` (or UTC) — the only
-    information available before a delivery window is scheduled.
+    Otherwise — and only ``deliveryDate`` is known — the window spans the
+    whole calendar day in the parcel's local timezone (start of day,
+    ``23:59:59`` end of day). Returns ``(None, None)`` when even the
+    date is missing or unparseable.
     """
     tz_id = (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
     tz: timezone | ZoneInfo = timezone.utc
@@ -88,21 +88,53 @@ def shipment_planned_dt(shipment: dict) -> datetime | None:
 
     fmp = shipment.get("fmpDeliveryDateAndTime") or {}
     fmp_date = fmp.get("deliveryDate")
-    fmp_from = (fmp.get("timeRange") or {}).get("from")
-    if fmp_date and fmp_from:
+    time_range = fmp.get("timeRange") or {}
+    fmp_from = time_range.get("from")
+    fmp_to = time_range.get("to")
+    if fmp_date and fmp_from and fmp_to:
         try:
-            return datetime.fromisoformat(f"{fmp_date}T{fmp_from}").replace(tzinfo=tz)
+            return (
+                datetime.fromisoformat(f"{fmp_date}T{fmp_from}").replace(tzinfo=tz),
+                datetime.fromisoformat(f"{fmp_date}T{fmp_to}").replace(tzinfo=tz),
+            )
         except ValueError:
             pass
 
     date_str = shipment.get("deliveryDate")
     if not date_str:
-        return None
+        return (None, None)
     try:
         d = datetime.fromisoformat(date_str)
     except ValueError:
-        return None
-    return d.replace(tzinfo=tz)
+        return (None, None)
+    start = d.replace(tzinfo=tz)
+    end = d.replace(hour=23, minute=59, second=59, tzinfo=tz)
+    return (start, end)
+
+
+def shipment_planned_dt(shipment: dict) -> datetime | None:
+    """Return the start of the planned delivery window, or ``None``.
+
+    Thin wrapper around :func:`shipment_planned_window` that keeps the
+    "start time" semantics callers (e.g. the next-delivery sensor) rely
+    on for sorting.
+    """
+    return shipment_planned_window(shipment)[0]
+
+
+def annotate_planned_delivery(shipment: dict) -> None:
+    """In-place: add ``plannedDeliveryFrom`` / ``plannedDeliveryTo`` to a shipment.
+
+    Both values are ISO 8601 strings with timezone offset, or ``None``
+    when the shipment carries no parseable date information. Surfacing
+    them top-level means every sensor that exposes the raw shipment dict
+    gets a ready-to-template ``from`` / ``to`` pair without callers
+    having to dig into ``fmpDeliveryDateAndTime`` or recompute midnight
+    fallbacks.
+    """
+    start, end = shipment_planned_window(shipment)
+    shipment["plannedDeliveryFrom"] = start.isoformat() if start else None
+    shipment["plannedDeliveryTo"] = end.isoformat() if end else None
 
 
 def fmp_hashcode(shipment: dict) -> str | None:
@@ -195,6 +227,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         outgoing_active = filter_active_shipments(outgoing)
 
         await self._enrich_with_fmp(incoming_active)
+
+        for shipment in (*incoming_active, *incoming_delivered, *outgoing_active):
+            annotate_planned_delivery(shipment)
 
         _LOGGER.debug(
             "DPD shipments fetched: %d incoming (%d active, %d delivered shown), "
