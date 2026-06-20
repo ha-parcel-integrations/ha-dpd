@@ -1,7 +1,27 @@
 """Constants for the DPD integration."""
+from enum import StrEnum
+
 from homeassistant.const import Platform
 
 DOMAIN = "dpd"
+
+
+class ParcelStatus(StrEnum):
+    """Carrier-agnostic parcel status.
+
+    Maps the carrier-specific raw status strings into a small set of
+    canonical values shared across DHL, DPD, PostNL and the parcel
+    aggregator. Listed in roughly the order a parcel moves through.
+    """
+
+    REGISTERED = "registered"               # Sender announced the parcel; carrier has not handed-over yet
+    IN_TRANSIT = "in_transit"               # In the carrier's network, somewhere between sender and delivery point
+    OUT_FOR_DELIVERY = "out_for_delivery"   # On a delivery vehicle today
+    AT_PICKUP_POINT = "at_pickup_point"     # Arrived at the chosen ServicePoint / PostNL Point / ParcelShop
+    DELIVERED = "delivered"                 # Handed over (mailbox, recipient, neighbour, picked up)
+    RETURNING = "returning"                 # Failed delivery, going back to sender
+    PROBLEM = "problem"                     # Carrier reports an exception, intervention, or other issue
+    UNKNOWN = "unknown"                     # Raw status we have not mapped yet — logged at info level
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
