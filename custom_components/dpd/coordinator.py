@@ -22,9 +22,29 @@ from .const import (
     DOMAIN,
     KNOWN_DESCRIPTIONS,
     POLL_INTERVAL,
+    STATUS_AT_DELIVERY_CENTER,
+    STATUS_DELIVERED,
+    STATUS_IN_TRANSIT,
+    STATUS_ORDER_CREATED,
+    STATUS_PARCEL_HANDED,
+    STATUS_PARCEL_OUT_FOR_DELIVERY,
+    ParcelStatus,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# DPD status.description → canonical ParcelStatus. Every value in
+# KNOWN_DESCRIPTIONS is mapped here; anything else falls back to
+# ParcelStatus.UNKNOWN and triggers a one-shot info log via
+# log_unknown_descriptions.
+_DESCRIPTION_MAP: dict[str, ParcelStatus] = {
+    STATUS_ORDER_CREATED: ParcelStatus.REGISTERED,
+    STATUS_PARCEL_HANDED: ParcelStatus.IN_TRANSIT,
+    STATUS_IN_TRANSIT: ParcelStatus.IN_TRANSIT,
+    STATUS_AT_DELIVERY_CENTER: ParcelStatus.IN_TRANSIT,
+    STATUS_PARCEL_OUT_FOR_DELIVERY: ParcelStatus.OUT_FOR_DELIVERY,
+    STATUS_DELIVERED: ParcelStatus.DELIVERED,
+}
 
 # Descriptions we have already info-logged once in this HA session, so
 # repeated polls do not flood the log with the same "new status" message.
@@ -35,11 +55,24 @@ def _description(shipment: dict) -> str | None:
     return (shipment.get("status") or {}).get("description")
 
 
-def log_unknown_descriptions(shipments: list[dict]) -> None:
-    """Info-log any status.description we have not catalogued yet, once per value.
+def map_parcel_status(parcel: dict) -> ParcelStatus:
+    """Map a raw DPD parcel to a canonical :class:`ParcelStatus`.
 
-    Lets us extend ``KNOWN_DESCRIPTIONS`` as new lifecycle stages surface
-    in real accounts without spamming the log on every poll.
+    Reads ``status.description`` and looks it up in ``_DESCRIPTION_MAP``;
+    unknown values (or a missing status field) fall back to
+    ``ParcelStatus.UNKNOWN``. New raw values are surfaced separately via
+    :func:`log_unknown_descriptions` so the map can be extended.
+    """
+    description = _description(parcel)
+    return _DESCRIPTION_MAP.get(description or "", ParcelStatus.UNKNOWN)
+
+
+def log_unknown_descriptions(shipments: list[dict]) -> None:
+    """Info-log any status.description we have not mapped yet, once per value.
+
+    Lets us extend ``_DESCRIPTION_MAP`` as new lifecycle stages surface
+    in real accounts without spamming the log on every poll. Anything
+    not in the map is reported as ``ParcelStatus.UNKNOWN`` until it is.
     """
     for shipment in shipments:
         description = _description(shipment)
@@ -50,8 +83,9 @@ def log_unknown_descriptions(shipments: list[dict]) -> None:
         ):
             _unknown_descriptions_logged.add(description)
             _LOGGER.info(
-                "DPD parcel status.description not yet catalogued: %r. "
-                "Please open an issue so we can add it to KNOWN_DESCRIPTIONS.",
+                "DPD status.description %r is not in _DESCRIPTION_MAP — "
+                "will be reported as ParcelStatus.UNKNOWN. Please open "
+                "an issue so we can add the mapping.",
                 description,
             )
 
