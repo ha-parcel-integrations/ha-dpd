@@ -80,10 +80,19 @@ async def async_setup_entry(
 
 
 def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
-    """Return a DeviceInfo dict shared by all sensors for this account."""
+    """Return a DeviceInfo dict shared by all sensors for this account.
+
+    Device name is ``"DPD (<email>)"`` so the auto-prefixed entity
+    friendly names read as ``"DPD (account@example.com) Incoming
+    parcels"``. Including the account in the device name disambiguates
+    users with multiple DPD accounts and matches mainstream HA style
+    for cloud-account integrations.
+    """
+    email = entry.title or ""
+    device_name = f"DPD ({email})" if email else "DPD"
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.title,
+        name=device_name,
         manufacturer="DPD",
         entry_type=DeviceEntryType.SERVICE,
         configuration_url="https://www.dpdgroup.com",
@@ -98,7 +107,8 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     drops out of the coordinator data — see ``DpdParcelSensor``.
     """
 
-    _attr_name = "DPD Incoming Parcels"
+    _attr_has_entity_name = True
+    _attr_translation_key = "incoming_parcels"
     _attr_icon = "mdi:package-variant-closed"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -152,6 +162,8 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Per-parcel sensor reporting the canonical ParcelStatus of a single active incoming shipment."""
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "parcel"
     _attr_icon = "mdi:package-variant-closed"
     _attr_attribution = "Data provided by DPD"
     _unrecorded_attributes = frozenset({"raw"})
@@ -165,7 +177,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._barcode = barcode
         self._attr_unique_id = f"{entry.entry_id}_{barcode}"
-        self._attr_name = f"DPD Parcel {barcode}"
+        self._attr_translation_placeholders = {"barcode": barcode}
         self._attr_device_info = _build_device_info(entry)
 
     def _get_parcel(self) -> dict[str, Any] | None:
@@ -197,7 +209,8 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Summary sensor reporting the count of active outgoing DPD shipments."""
 
-    _attr_name = "DPD Outgoing Parcels"
+    _attr_has_entity_name = True
+    _attr_translation_key = "outgoing_parcels"
     _attr_icon = "mdi:package-variant-closed"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -225,7 +238,8 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Sensor reporting recently delivered incoming DPD parcels."""
 
-    _attr_name = "DPD Delivered Parcels"
+    _attr_has_entity_name = True
+    _attr_translation_key = "delivered_parcels"
     _attr_icon = "mdi:package-variant"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -258,7 +272,8 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     and the calendar-day midnight otherwise) and picks the earliest.
     """
 
-    _attr_name = "DPD Next Delivery"
+    _attr_has_entity_name = True
+    _attr_translation_key = "next_delivery"
     _attr_icon = "mdi:clock-fast"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_attribution = "Data provided by DPD"
@@ -307,7 +322,8 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     separate awaiting-pickup sensor will be added once that status is mapped.
     """
 
-    _attr_name = "DPD Parcels En Route to ParcelShop"
+    _attr_has_entity_name = True
+    _attr_translation_key = "en_route_to_parcel_shop"
     _attr_icon = "mdi:truck-delivery"
     _attr_native_unit_of_measurement = "parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT

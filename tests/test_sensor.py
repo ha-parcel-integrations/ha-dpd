@@ -132,7 +132,10 @@ def test_parcel_sensor_attributes_contain_full_parcel():
 def test_parcel_sensor_unique_id_is_namespaced():
     sensor = DpdParcelSensor(_make_coordinator(None), _make_entry(entry_id="abc"), "P1")
     assert sensor.unique_id == "abc_P1"
-    assert sensor.name == "DPD Parcel P1"
+    # Friendly name is rendered by HA from `parcel` translation key plus the
+    # barcode placeholder; the sensor object exposes the contract pieces.
+    assert sensor.translation_key == "parcel"
+    assert sensor.translation_placeholders == {"barcode": "P1"}
 
 
 # ---------------------------------------------------------------------------
