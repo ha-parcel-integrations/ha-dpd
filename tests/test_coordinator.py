@@ -634,6 +634,151 @@ async def test_coordinator_annotates_all_buckets_with_planned_window(hass):
         assert parcel["raw"]["plannedDeliveryFrom"] is not None
 
 
+# ---------------------------------------------------------------------------
+# Parcel events
+# ---------------------------------------------------------------------------
+
+
+def _capture(hass, event_type: str) -> list:
+    events: list = []
+    hass.bus.async_listen(event_type, events.append)
+    return events
+
+
+async def test_first_refresh_suppresses_registered_events(hass):
+    """Parcels present on the first poll do not yield registered events."""
+    client = MagicMock()
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [
+            _shipment("ORDER_CREATED", parcel_number="A"),
+            _shipment("PARCEL_HANDED", parcel_number="B"),
+        ],
+        "sendingShipments": [],
+    })
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    captured = _capture(hass, "dpd_parcel_registered")
+
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert captured == []
+
+
+async def test_second_refresh_fires_registered_event_for_new_parcel(hass):
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {
+            "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
+            "sendingShipments": [],
+        },
+        {
+            "incomingShipments": [
+                _shipment("PARCEL_HANDED", parcel_number="A"),
+                _shipment("ORDER_CREATED", parcel_number="NEW"),
+            ],
+            "sendingShipments": [],
+        },
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_registered")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(captured) == 1
+    payload = captured[0].data
+    assert payload["barcode"] == "NEW"
+    assert payload["status"] == ParcelStatus.REGISTERED
+    assert payload["carrier"] == "DPD"
+
+
+async def test_status_change_fires_status_changed_event(hass):
+    """A known parcel whose status transitions yields one status_changed event."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {
+            "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
+            "sendingShipments": [],
+        },
+        {
+            "incomingShipments": [
+                _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="A"),
+            ],
+            "sendingShipments": [],
+        },
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_status_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(captured) == 1
+    payload = captured[0].data
+    assert payload["barcode"] == "A"
+    assert payload["old_status"] == ParcelStatus.IN_TRANSIT
+    assert payload["new_status"] == ParcelStatus.OUT_FOR_DELIVERY
+    assert payload["status"] == ParcelStatus.OUT_FOR_DELIVERY
+
+
+async def test_unchanged_status_fires_no_event(hass):
+    """Polling the same parcel with the same mapped status fires nothing."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    # Same description across two polls — should not trigger a change.
+    shipment = _shipment("PARCEL_HANDED", parcel_number="A")
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [shipment],
+        "sendingShipments": [],
+    })
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured_registered = _capture(hass, "dpd_parcel_registered")
+    captured_changed = _capture(hass, "dpd_parcel_status_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert captured_registered == []
+    assert captured_changed == []
+
+
+async def test_inter_in_transit_descriptions_do_not_fire(hass):
+    """PARCEL_HANDED → IN_TRANSIT → AT_DELIVERY_CENTER all map to IN_TRANSIT.
+
+    The canonical status does not change, so no status_changed event fires
+    even though the raw description does — that's the whole point of the
+    enum: cross-carrier automations react to canonical lifecycle changes,
+    not to internal renaming inside the carrier's tracking timeline.
+    """
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {"incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
+        {"incomingShipments": [_shipment("IN_TRANSIT", parcel_number="A")], "sendingShipments": []},
+        {"incomingShipments": [_shipment("AT_DELIVERY_CENTER", parcel_number="A")], "sendingShipments": []},
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_status_changed")
+    await coordinator._async_update_data()
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert captured == []
+
+
 async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
     window = {
         "deliveryDate": "2026-06-17",
