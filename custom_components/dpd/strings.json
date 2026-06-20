@@ -72,7 +72,7 @@
       },
       "outgoing_parcels": {
         "name": "Outgoing parcels",
-        "unit_of_measurement": "shipments"
+        "unit_of_measurement": "parcels"
       },
       "delivered_parcels": {
         "name": "Delivered parcels",

@@ -156,7 +156,7 @@ def test_outgoing_sensor_counts_active_shipments():
 def test_outgoing_sensor_zero_when_no_data():
     sensor = DpdOutgoingParcelsSensor(_make_coordinator(None), _make_entry())
     assert sensor.native_value == 0
-    assert sensor.extra_state_attributes == {"shipments": []}
+    assert sensor.extra_state_attributes == {"parcels": []}
 
 
 # ---------------------------------------------------------------------------

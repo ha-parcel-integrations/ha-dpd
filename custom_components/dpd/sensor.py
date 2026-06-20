@@ -210,7 +210,7 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_translation_key = "outgoing_parcels"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = "Data provided by DPD"
-    _unrecorded_attributes = frozenset({"shipments"})
+    _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -227,7 +227,7 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"shipments": self._shipments}
+        return {"parcels": self._shipments}
 
 
 class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
