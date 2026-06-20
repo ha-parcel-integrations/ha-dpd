@@ -11,6 +11,8 @@ from .const import (
     DEFAULT_BU,
     DPD_BASIC_TOKEN,
     DPD_CONSIGNEE_SSO_URL,
+    DPD_FMP_AUTHENTICATE_URL,
+    DPD_FMP_SHIPMENT_URL,
     DPD_GUEST_TOKEN_URL,
     DPD_PARCELS_URL,
     KEYCLOAK_CLIENT_ID,
@@ -131,6 +133,76 @@ class DpdApiClient:
             return data
 
         return await self._async_call_with_reauth(_fetch)
+
+    async def async_fmp_delivery_window(self, hashcode: str) -> dict[str, Any] | None:
+        """Fetch the Follow My Parcel delivery window for a parcel hashcode.
+
+        Returns the raw ``deliveryDateAndTime`` dict
+        (``{"deliveryDate": ..., "timeRange": {"from": ..., "to": ...}}``)
+        when DPD has scheduled a precise window — typically on the day a
+        parcel is out for delivery. Returns ``None`` when the window is
+        not (yet) available or the call fails; FMP is best-effort and
+        should never break the main parcels poll.
+        """
+        try:
+            fmp_token = await self._async_fmp_authenticate(hashcode)
+        except DpdApiError as err:
+            _LOGGER.debug(
+                "FMP authenticate failed for hashcode %s: HTTP %d",
+                hashcode[:8], err.status_code,
+            )
+            return None
+        except DpdAuthError as err:
+            _LOGGER.debug("FMP authenticate returned no token: %s", err)
+            return None
+
+        try:
+            shipment = await self._async_fmp_shipment(fmp_token)
+        except DpdApiError as err:
+            _LOGGER.debug(
+                "FMP shipment fetch failed for hashcode %s: HTTP %d",
+                hashcode[:8], err.status_code,
+            )
+            return None
+
+        delivery = shipment.get("deliveryDateAndTime")
+        return delivery if isinstance(delivery, dict) else None
+
+    async def _async_fmp_authenticate(self, hashcode: str) -> str:
+        """Exchange a parcel hashcode for an FMP access token."""
+        async with self._session.post(
+            DPD_FMP_AUTHENTICATE_URL,
+            json={"authMethod": "HASHCODE", "credentials": hashcode},
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        ) as response:
+            if response.status != 200:
+                raise DpdApiError(response.status)
+            body: dict[str, Any] = await response.json(content_type=None)
+
+        token = body.get("access_token")
+        if not token:
+            raise DpdAuthError("DPD FMP authenticate did not return a token")
+        return token
+
+    async def _async_fmp_shipment(self, fmp_token: str) -> dict[str, Any]:
+        """Fetch the FMP shipment detail for the current FMP token."""
+        async with self._session.get(
+            DPD_FMP_SHIPMENT_URL,
+            params={"lang": "en"},
+            headers={
+                "Authorization": f"Bearer {fmp_token}",
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        ) as response:
+            if response.status != 200:
+                raise DpdApiError(response.status)
+            data: dict[str, Any] = await response.json(content_type=None)
+        return data
 
     async def _async_call_with_reauth(self, coro_fn: Any) -> Any:
         """Call coro_fn(), re-authenticating once if the session has expired."""

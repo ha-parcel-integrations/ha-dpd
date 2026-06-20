@@ -17,6 +17,15 @@ DPD_GUEST_TOKEN_URL = f"{DPD_BASE_URL}/oauth/token"
 DPD_CONSIGNEE_SSO_URL = f"{DPD_BASE_URL}/users/login/consignee-sso"
 DPD_PARCELS_URL = f"{DPD_BASE_URL}/v7/parcels"
 
+# Follow My Parcel — DPD's same-day delivery-window sub-API. Per-parcel
+# auth flow: take the hashcode from
+# ``availableActions.FOLLOW_MY_PARCEL[0].hashcode`` on the shipment,
+# exchange it for an FMP access token at the authenticate endpoint, then
+# fetch the shipment detail to read ``deliveryDateAndTime.timeRange``
+# (``from`` / ``to``).
+DPD_FMP_AUTHENTICATE_URL = f"{DPD_BASE_URL}/fmp/authenticate"
+DPD_FMP_SHIPMENT_URL = f"{DPD_BASE_URL}/v3/fmp/shipment"
+
 # myDPD Mobile App client credentials (base64 of "<client_id>:<client_secret>"),
 # fetched from DPD's Firebase Remote Config and hardcoded in the mobile app.
 DPD_BASIC_TOKEN = (
