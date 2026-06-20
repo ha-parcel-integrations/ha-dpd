@@ -71,14 +71,21 @@ See [`docs/api/parcels.md`](docs/api/parcels.md#status-lifecycle) for the canoni
 
 ### Delivery-time window
 
-On the day a parcel is out for delivery (status `4`), DPD exposes a
-precise one-hour `from` / `to` window via its
-[Follow My Parcel](docs/api/fmp.md) sub-API. The integration fetches
-this automatically for every FMP-eligible parcel each poll, so
-`sensor.<account>_dpd_next_delivery` reports the **actual** hour the
-driver is expected — not just midnight of the delivery date. Parcels
-without an FMP window (anything before the day of delivery) keep using
-the calendar-date midnight as a "today / tomorrow" timestamp.
+Every parcel exposes a planned delivery window as two top-level
+attributes — `plannedDeliveryFrom` and `plannedDeliveryTo` — both
+ISO 8601 strings with timezone offset, visible on the per-parcel
+sensor and inside the `parcels` / `shipments` attribute of every
+summary sensor.
+
+| When | `plannedDeliveryFrom` / `plannedDeliveryTo` |
+|---|---|
+| On the day a parcel is out for delivery | The precise one-hour window DPD shows on its tracking page (e.g. `10:34` – `11:34`), fetched from the [Follow My Parcel](docs/api/fmp.md) sub-API. |
+| Before the day of delivery | The full calendar day in the parcel's local timezone (`00:00:00` – `23:59:59` on the planned `deliveryDate`). |
+| No delivery date known yet | `null` for both. |
+
+`sensor.<account>_dpd_next_delivery` uses `plannedDeliveryFrom` as the
+sort key, so it reports the actual hour the driver is expected — not
+just midnight — on the day of delivery.
 
 ### Coming next
 
