@@ -1,0 +1,33 @@
+# Notify exactly once per parcel when DPD says it's on the delivery
+# vehicle today. Filters on the normalised ParcelStatus.OUT_FOR_DELIVERY
+# value so this is independent of DPD's raw status strings.
+#
+# On the day of delivery the integration also fills in a precise hour
+# window via Follow My Parcel — the message includes the window when
+# available, otherwise just "vandaag".
+
+alias: "DPD: parcel out for delivery"
+description: Notify when a DPD parcel goes out for delivery today.
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: dpd_parcel_status_changed
+    event_data:
+      new_status: out_for_delivery
+
+actions:
+  - action: notify.mobile_app
+    data:
+      title: "Pakket onderweg vandaag"
+      message: >-
+        {{ trigger.event.data.sender or 'Onbekende afzender' }} – verwacht
+        {% if trigger.event.data.planned_from and trigger.event.data.planned_to %}
+        tussen {{ as_timestamp(trigger.event.data.planned_from) | timestamp_custom('%H:%M') }}
+        en {{ as_timestamp(trigger.event.data.planned_to) | timestamp_custom('%H:%M') }}
+        {% else %}
+        vandaag
+        {% endif %}
+      data:
+        clickAction: "{{ trigger.event.data.url }}"

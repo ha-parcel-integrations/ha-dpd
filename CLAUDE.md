@@ -17,9 +17,8 @@ you only "know" from training data.
 | Config flow, options flow, reauth, reconfigure | https://developers.home-assistant.io/docs/config_entries_config_flow_handler |
 | DataUpdateCoordinator pattern | https://developers.home-assistant.io/docs/integration_fetching_data |
 | Quality scale rules | https://developers.home-assistant.io/docs/core/integration-quality-scale |
-| Diagnostics | https://developers.home-assistant.io/docs/integration_diagnostics |
+| Diagnostics | https://developers.home-assistant.io/docs/core/integration/diagnostics |
 | Translations | https://developers.home-assistant.io/docs/internationalization/core |
-| Brand registration | https://developers.home-assistant.io/docs/creating_integration_brand |
 
 ### Recent developer-facing changes
 
@@ -38,24 +37,63 @@ re-propose these as improvements:
 - `quality_scale: "silver"` in manifest, minimum HA version `2024.7.0`
 - `ConfigEntry.runtime_data` (typed dataclass `DpdData`)
 - `PARALLEL_UPDATES = 0` in `sensor.py`
+- Coordinator takes `config_entry=entry` so `self.config_entry` is
+  available on the base class
 - Per-parcel sensors self-remove via `async_remove(force_remove=True)`
-- Coordinator logs warnings on unavailability (auth and connectivity)
-- Reauth flow calls `async_reload` so new credentials propagate to the
-  in-memory `DpdApiClient`
+- Reauth flow uses `async_update_reload_and_abort` (one helper call
+  instead of update + reload + abort)
+- `aiohttp.ClientError` is intentionally not caught in the coordinator —
+  `DataUpdateCoordinator` wraps it automatically
 - Diagnostics handler in `diagnostics.py` with credential and PII
   redaction
-- Tests cover config flow, sensor, coordinator, diagnostics, and
-  setup/unload lifecycle (≥75% required for silver)
-- `_unrecorded_attributes` on every summary sensor — parcel/shipment
-  lists are kept out of the recorder long-term tables
+- Tests cover config flow, sensor, coordinator (incl. event firing),
+  diagnostics, FMP delivery-window, and setup/unload lifecycle
+- `_unrecorded_attributes` on every summary sensor — parcel lists are
+  kept out of the recorder long-term tables
 - `_attr_attribution = "Data provided by DPD"` per entity
 
-## What was deliberately skipped
+### Adopted in 2.0.0 (do not refactor away)
 
-- **`has_entity_name`** is *not* used on this integration. Switching to
-  it would change friendly names for existing dashboards and automations.
-  The user weighed this trade-off explicitly. Do not change it without
-  asking.
+- **Canonical `ParcelStatus` enum** in `const.py` — shared with DHL,
+  PostNL and the parcel aggregator. `normalize_parcel` maps the raw
+  DPD `status.description` via `map_parcel_status` and reports
+  `ParcelStatus.UNKNOWN` (with one-shot info log) for anything not
+  yet in `_DESCRIPTION_MAP`. The original DPD description lives on
+  `raw_status`; do not re-introduce it on `status`.
+- **Events:** the coordinator fires `dpd_parcel_registered` and
+  `dpd_parcel_status_changed` on the HA event bus. Events are
+  suppressed on the very first refresh so we do not flood users with
+  "registered" events for parcels that already existed.
+- **`has_entity_name = True`** on every entity, with `translation_key`
+  routing names through `strings.json` and the language files. Drop
+  `_attr_name` is the rule — translations are the source of truth.
+- **Translated unit-of-measurement** (`entity.sensor.<key>.unit_of_measurement`
+  in strings/translations). `_attr_native_unit_of_measurement` is
+  intentionally absent. Every summary sensor uses the single `parcels`
+  unit ("pakketten" in Dutch); the old `shipments` / `zendingen` split
+  is gone.
+- **`icons.json`** holds all sensor icons via the `translation_key`. Do
+  not re-introduce `_attr_icon` on the sensor classes.
+- **Device name pattern**: `"DPD (<email>)"`. Sensors auto-prefix with
+  this, yielding friendly names like
+  `DPD (account@example.com) Incoming parcels`.
+- **Carrier-agnostic parcel shape** out of `normalize_parcel` —
+  `carrier`, `barcode`, `sender`, `status` (enum), `raw_status`,
+  `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`,
+  `pickup_point`, `url`, plus the original DPD payload preserved under
+  `raw`. Sensors read from these top-level keys; the FMP-window and
+  raw description handling lives only inside the coordinator.
+
+## Planned for the next major bump
+
+- **Exception translations** (Gold-tier rule). `UpdateFailed(f"...")`
+  still uses f-strings; the Gold push will move to `translation_key` +
+  `translation_placeholders`.
+- **`at_pickup_point` mapping + a real awaiting-pickup sensor.**
+  Blocked on DPD shipping a distinct "arrived at ParcelShop" status —
+  see [issue #1](https://github.com/peternijssen/ha-dpd/issues/1).
+- **Populated `pickup_point` field.** Blocked on DPD exposing the
+  ParcelShop name/address.
 
 ## Repo-specific quirks
 
@@ -67,15 +105,25 @@ re-propose these as improvements:
   start 401-ing for everyone.
 - **Business Unit dropdown**: only `DPD-NL` is currently mapped in
   `BUSINESS_UNITS`. The setup code is BU-agnostic, but the tracking-URL
-  pattern hardcodes `/nl/` in the path. If you add another BU, update
-  the URL builder too.
-- The "`PARCEL_HANDED` is the terminal hand-off status" intel comes
-  from a community issue, not official docs. If a new status appears,
-  the `DELIVERED_DESCRIPTION` const may need extending.
-- `DpdEnRouteToParcelShopSensor` counts every non-delivered
-  PARCELSHOP-destination parcel — DPD does not yet expose a distinct
-  "arrived at ParcelShop" status, so we cannot tell *en route* apart
-  from *awaiting collection*. Documented limitation, not a bug.
+  pattern (`_tracking_url` in `coordinator.py`) hardcodes `/nl/` in the
+  path. If you add another BU, update the URL builder too.
+- **`KNOWN_DESCRIPTIONS`** in `const.py` is the catalogue of all
+  observed DPD `status.description` values; `_DESCRIPTION_MAP` in
+  `coordinator.py` is the source of truth for the ParcelStatus
+  mapping. Both need updating when DPD introduces a new lifecycle
+  stage — the integration info-logs unknown descriptions once per HA
+  session so they are easy to spot.
+- **`fmpDeliveryDateAndTime`** (under `raw`) is filled by the
+  coordinator's per-parcel FMP fetch when DPD exposes a
+  `FOLLOW_MY_PARCEL` action. The fetch is explicitly best-effort: any
+  non-200 / missing token / network error returns `None` and the
+  parcels poll keeps going. `planned_from` / `planned_to` on the
+  normalised dict reflect the FMP hour window when present, otherwise
+  the calendar-day window in the parcel's local timezone.
+- **`DpdEnRouteToParcelShopSensor`** filters on the normalised
+  `pickup` bool — DPD does not yet expose a distinct "arrived at
+  ParcelShop" status, so the sensor cannot tell *en route* apart from
+  *awaiting collection*. Documented limitation, not a bug.
 
 ## Running tests
 
@@ -83,4 +131,5 @@ re-propose these as improvements:
 python -m pytest tests/ --cov=custom_components.dpd
 ```
 
-Coverage must stay ≥75% (silver requirement). Run before committing.
+Coverage must stay **above 95%** (the silver `test-coverage` rule on
+developers.home-assistant.io). Run before committing.

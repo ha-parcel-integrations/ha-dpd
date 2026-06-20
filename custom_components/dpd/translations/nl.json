@@ -60,5 +60,31 @@
         "parcels": "Aantal pakketten"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "incoming_parcels": {
+        "name": "Binnenkomende pakketten",
+        "unit_of_measurement": "pakketten"
+      },
+      "parcel": {
+        "name": "Pakket {barcode}"
+      },
+      "outgoing_parcels": {
+        "name": "Uitgaande pakketten",
+        "unit_of_measurement": "pakketten"
+      },
+      "delivered_parcels": {
+        "name": "Bezorgde pakketten",
+        "unit_of_measurement": "pakketten"
+      },
+      "next_delivery": {
+        "name": "Eerstvolgende bezorging"
+      },
+      "en_route_to_parcel_shop": {
+        "name": "Onderweg naar ParcelShop",
+        "unit_of_measurement": "pakketten"
+      }
+    }
   }
 }

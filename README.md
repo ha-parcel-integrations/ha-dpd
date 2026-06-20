@@ -13,7 +13,7 @@ A custom Home Assistant integration that tracks your DPD shipments.
 
 ## Requirements
 
-- Home Assistant 2024.1 or newer
+- Home Assistant 2024.7 or newer
 - A DPD account (the same credentials you use in the myDPD mobile app)
 
 ## Installation
@@ -38,62 +38,135 @@ A custom Home Assistant integration that tracks your DPD shipments.
 4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
 5. Click **Submit**
 
-The delivered-parcels filter can be changed later via **Settings → Devices & Services → DPD → Configure**. Changes take effect on the next refresh — no reload required.
+### Setup parameters
+
+| Field | Description |
+|---|---|
+| Email | The email address of your DPD consumer account (the one you use in the myDPD mobile app). |
+| Password | The password for that account. Stored in the HA config entry and refreshed automatically when the integration triggers a re-authentication. |
+| Country | The DPD business unit to query. Only **Netherlands** (`DPD-NL`) is mapped today; more land once contributors share parcel-payload samples. |
+
+## Options
+
+Click **Configure** on the integration card to change the delivered-parcels filter:
+
+| Option | Description |
+|---|---|
+| Filter by | `Days` keeps delivered parcels visible for the last N days. `Number of parcels` keeps only the N most recent regardless of age. |
+| Amount | The N used by the filter above. |
+
+Changes take effect on the next refresh — no reload required.
+
+## Removal
+
+Standard HA removal applies: **Settings → Devices & Services →
+DPD → ⋮ → Delete**. No DPD-side cleanup is needed; deleting the
+config entry stops the polling. To revoke API access entirely, change
+your DPD account password — the integration will trigger a re-auth
+notification, which you can then ignore.
 
 ## Sensors
 
-| Entity | Description |
-|--------|-------------|
-| `sensor.<account>_dpd_incoming_parcels` | Number of active incoming parcels; full list on the `parcels` attribute |
-| `sensor.<account>_dpd_parcel_<number>` | Status of a single active incoming shipment, with the full DPD object on the attributes |
-| `sensor.<account>_dpd_next_delivery` | Earliest expected delivery datetime across all active incoming parcels. Uses DPD's Follow My Parcel hour-window (`from` time) on the day a parcel is out for delivery; falls back to the calendar date at midnight for parcels not yet scheduled. |
-| `sensor.<account>_dpd_en_route_to_parcel_shop` | Active incoming parcels destined for a ParcelShop pickup point |
-| `sensor.<account>_dpd_delivered_parcels` | Recently delivered parcels (configurable window) |
-| `sensor.<account>_dpd_outgoing_parcels` | Number of active outgoing shipments; full list on the `shipments` attribute |
+The integration creates one device per DPD account, named
+**`DPD (<your-email>)`**. With multiple accounts each gets its own device
+named after its email. The entities below show the friendly-name pattern;
+their entity_ids carry the same account suffix:
 
-### Parcel statuses
-
-DPD's `status.description` moves through six stages, mapped 1-to-1 to
-the numeric `status.status` code. The integration recognises all of
-them today; any new value DPD introduces is info-logged once per HA
-session so it can be added to the catalogue.
-
-| `status.status` | `status.description` | When it appears |
-|---|---|---|
-| `0` | `ORDER_CREATED` | Label printed; not yet handed to DPD |
-| `1` | `PARCEL_HANDED` | Sender has handed the parcel to DPD |
-| `2` | `IN_TRANSIT` | In DPD's network |
-| `3` | `AT_DELIVERY_CENTER` | At the regional sorting hub the morning of delivery |
-| `4` | `PARCEL_OUT_FOR_DELIVERY` | On the delivery vehicle today |
-| `5` | `DELIVERED` | Terminal |
-
-See [`docs/api/parcels.md`](docs/api/parcels.md#status-lifecycle) for the canonical reference.
-
-### Delivery-time window
-
-Every parcel exposes a planned delivery window as two top-level
-attributes — `plannedDeliveryFrom` and `plannedDeliveryTo` — both
-ISO 8601 strings with timezone offset, visible on the per-parcel
-sensor and inside the `parcels` / `shipments` attribute of every
-summary sensor.
-
-| When | `plannedDeliveryFrom` / `plannedDeliveryTo` |
+| Friendly name pattern | Description |
 |---|---|
-| On the day a parcel is out for delivery | The precise one-hour window DPD shows on its tracking page (e.g. `10:34` – `11:34`), fetched from the [Follow My Parcel](docs/api/fmp.md) sub-API. |
-| Before the day of delivery | The full calendar day in the parcel's local timezone (`00:00:00` – `23:59:59` on the planned `deliveryDate`). |
-| No delivery date known yet | `null` for both. |
+| `DPD (account) Incoming parcels` | Number of active incoming parcels |
+| `DPD (account) Parcel <barcode>` | Canonical status of a single incoming shipment |
+| `DPD (account) Next delivery` | Earliest expected delivery datetime |
+| `DPD (account) En route to ParcelShop` | Active incoming parcels destined for a DPD ParcelShop pickup point |
+| `DPD (account) Delivered parcels` | Recently delivered parcels (configurable window) |
+| `DPD (account) Outgoing parcels` | Number of active outgoing parcels |
 
-`sensor.<account>_dpd_next_delivery` uses `plannedDeliveryFrom` as the
-sort key, so it reports the actual hour the driver is expected — not
-just midnight — on the day of delivery.
+Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 
-### Coming next
+| Key | Type | Meaning |
+|---|---|---|
+| `carrier` | string | `"DPD"` |
+| `barcode` | string | Parcel tracking number |
+| `sender` | string \| null | Sender name (e.g. webshop) |
+| `status` | `ParcelStatus` | Canonical status — see the [status reference](#parcel-status-reference) |
+| `raw_status` | string \| null | Original DPD status description (for power users) |
+| `delivered` | bool | Whether the parcel has been delivered |
+| `delivered_at` | ISO 8601 \| null | Delivery moment, if known |
+| `planned_from` | ISO 8601 \| null | Expected delivery window start (Follow My Parcel hour on the day of delivery, else midnight on the planned date) |
+| `planned_to` | ISO 8601 \| null | Expected delivery window end (Follow My Parcel hour, else 23:59:59 on the planned date) |
+| `pickup` | bool | Destined for a pickup point rather than a home address |
+| `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD has not yet exposed the field) |
+| `url` | string \| null | Deep link to the parcel's tracking page |
+| `raw` | dict | The full original DPD API payload |
 
-Blocked on additional data:
+This is the same shape that DHL and PostNL use, so the
+[parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
+and any cross-carrier dashboard can read parcels from all three
+integrations the same way.
 
-- A separate **awaiting-pickup** sensor — needs the DPD status value that indicates "parcel has arrived at the ParcelShop". Until that's mapped, all ParcelShop-bound parcels stay grouped in the en-route sensor.
+For full attribute reference and example automations see
+[docs/sensors.md](docs/sensors.md) — or the
+[examples folder](examples/) for ready-to-paste automation and
+dashboard snippets.
 
-See [issue #1](https://github.com/peternijssen/ha-dpd/issues/1) — extra data is very welcome.
+## Parcel status reference
+
+`status` on every parcel is one of the canonical `ParcelStatus` values
+below. Use these in your automations rather than DPD's raw description
+strings — the raw value stays available on `raw_status` for power
+users, and the [DPD status lifecycle](docs/api/parcels.md#status-lifecycle)
+documents the source mapping in full.
+
+| `status` | Meaning | DPD raw description that maps here |
+|---|---|---|
+| `registered` | DPD knows about the label but the parcel is not yet in transit | `ORDER_CREATED` |
+| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER` |
+| `out_for_delivery` | On the delivery vehicle today | `PARCEL_OUT_FOR_DELIVERY` |
+| `at_pickup_point` | Arrived at the ParcelShop, ready to collect | (not yet observed — DPD has no distinct "arrived at ParcelShop" status; ParcelShop-bound parcels surface as `out_for_delivery` on delivery day) |
+| `delivered` | Handed over (mailbox, recipient, neighbour, picked up) | `DELIVERED` |
+| `returning` | Failed delivery, on the way back to the sender | (not yet observed) |
+| `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
+| `unknown` | Raw description we have not mapped yet | anything else — logged once at info level so it can be added to the map |
+
+This mapping is shared across the carriers: DHL and PostNL use the
+same `ParcelStatus` values with their own raw-status mappings, so a
+single event-driven automation can act on `status` regardless of
+carrier.
+
+## Events
+
+The coordinator fires events on the HA event bus when something
+interesting happens to a parcel, so automations can react without
+polling per-parcel sensors.
+
+| Event | When | Payload |
+|---|---|---|
+| `dpd_parcel_registered` | A new barcode appears in the active list | The full normalised parcel dict (`carrier`, `barcode`, `sender`, `status`, `raw_status`, `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`, `raw`) |
+| `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes | Same payload plus `old_status` and `new_status` |
+
+The coordinator suppresses events on the very first refresh after
+start-up so you don't get a stampede of "registered" events for
+parcels that were already in your account before HA started.
+
+See [`examples/automations/`](examples/automations/) for ready-to-paste
+event-driven automations, or the
+[parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
+for a carrier-agnostic re-emit layer that fires
+`parcel_aggregator_parcel_*` events covering every installed carrier
+in one go.
+
+## Examples
+
+The [`examples/`](examples/) folder ships ready-to-paste snippets for
+both automations and dashboards. Highlights:
+
+- [`examples/automations/notify_when_parcel_registered.yaml`](examples/automations/notify_when_parcel_registered.yaml) — push when DPD announces a new parcel.
+- [`examples/automations/notify_when_out_for_delivery.yaml`](examples/automations/notify_when_out_for_delivery.yaml) — alert once per parcel when it's on the truck today; uses the FMP hour window when available.
+- [`examples/automations/notify_when_at_parcelshop.yaml`](examples/automations/notify_when_at_parcelshop.yaml) — alert when a parcel is routed to a DPD ParcelShop.
+- [`examples/automations/announce_delivery_window.yaml`](examples/automations/announce_delivery_window.yaml) — TTS announcement an hour before the next planned delivery.
+- [`examples/dashboards/active_parcels_grid.yaml`](examples/dashboards/active_parcels_grid.yaml) — markdown card listing every active parcel with sender, canonical status and tracking link.
+- [`examples/dashboards/summary_glance.yaml`](examples/dashboards/summary_glance.yaml) — compact glance row with the day-to-day counters.
+- [`examples/dashboards/next_delivery_countdown.yaml`](examples/dashboards/next_delivery_countdown.yaml) — entities card showing the next expected delivery and details.
 
 ## Debugging
 

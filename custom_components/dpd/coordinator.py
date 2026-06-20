@@ -5,8 +5,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-import aiohttp
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -22,9 +20,29 @@ from .const import (
     DOMAIN,
     KNOWN_DESCRIPTIONS,
     POLL_INTERVAL,
+    STATUS_AT_DELIVERY_CENTER,
+    STATUS_DELIVERED,
+    STATUS_IN_TRANSIT,
+    STATUS_ORDER_CREATED,
+    STATUS_PARCEL_HANDED,
+    STATUS_PARCEL_OUT_FOR_DELIVERY,
+    ParcelStatus,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# DPD status.description → canonical ParcelStatus. Every value in
+# KNOWN_DESCRIPTIONS is mapped here; anything else falls back to
+# ParcelStatus.UNKNOWN and triggers a one-shot info log via
+# log_unknown_descriptions.
+_DESCRIPTION_MAP: dict[str, ParcelStatus] = {
+    STATUS_ORDER_CREATED: ParcelStatus.REGISTERED,
+    STATUS_PARCEL_HANDED: ParcelStatus.IN_TRANSIT,
+    STATUS_IN_TRANSIT: ParcelStatus.IN_TRANSIT,
+    STATUS_AT_DELIVERY_CENTER: ParcelStatus.IN_TRANSIT,
+    STATUS_PARCEL_OUT_FOR_DELIVERY: ParcelStatus.OUT_FOR_DELIVERY,
+    STATUS_DELIVERED: ParcelStatus.DELIVERED,
+}
 
 # Descriptions we have already info-logged once in this HA session, so
 # repeated polls do not flood the log with the same "new status" message.
@@ -35,11 +53,24 @@ def _description(shipment: dict) -> str | None:
     return (shipment.get("status") or {}).get("description")
 
 
-def log_unknown_descriptions(shipments: list[dict]) -> None:
-    """Info-log any status.description we have not catalogued yet, once per value.
+def map_parcel_status(parcel: dict) -> ParcelStatus:
+    """Map a raw DPD parcel to a canonical :class:`ParcelStatus`.
 
-    Lets us extend ``KNOWN_DESCRIPTIONS`` as new lifecycle stages surface
-    in real accounts without spamming the log on every poll.
+    Reads ``status.description`` and looks it up in ``_DESCRIPTION_MAP``;
+    unknown values (or a missing status field) fall back to
+    ``ParcelStatus.UNKNOWN``. New raw values are surfaced separately via
+    :func:`log_unknown_descriptions` so the map can be extended.
+    """
+    description = _description(parcel)
+    return _DESCRIPTION_MAP.get(description or "", ParcelStatus.UNKNOWN)
+
+
+def log_unknown_descriptions(shipments: list[dict]) -> None:
+    """Info-log any status.description we have not mapped yet, once per value.
+
+    Lets us extend ``_DESCRIPTION_MAP`` as new lifecycle stages surface
+    in real accounts without spamming the log on every poll. Anything
+    not in the map is reported as ``ParcelStatus.UNKNOWN`` until it is.
     """
     for shipment in shipments:
         description = _description(shipment)
@@ -50,8 +81,9 @@ def log_unknown_descriptions(shipments: list[dict]) -> None:
         ):
             _unknown_descriptions_logged.add(description)
             _LOGGER.info(
-                "DPD parcel status.description not yet catalogued: %r. "
-                "Please open an issue so we can add it to KNOWN_DESCRIPTIONS.",
+                "DPD status.description %r is not in _DESCRIPTION_MAP — "
+                "will be reported as ParcelStatus.UNKNOWN. Please open "
+                "an issue so we can add the mapping.",
                 description,
             )
 
@@ -64,6 +96,60 @@ def filter_active_shipments(shipments: list[dict]) -> list[dict]:
 def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     """Return shipments in the DELIVERED state."""
     return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
+
+
+def _tracking_url(parcel: dict) -> str | None:
+    """Build the DPD tracking URL for a parcel, or ``None`` when no parcelNumber.
+
+    The ``/nl/`` segment is hardcoded while only DPD-NL is supported as
+    a business unit — see CLAUDE.md. When more BUs are added, map each
+    to its tracking-page country code.
+    """
+    parcel_number = parcel.get("parcelNumber")
+    if not parcel_number:
+        return None
+    return (
+        f"https://www.dpdgroup.com/nl/mydpd/my-parcels/search?"
+        f"parcelNumber={parcel_number}"
+    )
+
+
+def normalize_parcel(parcel: dict) -> dict:
+    """Return a carrier-agnostic parcel dict with the DPD payload under ``raw``.
+
+    Mirrors the shape every other carrier integration (DHL, PostNL)
+    publishes, so the parcel aggregator and cross-carrier dashboards
+    can read parcels the same way regardless of source. The original
+    DPD shipment object stays available under ``raw``.
+
+    ``planned_from`` / ``planned_to`` are read from the
+    ``plannedDeliveryFrom`` / ``plannedDeliveryTo`` annotations added
+    by :func:`annotate_planned_delivery` (FMP window when available,
+    full-day fallback otherwise), and cleared for delivered parcels
+    where ``delivered_at`` carries the actual moment instead.
+    """
+    description = _description(parcel)
+    delivered = description == DELIVERED_DESCRIPTION
+    delivered_at: str | None = None
+    if delivered:
+        dt = shipment_delivery_dt(parcel)
+        delivered_at = dt.isoformat() if dt else None
+    is_pickup = (parcel.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+    return {
+        "carrier": "DPD",
+        "barcode": parcel.get("parcelNumber"),
+        "sender": parcel.get("senderName"),
+        "status": map_parcel_status(parcel),
+        "raw_status": description,
+        "delivered": delivered,
+        "delivered_at": delivered_at,
+        "planned_from": None if delivered else parcel.get("plannedDeliveryFrom"),
+        "planned_to": None if delivered else parcel.get("plannedDeliveryTo"),
+        "pickup": is_pickup,
+        "pickup_point": None,
+        "url": _tracking_url(parcel),
+        "raw": parcel,
+    }
 
 
 def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime | None]:
@@ -199,11 +285,15 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=POLL_INTERVAL),
         )
         self._client = client
-        self._entry = entry
+        # barcode -> last seen ParcelStatus. ``None`` on the first refresh so
+        # we can suppress events for parcels that already existed when the
+        # integration started (we do not know their previous state).
+        self._known_state: dict[str, ParcelStatus] | None = None
 
     async def _async_update_data(self) -> dict[str, list[dict]]:
         try:
@@ -211,9 +301,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         except DpdAuthError as err:
             _LOGGER.error("DPD authentication failed: %s", err)
             raise ConfigEntryAuthFailed("DPD authentication failed") from err
-        except (DpdApiError, aiohttp.ClientError) as err:
+        except DpdApiError as err:
             _LOGGER.warning("DPD parcels endpoint unreachable: %s", err)
             raise UpdateFailed(f"DPD error: {err}") from err
+        # aiohttp.ClientError is wrapped automatically by DataUpdateCoordinator.
 
         incoming = payload.get("incomingShipments") or []
         outgoing = payload.get("sendingShipments") or []
@@ -243,11 +334,56 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         if incoming or outgoing:
             _LOGGER.debug("DPD raw parcels payload: %s", payload)
 
-        return {
-            "incoming_active": incoming_active,
-            "incoming_delivered": incoming_delivered,
-            "outgoing_active": outgoing_active,
+        normalized_active = [normalize_parcel(p) for p in incoming_active]
+        normalized_delivered = [normalize_parcel(p) for p in incoming_delivered]
+        normalized_outgoing = [normalize_parcel(p) for p in outgoing_active]
+
+        self._fire_change_events(normalized_active)
+
+        self._known_state = {
+            p["barcode"]: p["status"]
+            for p in normalized_active
+            if p.get("barcode")
         }
+
+        return {
+            "incoming_active": normalized_active,
+            "incoming_delivered": normalized_delivered,
+            "outgoing_active": normalized_outgoing,
+        }
+
+    def _fire_change_events(self, parcels: list[dict]) -> None:
+        """Fire events for newly-registered parcels and status transitions.
+
+        Silent on the very first refresh — we cannot reliably know which
+        parcels are "new" to the user vs. "already there before HA started".
+        From the second refresh onward, every parcel that was not present
+        before yields one ``dpd_parcel_registered`` event, and every
+        parcel whose normalised status changed yields one
+        ``dpd_parcel_status_changed`` event.
+        """
+        if self._known_state is None:
+            return
+
+        for parcel in parcels:
+            barcode = parcel.get("barcode")
+            if not barcode:
+                continue
+            new_status = parcel["status"]
+            if barcode not in self._known_state:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_parcel_registered",
+                    {**parcel},
+                )
+            elif self._known_state[barcode] != new_status:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_parcel_status_changed",
+                    {
+                        **parcel,
+                        "old_status": self._known_state[barcode],
+                        "new_status": new_status,
+                    },
+                )
 
     async def _enrich_with_fmp(self, shipments: list[dict]) -> None:
         """In-place: add ``fmpDeliveryDateAndTime`` to shipments that expose FMP.
@@ -267,7 +403,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:
         """Trim the delivered list according to the configured options."""
-        options = self._entry.options
+        options = self.config_entry.options
         filter_type = options.get(
             CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
         )

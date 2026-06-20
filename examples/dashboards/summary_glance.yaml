@@ -1,0 +1,19 @@
+# Compact at-a-glance row showing the three counters that matter day to
+# day: incoming active, en route to a ParcelShop, and recently delivered.
+# Stack on top of the active-parcels grid for a complete view.
+#
+# DPD does not (yet) expose a distinct "arrived at ParcelShop" status,
+# so there is no separate "awaiting pickup" counter — all ParcelShop-
+# bound parcels are grouped in the en-route counter.
+
+type: glance
+title: DPD
+show_icon: true
+columns: 3
+entities:
+  - entity: sensor.dpd_incoming_parcels
+    name: Onderweg
+  - entity: sensor.dpd_en_route_to_parcel_shop
+    name: Naar PS
+  - entity: sensor.dpd_delivered_parcels
+    name: Recent

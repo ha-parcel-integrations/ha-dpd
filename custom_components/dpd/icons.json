@@ -1,0 +1,24 @@
+{
+  "entity": {
+    "sensor": {
+      "incoming_parcels": {
+        "default": "mdi:package-variant-closed"
+      },
+      "parcel": {
+        "default": "mdi:package-variant-closed"
+      },
+      "outgoing_parcels": {
+        "default": "mdi:package-variant-closed"
+      },
+      "delivered_parcels": {
+        "default": "mdi:package-variant"
+      },
+      "next_delivery": {
+        "default": "mdi:clock-fast"
+      },
+      "en_route_to_parcel_shop": {
+        "default": "mdi:truck-delivery"
+      }
+    }
+  }
+}
