@@ -1,0 +1,31 @@
+# Notify when a DPD parcel destined for a ParcelShop is en route — or
+# arrived. DPD does not yet expose a distinct "arrived at ParcelShop"
+# status, so this triggers on the broader `pickup` bool flipping to
+# true via a status change. Once DPD ships an explicit at-pickup-point
+# status the trigger can switch to:
+#
+#     event_data:
+#       new_status: at_pickup_point
+
+alias: "DPD: parcel heading to ParcelShop"
+description: Notify when a DPD parcel is routed to a ParcelShop pickup point.
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: dpd_parcel_status_changed
+
+conditions:
+  - condition: template
+    value_template: "{{ trigger.event.data.pickup }}"
+
+actions:
+  - action: notify.mobile_app
+    data:
+      title: "Pakket naar ParcelShop"
+      message: >-
+        {{ trigger.event.data.sender or 'Onbekende afzender' }} gaat naar
+        {{ trigger.event.data.pickup_point or 'een DPD ParcelShop' }}.
+      data:
+        clickAction: "{{ trigger.event.data.url }}"
