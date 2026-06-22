@@ -122,11 +122,12 @@ def normalize_parcel(parcel: dict) -> dict:
     can read parcels the same way regardless of source. The original
     DPD shipment object stays available under ``raw``.
 
-    ``planned_from`` / ``planned_to`` are read from the
-    ``plannedDeliveryFrom`` / ``plannedDeliveryTo`` annotations added
-    by :func:`annotate_planned_delivery` (FMP window when available,
-    full-day fallback otherwise), and cleared for delivered parcels
-    where ``delivered_at`` carries the actual moment instead.
+    ``planned_from`` / ``planned_to`` are derived from
+    :func:`shipment_planned_window` (FMP window first, then the top-level
+    ``deliveryTime{From,To}`` pair, finally the all-day fallback), and
+    cleared for delivered parcels where ``delivered_at`` carries the
+    actual moment instead. The raw DPD payload is passed through under
+    ``raw`` without modification.
     """
     description = _description(parcel)
     delivered = description == DELIVERED_DESCRIPTION
@@ -134,6 +135,12 @@ def normalize_parcel(parcel: dict) -> dict:
     if delivered:
         dt = shipment_delivery_dt(parcel)
         delivered_at = dt.isoformat() if dt else None
+    planned_from: str | None = None
+    planned_to: str | None = None
+    if not delivered:
+        start, end = shipment_planned_window(parcel)
+        planned_from = start.isoformat() if start else None
+        planned_to = end.isoformat() if end else None
     is_pickup = (parcel.get("status") or {}).get("deliveryType") == "PARCELSHOP"
     return {
         "carrier": "DPD",
@@ -143,8 +150,8 @@ def normalize_parcel(parcel: dict) -> dict:
         "raw_status": description,
         "delivered": delivered,
         "delivered_at": delivered_at,
-        "planned_from": None if delivered else parcel.get("plannedDeliveryFrom"),
-        "planned_to": None if delivered else parcel.get("plannedDeliveryTo"),
+        "planned_from": planned_from,
+        "planned_to": planned_to,
         "pickup": is_pickup,
         "pickup_point": None,
         "url": _tracking_url(parcel),
@@ -155,14 +162,19 @@ def normalize_parcel(parcel: dict) -> dict:
 def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime | None]:
     """Return the planned ``(from, to)`` delivery window for a shipment.
 
-    When DPD has scheduled a precise Follow My Parcel window (typically on
-    the day a parcel is out for delivery) both bounds carry the hour
-    range, e.g. ``(10:34, 11:34)`` on the delivery date.
+    Resolution order:
 
-    Otherwise — and only ``deliveryDate`` is known — the window spans the
-    whole calendar day in the parcel's local timezone (start of day,
-    ``23:59:59`` end of day). Returns ``(None, None)`` when even the
-    date is missing or unparseable.
+    1. The nested Follow My Parcel block (``fmpDeliveryDateAndTime``),
+       which gives a precise hour range like ``(10:34, 11:34)`` on the
+       day of delivery.
+    2. The top-level ``deliveryTimeFrom`` / ``deliveryTimeTo`` pair
+       (combined with ``deliveryDate``), which DPD attaches once a
+       parcel is out for delivery.
+    3. A whole-day window in the parcel's local timezone, when only
+       ``deliveryDate`` is known.
+
+    Returns ``(None, None)`` when even the date is missing or
+    unparseable.
     """
     tz_id = (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
     tz: timezone | ZoneInfo = timezone.utc
@@ -189,6 +201,18 @@ def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime |
     date_str = shipment.get("deliveryDate")
     if not date_str:
         return (None, None)
+
+    top_from = shipment.get("deliveryTimeFrom")
+    top_to = shipment.get("deliveryTimeTo")
+    if top_from and top_to:
+        try:
+            return (
+                datetime.fromisoformat(f"{date_str}T{top_from}").replace(tzinfo=tz),
+                datetime.fromisoformat(f"{date_str}T{top_to}").replace(tzinfo=tz),
+            )
+        except ValueError:
+            pass
+
     try:
         d = datetime.fromisoformat(date_str)
     except ValueError:
@@ -206,21 +230,6 @@ def shipment_planned_dt(shipment: dict) -> datetime | None:
     on for sorting.
     """
     return shipment_planned_window(shipment)[0]
-
-
-def annotate_planned_delivery(shipment: dict) -> None:
-    """In-place: add ``plannedDeliveryFrom`` / ``plannedDeliveryTo`` to a shipment.
-
-    Both values are ISO 8601 strings with timezone offset, or ``None``
-    when the shipment carries no parseable date information. Surfacing
-    them top-level means every sensor that exposes the raw shipment dict
-    gets a ready-to-template ``from`` / ``to`` pair without callers
-    having to dig into ``fmpDeliveryDateAndTime`` or recompute midnight
-    fallbacks.
-    """
-    start, end = shipment_planned_window(shipment)
-    shipment["plannedDeliveryFrom"] = start.isoformat() if start else None
-    shipment["plannedDeliveryTo"] = end.isoformat() if end else None
 
 
 def fmp_hashcode(shipment: dict) -> str | None:
@@ -318,9 +327,6 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         outgoing_active = filter_active_shipments(outgoing)
 
         await self._enrich_with_fmp(incoming_active)
-
-        for shipment in (*incoming_active, *incoming_delivered, *outgoing_active):
-            annotate_planned_delivery(shipment)
 
         _LOGGER.debug(
             "DPD shipments fetched: %d incoming (%d active, %d delivered shown), "

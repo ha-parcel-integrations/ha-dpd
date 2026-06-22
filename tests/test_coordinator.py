@@ -14,7 +14,6 @@ from custom_components.dpd.coordinator import (
     DpdCoordinator,
     _tracking_url,
     _unknown_descriptions_logged,
-    annotate_planned_delivery,
     filter_active_shipments,
     filter_delivered_shipments,
     fmp_hashcode,
@@ -44,6 +43,8 @@ def _shipment(
     delivery_date: str | None = None,
     fmp_hashcode: str | None = None,
     fmp_window: dict | None = None,
+    delivery_time_from: str | None = None,
+    delivery_time_to: str | None = None,
 ) -> dict:
     status: dict = {"description": description}
     if event_dt is not None:
@@ -57,6 +58,10 @@ def _shipment(
         out["availableActions"] = {"FOLLOW_MY_PARCEL": [{"hashcode": fmp_hashcode}]}
     if fmp_window is not None:
         out["fmpDeliveryDateAndTime"] = fmp_window
+    if delivery_time_from is not None:
+        out["deliveryTimeFrom"] = delivery_time_from
+    if delivery_time_to is not None:
+        out["deliveryTimeTo"] = delivery_time_to
     return out
 
 
@@ -491,7 +496,6 @@ def test_normalize_delivered_parcel_carries_delivered_at_not_planned_window():
         event_dt="2026-06-05T14:23:12",
         tz_id="Europe/Amsterdam",
     )
-    annotate_planned_delivery(raw)
     normalized = normalize_parcel(raw)
     assert normalized["delivered"] is True
     assert normalized["delivered_at"] is not None
@@ -500,7 +504,7 @@ def test_normalize_delivered_parcel_carries_delivered_at_not_planned_window():
     assert normalized["planned_to"] is None
 
 
-def test_normalize_active_parcel_carries_planned_window_from_annotation():
+def test_normalize_active_parcel_derives_planned_window_from_fmp():
     raw = _shipment(
         "PARCEL_OUT_FOR_DELIVERY",
         delivery_date="2026-06-17",
@@ -510,10 +514,24 @@ def test_normalize_active_parcel_carries_planned_window_from_annotation():
             "timeRange": {"from": "10:34:00", "to": "11:34:00"},
         },
     )
-    annotate_planned_delivery(raw)
     normalized = normalize_parcel(raw)
     assert normalized["planned_from"].startswith("2026-06-17T10:34:00")
     assert normalized["planned_to"].startswith("2026-06-17T11:34:00")
+
+
+def test_normalize_does_not_mutate_raw_payload():
+    raw = _shipment(
+        "PARCEL_OUT_FOR_DELIVERY",
+        delivery_date="2026-06-22",
+        tz_id="Europe/Amsterdam",
+        delivery_time_from="21:03:00",
+        delivery_time_to="22:03:00",
+    )
+    snapshot = set(raw.keys())
+    normalized = normalize_parcel(raw)
+    assert set(normalized["raw"].keys()) == snapshot
+    assert "plannedDeliveryFrom" not in normalized["raw"]
+    assert "plannedDeliveryTo" not in normalized["raw"]
 
 
 # ---------------------------------------------------------------------------
@@ -560,53 +578,40 @@ def test_planned_window_full_day_when_fmp_lacks_from_or_to():
         tz_id="Europe/Amsterdam",
         fmp_window=fmp,
     ))
-    # No `to` in FMP → fall back to the full-day window
+    # No `to` in FMP → fall back to the top-level / full-day window
+    assert (start.hour, end.hour) == (0, 23)
+
+
+def test_planned_window_uses_top_level_delivery_time_when_fmp_absent():
+    start, end = shipment_planned_window(_shipment(
+        delivery_date="2026-06-22",
+        tz_id="Europe/Amsterdam",
+        delivery_time_from="21:03:00",
+        delivery_time_to="22:03:00",
+    ))
+    assert start is not None and end is not None
+    assert (start.hour, start.minute) == (21, 3)
+    assert (end.hour, end.minute) == (22, 3)
+    assert start.tzinfo is not None
+    assert end.tzinfo is not None
+
+
+def test_planned_window_top_level_takes_precedence_over_full_day_fallback():
+    # Only one bound present → fall back to full-day, not a half-window.
+    start, end = shipment_planned_window(_shipment(
+        delivery_date="2026-06-22",
+        tz_id="Europe/Amsterdam",
+        delivery_time_from="21:03:00",
+    ))
     assert (start.hour, end.hour) == (0, 23)
 
 
 # ---------------------------------------------------------------------------
-# annotate_planned_delivery
+# Coordinator publishes planned windows without mutating raw payloads
 # ---------------------------------------------------------------------------
 
 
-def test_annotate_writes_iso_strings_with_tz():
-    shipment = _shipment(delivery_date="2026-06-17", tz_id="Europe/Amsterdam")
-    annotate_planned_delivery(shipment)
-    assert shipment["plannedDeliveryFrom"].startswith("2026-06-17T00:00:00")
-    assert shipment["plannedDeliveryTo"].startswith("2026-06-17T23:59:59")
-    # Both carry an offset (not bare naive iso)
-    assert "+" in shipment["plannedDeliveryFrom"]
-    assert "+" in shipment["plannedDeliveryTo"]
-
-
-def test_annotate_uses_fmp_window_when_present():
-    fmp = {
-        "deliveryDate": "2026-06-17",
-        "timeRange": {"from": "10:34:00", "to": "11:34:00"},
-    }
-    shipment = _shipment(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    )
-    annotate_planned_delivery(shipment)
-    assert shipment["plannedDeliveryFrom"].startswith("2026-06-17T10:34:00")
-    assert shipment["plannedDeliveryTo"].startswith("2026-06-17T11:34:00")
-
-
-def test_annotate_sets_none_when_no_date():
-    shipment = {"parcelNumber": "X", "status": {"description": "ORDER_CREATED"}}
-    annotate_planned_delivery(shipment)
-    assert shipment["plannedDeliveryFrom"] is None
-    assert shipment["plannedDeliveryTo"] is None
-
-
-# ---------------------------------------------------------------------------
-# Coordinator wires annotation onto every bucket
-# ---------------------------------------------------------------------------
-
-
-async def test_coordinator_annotates_all_buckets_with_planned_window(hass):
+async def test_coordinator_publishes_planned_window_without_touching_raw(hass):
     client = MagicMock()
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [
@@ -622,16 +627,20 @@ async def test_coordinator_annotates_all_buckets_with_planned_window(hass):
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
     result = await coordinator._async_update_data()
 
-    # Active buckets carry the from/to on top-level normalised fields;
-    # delivered parcels expose them under `raw` only (planned_* is None
-    # because delivered_at carries the truth instead).
+    # Active buckets carry the from/to on the normalised fields; delivered
+    # parcels clear them because delivered_at carries the truth instead.
     for parcel in result["incoming_active"] + result["outgoing_active"]:
         assert parcel["planned_from"] is not None
         assert parcel["planned_to"] is not None
     for parcel in result["incoming_delivered"]:
         assert parcel["planned_from"] is None
         assert parcel["planned_to"] is None
-        assert parcel["raw"]["plannedDeliveryFrom"] is not None
+
+    # `raw` must be pristine — no derived plannedDelivery* fields leaked in.
+    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active"):
+        for parcel in result[bucket]:
+            assert "plannedDeliveryFrom" not in parcel["raw"]
+            assert "plannedDeliveryTo" not in parcel["raw"]
 
 
 # ---------------------------------------------------------------------------
