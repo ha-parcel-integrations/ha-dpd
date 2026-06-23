@@ -13,8 +13,7 @@ Full reference for all sensors provided by the DPD integration.
 > value), `raw_status` (the original DPD description string),
 > `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`,
 > `pickup_point`, `url`, plus the original DPD shipment payload under
-> `raw`. The mapping from DPD-side fields onto these keys is documented
-> in [docs/api/parcels.md](api/parcels.md).
+> `raw`.
 
 ## Incoming parcels
 
@@ -120,10 +119,6 @@ in automations rather than DPD's raw description strings —
 | `returning` | Failed delivery, on the way back | (not yet observed) |
 | `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
 | `unknown` | Raw description we have not mapped yet | anything else — logged once per HA session at info level |
-
-The full DPD-side lifecycle table (numeric `status.status` + raw
-description per stage) lives in
-[docs/api/parcels.md](api/parcels.md#status-lifecycle).
 
 ---
 
