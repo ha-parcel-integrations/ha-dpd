@@ -23,6 +23,7 @@ from custom_components.dpd.coordinator import (
     shipment_delivery_dt,
     shipment_planned_dt,
     shipment_planned_window,
+    sort_parcels_by_ts,
 )
 
 
@@ -808,5 +809,64 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
 
     client.async_fmp_delivery_window.assert_awaited_once_with("hashA")
     # FMP window lives under the preserved `raw` payload after normalisation.
-    assert result["incoming_active"][0]["raw"]["fmpDeliveryDateAndTime"] == window
-    assert "fmpDeliveryDateAndTime" not in result["incoming_active"][1]["raw"]
+    by_barcode = {p["barcode"]: p for p in result["incoming_active"]}
+    assert by_barcode["A"]["raw"]["fmpDeliveryDateAndTime"] == window
+    assert "fmpDeliveryDateAndTime" not in by_barcode["B"]["raw"]
+
+
+# ---------------------------------------------------------------------------
+# sort_parcels_by_ts
+# ---------------------------------------------------------------------------
+
+
+def _norm(barcode: str, planned_from: str | None = None, delivered_at: str | None = None) -> dict:
+    return {
+        "barcode": barcode,
+        "planned_from": planned_from,
+        "delivered_at": delivered_at,
+    }
+
+
+def test_sort_orders_ascending_by_planned_from():
+    parcels = [
+        _norm("late", planned_from="2026-06-15T10:00:00+00:00"),
+        _norm("early", planned_from="2026-06-13T08:00:00+00:00"),
+        _norm("mid", planned_from="2026-06-14T12:00:00+00:00"),
+    ]
+    ordered = [p["barcode"] for p in sort_parcels_by_ts(parcels, "planned_from")]
+    assert ordered == ["early", "mid", "late"]
+
+
+def test_sort_orders_descending_for_delivered_at():
+    parcels = [
+        _norm("oldest", delivered_at="2026-06-13T08:00:00+00:00"),
+        _norm("newest", delivered_at="2026-06-15T10:00:00+00:00"),
+        _norm("mid", delivered_at="2026-06-14T12:00:00+00:00"),
+    ]
+    ordered = [p["barcode"] for p in sort_parcels_by_ts(parcels, "delivered_at", descending=True)]
+    assert ordered == ["newest", "mid", "oldest"]
+
+
+def test_sort_keeps_missing_or_garbage_timestamps_at_end():
+    parcels = [
+        _norm("no-ts"),
+        _norm("garbage", planned_from="not-a-date"),
+        _norm("early", planned_from="2026-06-13T08:00:00+00:00"),
+        _norm("late", planned_from="2026-06-15T10:00:00+00:00"),
+    ]
+    ordered = [p["barcode"] for p in sort_parcels_by_ts(parcels, "planned_from")]
+    assert ordered[:2] == ["early", "late"]
+    assert set(ordered[2:]) == {"no-ts", "garbage"}
+
+
+def test_sort_handles_z_suffix_timestamps():
+    parcels = [
+        _norm("a", planned_from="2026-06-15T10:00:00Z"),
+        _norm("b", planned_from="2026-06-13T10:00:00Z"),
+    ]
+    ordered = [p["barcode"] for p in sort_parcels_by_ts(parcels, "planned_from")]
+    assert ordered == ["b", "a"]
+
+
+def test_sort_empty_input_returns_empty_list():
+    assert sort_parcels_by_ts([], "planned_from") == []

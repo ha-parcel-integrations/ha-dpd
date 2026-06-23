@@ -159,6 +159,32 @@ def normalize_parcel(parcel: dict) -> dict:
     }
 
 
+def sort_parcels_by_ts(
+    parcels: list[dict], key_field: str, *, descending: bool = False
+) -> list[dict]:
+    """Return normalized parcels sorted by the ISO timestamp at ``key_field``.
+
+    Parcels whose value is missing or unparseable always sort to the end,
+    regardless of ``descending`` — so freshly registered parcels without
+    an ETA stay visible at the bottom instead of jumping to the top.
+    """
+    with_ts: list[tuple[datetime, dict]] = []
+    without_ts: list[dict] = []
+    for parcel in parcels:
+        value = parcel.get(key_field)
+        if not isinstance(value, str) or not value:
+            without_ts.append(parcel)
+            continue
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            without_ts.append(parcel)
+            continue
+        with_ts.append((dt, parcel))
+    with_ts.sort(key=lambda item: item[0], reverse=descending)
+    return [p for _, p in with_ts] + without_ts
+
+
 def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime | None]:
     """Return the planned ``(from, to)`` delivery window for a shipment.
 
@@ -340,9 +366,17 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         if incoming or outgoing:
             _LOGGER.debug("DPD raw parcels payload: %s", payload)
 
-        normalized_active = [normalize_parcel(p) for p in incoming_active]
-        normalized_delivered = [normalize_parcel(p) for p in incoming_delivered]
-        normalized_outgoing = [normalize_parcel(p) for p in outgoing_active]
+        normalized_active = sort_parcels_by_ts(
+            [normalize_parcel(p) for p in incoming_active], "planned_from"
+        )
+        normalized_delivered = sort_parcels_by_ts(
+            [normalize_parcel(p) for p in incoming_delivered],
+            "delivered_at",
+            descending=True,
+        )
+        normalized_outgoing = sort_parcels_by_ts(
+            [normalize_parcel(p) for p in outgoing_active], "planned_from"
+        )
 
         self._fire_change_events(normalized_active)
 
