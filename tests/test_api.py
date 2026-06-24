@@ -101,6 +101,24 @@ async def test_keycloak_login_raises_with_unknown_when_no_error_info():
         await client.async_login()
 
 
+@pytest.mark.asyncio
+async def test_keycloak_login_raises_api_error_on_5xx_without_parsing_body():
+    """5xx during login = DPD auth service is down. Surface as DpdApiError
+    so __init__.py maps it to ConfigEntryNotReady (HA retries) instead of
+    DpdAuthError → ConfigEntryAuthFailed (would push the user into reauth).
+    The response body is HTML during DPD outages, so we must not try to
+    parse it as JSON (that produced the orjson "unexpected character" error).
+    """
+    bad = MagicMock()
+    bad.status = 503
+    bad.json = AsyncMock(side_effect=AssertionError("must not parse body on 5xx"))
+    session = _mock_session(bad)
+    client = _client(session)
+    with pytest.raises(DpdApiError) as exc_info:
+        await client.async_login()
+    assert exc_info.value.status_code == 503
+
+
 # ---------------------------------------------------------------------------
 # Guest-token step
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import DpdApiClient, DpdAuthError
+from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import CONF_BU, DEFAULT_BU, PLATFORMS
 from .coordinator import DpdCoordinator
 
@@ -44,6 +44,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
         await client.async_login()
     except DpdAuthError as exc:
         raise ConfigEntryAuthFailed("DPD authentication failed") from exc
+    except DpdApiError as exc:
+        # Non-success HTTP status during the auth flow — almost always a 5xx
+        # from DPD's auth tier. Surface it as a transient setup failure so HA
+        # retries with backoff instead of pushing the user into reauth.
+        raise ConfigEntryNotReady(
+            f"DPD authentication service returned HTTP {exc.status_code}"
+        ) from exc
     except aiohttp.ClientError as exc:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc
 

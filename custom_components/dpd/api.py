@@ -83,6 +83,8 @@ class DpdApiClient:
             data=data,
             headers={"User-Agent": USER_AGENT},
         ) as response:
+            if response.status >= 500:
+                raise DpdApiError(response.status)
             body: dict[str, Any] = await response.json(content_type=None)
 
         token = body.get("access_token")
@@ -101,6 +103,8 @@ class DpdApiClient:
                 "User-Agent": USER_AGENT,
             },
         ) as response:
+            if response.status >= 500:
+                raise DpdApiError(response.status)
             body: dict[str, Any] = await response.json(content_type=None)
 
         token = body.get("access_token")
@@ -226,6 +230,8 @@ class DpdApiClient:
                 "User-Agent": USER_AGENT,
             },
         ) as response:
+            if response.status >= 500:
+                raise DpdApiError(response.status)
             body: dict[str, Any] = await response.json(content_type=None)
 
         token = body.get("access_token")
