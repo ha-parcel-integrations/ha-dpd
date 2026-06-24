@@ -102,9 +102,14 @@ def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
 class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Summary sensor reporting the count of active incoming DPD parcels.
 
-    Spawns a per-parcel :class:`DpdParcelSensor` whenever a new parcel number
-    appears. Stale per-parcel sensors remove themselves once their number
-    drops out of the coordinator data — see ``DpdParcelSensor``.
+    Spawns a per-parcel :class:`DpdParcelSensor` whenever a new parcel
+    number appears, and removes the per-parcel sensor from the entity
+    registry when its number drops out of the coordinator data. Doing the
+    removal here (synchronously, via the registry) instead of having the
+    per-parcel sensor self-remove from inside its own
+    ``_handle_coordinator_update`` avoids the race where
+    ``async_remove(force_remove=True)`` competes with the coordinator-
+    listener cleanup and leaves a ghost entity behind.
     """
 
     _attr_has_entity_name = True
@@ -153,6 +158,16 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
                 for n in new_numbers
             )
 
+        removed_numbers = self._known_parcel_numbers - current_numbers
+        if removed_numbers:
+            registry = er.async_get(self.hass)
+            for barcode in removed_numbers:
+                entity_id = registry.async_get_entity_id(
+                    "sensor", DOMAIN, f"{self._entry.entry_id}_{barcode}"
+                )
+                if entity_id:
+                    registry.async_remove(entity_id)
+
         self._known_parcel_numbers = current_numbers
         super()._handle_coordinator_update()
 
@@ -195,12 +210,6 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         parcel = self._get_parcel()
         return dict(parcel) if parcel else {}
 
-    def _handle_coordinator_update(self) -> None:
-        """Self-remove once this parcel falls out of the coordinator data."""
-        if self._get_parcel() is None and self.hass is not None:
-            self.hass.async_create_task(self.async_remove(force_remove=True))
-            return
-        super()._handle_coordinator_update()
 
 
 class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):

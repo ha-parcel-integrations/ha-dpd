@@ -8,7 +8,7 @@ shape directly — bypassing the coordinator's raw-to-normalised
 transformation tested in ``test_coordinator.py``.
 """
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.sensor import (
@@ -88,6 +88,42 @@ def test_incoming_sensor_unique_id_uses_entry_id():
         _make_coordinator(None), _make_entry(entry_id="abc"), lambda _: None
     )
     assert sensor.unique_id == "abc_incoming_parcels"
+
+
+def test_summary_sensor_removes_stale_per_parcel_entity_from_registry():
+    """When a barcode falls out of coordinator data, the summary sensor must
+    remove the per-parcel entity from the registry. The previous self-remove
+    pattern raced with the coordinator-listener cleanup and could leave a
+    ghost entity behind.
+    """
+    coordinator = _make_coordinator({
+        "incoming_active": [_parcel("A1")],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+    })
+    sensor = DpdIncomingParcelsSensor(
+        coordinator,
+        _make_entry(entry_id="cfg"),
+        MagicMock(),
+        known_parcel_numbers={"A1", "A2"},
+    )
+    sensor.hass = MagicMock()
+
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = "sensor.dpd_parcel_a2"
+
+    with patch(
+        "custom_components.dpd.sensor.er.async_get",
+        return_value=registry,
+    ), patch.object(
+        DpdIncomingParcelsSensor.__bases__[0], "_handle_coordinator_update"
+    ):
+        sensor._handle_coordinator_update()
+
+    registry.async_get_entity_id.assert_called_once_with(
+        "sensor", "dpd", "cfg_A2"
+    )
+    registry.async_remove.assert_called_once_with("sensor.dpd_parcel_a2")
 
 
 # ---------------------------------------------------------------------------
