@@ -418,42 +418,52 @@ async def test_enrich_with_fmp_leaves_shipment_alone_when_window_unavailable(has
 
 
 # ---------------------------------------------------------------------------
-# DpdCoordinator._enrich_receiver_cache
+# DpdCoordinator._enrich_detail_cache
 # ---------------------------------------------------------------------------
 
 
-async def test_enrich_receiver_cache_populates_from_detail_endpoint(hass):
+async def test_enrich_detail_cache_populates_receiver_weight_dimensions(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(
-        return_value={"receiver": {"name": "Jane Doe"}}
+        return_value={
+            "receiver": {"name": "Jane Doe"},
+            "weight": 4.40,
+            "dimensions": {"length": 31, "width": 23, "height": 17},
+        }
     )
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     shipment = _shipment("PARCEL_HANDED", parcel_number="01ABC")
     shipment["shipmentBUCode"] = "021"
-    await coordinator._enrich_receiver_cache([shipment], [])
+    await coordinator._enrich_detail_cache([shipment], [])
 
     client.async_get_parcel_detail.assert_awaited_once_with(
         "01ABC", shipment_bu_code="021", parcel_type="INCOMING"
     )
-    assert coordinator._receiver_cache == {"01ABC": "Jane Doe"}
+    assert coordinator._detail_cache == {
+        "01ABC": {
+            "receiver_name": "Jane Doe",
+            "weight": 4.40,
+            "dimensions": {"length": 31, "width": 23, "height": 17},
+        }
+    }
 
 
-async def test_enrich_receiver_cache_uses_outgoing_parcel_type(hass):
+async def test_enrich_detail_cache_uses_outgoing_parcel_type(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(
-        return_value={"receiver": {"name": "Out Receiver"}}
+        return_value={"receiver": {"name": "Out Receiver"}, "weight": None, "dimensions": None}
     )
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     shipment = _shipment("PARCEL_HANDED", parcel_number="01OUT")
-    await coordinator._enrich_receiver_cache([], [shipment])
+    await coordinator._enrich_detail_cache([], [shipment])
 
     args = client.async_get_parcel_detail.await_args
     assert args.kwargs["parcel_type"] == "OUTGOING"
 
 
-async def test_enrich_receiver_cache_caches_none_when_detail_fails(hass):
+async def test_enrich_detail_cache_caches_none_when_detail_fails(hass):
     """A failed detail call must still be cached as None so we don't retry
     on every refresh and hammer DPD when the endpoint is flaky."""
     client = MagicMock()
@@ -461,23 +471,25 @@ async def test_enrich_receiver_cache_caches_none_when_detail_fails(hass):
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     shipment = _shipment("PARCEL_HANDED", parcel_number="01ABC")
-    await coordinator._enrich_receiver_cache([shipment], [])
+    await coordinator._enrich_detail_cache([shipment], [])
 
-    assert coordinator._receiver_cache == {"01ABC": None}
+    assert coordinator._detail_cache == {"01ABC": None}
 
 
-async def test_enrich_receiver_cache_skips_already_cached_barcodes(hass):
+async def test_enrich_detail_cache_skips_already_cached_barcodes(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock()
     coordinator = DpdCoordinator(hass, client, _mock_entry())
-    coordinator._receiver_cache = {"01ABC": "Cached Person"}
+    coordinator._detail_cache = {
+        "01ABC": {"receiver_name": "Cached Person", "weight": 1.0, "dimensions": None}
+    }
 
-    await coordinator._enrich_receiver_cache(
+    await coordinator._enrich_detail_cache(
         [_shipment("PARCEL_HANDED", parcel_number="01ABC")], []
     )
 
     client.async_get_parcel_detail.assert_not_called()
-    assert coordinator._receiver_cache["01ABC"] == "Cached Person"
+    assert coordinator._detail_cache["01ABC"]["receiver_name"] == "Cached Person"
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +556,8 @@ def test_normalize_returns_carrier_agnostic_keys():
     assert normalized["barcode"] == "01XYZ"
     assert normalized["sender"] == "Acme Webshop"
     assert normalized["receiver"] is None
+    assert normalized["weight"] is None
+    assert normalized["dimensions"] is None
     assert normalized["status"] == ParcelStatus.OUT_FOR_DELIVERY
     assert normalized["raw_status"] == "PARCEL_OUT_FOR_DELIVERY"
     assert normalized["delivered"] is False
@@ -557,6 +571,14 @@ def test_normalize_carries_receiver_when_provided():
     raw = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01XYZ")
     normalized = normalize_parcel(raw, receiver="Jane Doe")
     assert normalized["receiver"] == "Jane Doe"
+
+
+def test_normalize_carries_weight_and_dimensions_when_provided():
+    raw = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01XYZ")
+    dims = {"length": 31, "width": 23, "height": 17}
+    normalized = normalize_parcel(raw, weight=4.40, dimensions=dims)
+    assert normalized["weight"] == 4.40
+    assert normalized["dimensions"] == dims
 
 
 def test_normalize_marks_pickup_for_parcelshop_delivery():

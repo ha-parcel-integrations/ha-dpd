@@ -121,7 +121,13 @@ def _tracking_url(parcel: dict) -> str | None:
     )
 
 
-def normalize_parcel(parcel: dict, *, receiver: str | None = None) -> dict:
+def normalize_parcel(
+    parcel: dict,
+    *,
+    receiver: str | None = None,
+    weight: float | None = None,
+    dimensions: dict | None = None,
+) -> dict:
     """Return a carrier-agnostic parcel dict with the DPD payload under ``raw``.
 
     Mirrors the shape every other carrier integration (DHL, PostNL)
@@ -136,10 +142,11 @@ def normalize_parcel(parcel: dict, *, receiver: str | None = None) -> dict:
     actual moment instead. The raw DPD payload is passed through under
     ``raw`` without modification.
 
-    The ``receiver`` keyword is the recipient name from the per-parcel
-    detail endpoint — the list endpoint doesn't carry it, so the
-    coordinator fetches it lazily and passes it in. ``None`` when the
-    detail call has not been made or failed.
+    ``receiver``, ``weight`` and ``dimensions`` come from the per-parcel
+    detail endpoint — the list endpoint doesn't carry them, so the
+    coordinator fetches them lazily and passes them in. DPD's native
+    units (kg + cm) already match the canonical contract, so no
+    conversion is needed here.
     """
     description = _description(parcel)
     delivered = description == DELIVERED_DESCRIPTION
@@ -168,6 +175,8 @@ def normalize_parcel(parcel: dict, *, receiver: str | None = None) -> dict:
         "pickup": is_pickup,
         "pickup_point": None,
         "url": _tracking_url(parcel),
+        "weight": weight,
+        "dimensions": dimensions,
         "raw": parcel,
     }
 
@@ -342,10 +351,15 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # we can suppress events for parcels that already existed when the
         # integration started (we do not know their previous state).
         self._known_state: dict[str, ParcelStatus] | None = None
-        # barcode -> receiver name from the per-parcel detail endpoint.
-        # Populated lazily — receivers don't change for a known parcel, so we
-        # fetch each detail once and reuse it for the integration's lifetime.
-        self._receiver_cache: dict[str, str | None] = {}
+        # barcode -> per-parcel fields fetched from the detail endpoint
+        # (``receiver_name``, ``weight``, ``dimensions``). The list endpoint
+        # doesn't carry these; the detail endpoint does, but it costs an
+        # extra HTTP call per parcel. None of these fields change for a
+        # known parcel, so we fetch the detail once per barcode and reuse
+        # the result for the integration's lifetime. ``None`` is cached when
+        # the detail call failed, so we don't hammer DPD when their endpoint
+        # is flaky.
+        self._detail_cache: dict[str, dict[str, Any] | None] = {}
 
     async def _async_update_data(self) -> dict[str, list[dict]]:
         try:
@@ -370,7 +384,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         outgoing_active = filter_active_shipments(outgoing)
 
         await self._enrich_with_fmp(incoming_active)
-        await self._enrich_receiver_cache(
+        await self._enrich_detail_cache(
             incoming_active + incoming_delivered,
             outgoing_active,
         )
@@ -387,21 +401,36 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         if incoming or outgoing:
             _LOGGER.debug("DPD raw parcels payload: %s", payload)
 
-        def _receiver_for(parcel: dict) -> str | None:
-            return self._receiver_cache.get(parcel.get("parcelNumber") or "")
+        def _normalize(parcel: dict) -> dict:
+            cached = self._detail_cache.get(parcel.get("parcelNumber") or "") or {}
+            weight = cached.get("weight")
+            dimensions = cached.get("dimensions")
+            # Mirror weight + dimensions back onto the raw payload too so
+            # ``state_attr(..., 'raw').weight`` / ``.dimensions`` works for
+            # users who want the native shape under raw rather than the
+            # carrier-agnostic top-level keys. The list endpoint never
+            # populates these, so adding them is non-destructive.
+            if weight is not None and "weight" not in parcel:
+                parcel["weight"] = weight
+            if dimensions is not None and "dimensions" not in parcel:
+                parcel["dimensions"] = dimensions
+            return normalize_parcel(
+                parcel,
+                receiver=cached.get("receiver_name"),
+                weight=weight,
+                dimensions=dimensions,
+            )
 
         normalized_active = sort_parcels_by_ts(
-            [normalize_parcel(p, receiver=_receiver_for(p)) for p in incoming_active],
-            "planned_from",
+            [_normalize(p) for p in incoming_active], "planned_from",
         )
         normalized_delivered = sort_parcels_by_ts(
-            [normalize_parcel(p, receiver=_receiver_for(p)) for p in incoming_delivered],
+            [_normalize(p) for p in incoming_delivered],
             "delivered_at",
             descending=True,
         )
         normalized_outgoing = sort_parcels_by_ts(
-            [normalize_parcel(p, receiver=_receiver_for(p)) for p in outgoing_active],
-            "planned_from",
+            [_normalize(p) for p in outgoing_active], "planned_from",
         )
 
         self._fire_change_events(normalized_active)
@@ -467,36 +496,43 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             if window:
                 shipment["fmpDeliveryDateAndTime"] = window
 
-    async def _enrich_receiver_cache(
+    async def _enrich_detail_cache(
         self,
         incoming: list[dict],
         outgoing: list[dict],
     ) -> None:
-        """Populate ``self._receiver_cache`` for any barcode we have not seen.
+        """Populate ``self._detail_cache`` for any barcode we have not seen.
 
-        The list endpoint doesn't carry the recipient name; we have to call
-        the per-parcel detail endpoint for it. Receivers don't change for a
-        known parcel so one call per parcel ever is enough; the cache lives
-        for the integration's lifetime (it resets on HA restart, which then
-        backfills active + delivered + outgoing on the first refresh).
-        Failures are swallowed by the API client (returns ``None``); we
-        cache ``None`` so we do not retry on every refresh.
+        Calls the per-parcel detail endpoint once per barcode and extracts
+        the three fields that aren't on the list endpoint: ``receiver.name``,
+        ``weight`` and ``dimensions``. Receivers, weight and dimensions
+        don't change for a known parcel so one call per parcel ever is
+        enough; the cache lives for the integration's lifetime (it resets
+        on HA restart, which then backfills active + delivered + outgoing
+        on the first refresh). Failures are swallowed by the API client
+        (returns ``None``); we cache ``None`` so we do not retry on every
+        refresh.
         """
         for shipment, parcel_type in (
             *((s, "INCOMING") for s in incoming),
             *((s, "OUTGOING") for s in outgoing),
         ):
             barcode = shipment.get("parcelNumber")
-            if not barcode or barcode in self._receiver_cache:
+            if not barcode or barcode in self._detail_cache:
                 continue
             detail = await self._client.async_get_parcel_detail(
                 barcode,
                 shipment_bu_code=shipment.get("shipmentBUCode"),
                 parcel_type=parcel_type,
             )
-            self._receiver_cache[barcode] = (
-                ((detail or {}).get("receiver") or {}).get("name")
-            )
+            if detail is None:
+                self._detail_cache[barcode] = None
+                continue
+            self._detail_cache[barcode] = {
+                "receiver_name": ((detail.get("receiver") or {}).get("name")),
+                "weight": detail.get("weight"),
+                "dimensions": detail.get("dimensions"),
+            }
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:
         """Trim the delivered list according to the configured options."""

@@ -12,8 +12,12 @@ Full reference for all sensors provided by the DPD integration.
 > `receiver`, `status` (the canonical
 > [`ParcelStatus`](#parcel-status-reference) value), `raw_status` (the
 > original DPD description string), `delivered`, `delivered_at`,
-> `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`, plus
-> the original DPD shipment payload under `raw`.
+> `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`,
+> `weight` (kg) and `dimensions` (`{height, width, length}` in cm) —
+> the last two are lazily fetched from the per-parcel detail endpoint
+> and stay `null` until that call has succeeded. The original DPD
+> shipment payload lives under `raw`, with `weight` + `dimensions`
+> also injected onto it.
 
 ## Incoming parcels
 
