@@ -12,6 +12,7 @@ from custom_components.dpd.const import (
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
+    _augment_dimensions,
     _refresh_interval,
     _tracking_url,
     _unknown_descriptions_logged,
@@ -444,7 +445,10 @@ async def test_enrich_detail_cache_populates_receiver_weight_dimensions(hass):
         "01ABC": {
             "receiver_name": "Jane Doe",
             "weight": 4.40,
-            "dimensions": {"length": 31, "width": 23, "height": 17},
+            "dimensions": {
+                "length": 31, "width": 23, "height": 17,
+                "text": "31 x 23 x 17 cm",
+            },
         }
     }
 
@@ -933,6 +937,33 @@ def test_refresh_interval_reads_minutes_from_options():
     entry = MagicMock()
     entry.options = {"refresh_interval": 120}
     assert _refresh_interval(entry).total_seconds() == 120 * 60
+
+
+# ---------------------------------------------------------------------------
+# _augment_dimensions
+# ---------------------------------------------------------------------------
+
+
+def test_augment_dimensions_formats_l_w_h_with_lowercase_x_and_cm():
+    result = _augment_dimensions({"length": 31, "width": 23, "height": 17})
+    assert result["text"] == "31 x 23 x 17 cm"
+
+
+def test_augment_dimensions_rounds_floats_to_int():
+    result = _augment_dimensions({"length": 31.4, "width": 23.6, "height": 17.0})
+    assert result["text"] == "31 x 24 x 17 cm"
+
+
+def test_augment_dimensions_text_is_none_when_any_field_missing():
+    result = _augment_dimensions({"length": 31, "width": 23})
+    assert "text" in result and result["text"] is None
+    # The partial fields are still present so callers can use what they have.
+    assert result["length"] == 31
+
+
+def test_augment_dimensions_returns_none_for_empty_input():
+    assert _augment_dimensions(None) is None
+    assert _augment_dimensions({}) is None
 
 
 # ---------------------------------------------------------------------------

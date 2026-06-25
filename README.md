@@ -125,7 +125,7 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD has not yet exposed the field) |
 | `url` | string \| null | Deep link to the parcel's tracking page |
 | `weight` | float \| null | Parcel weight in kilograms. Fetched from the per-parcel detail endpoint (same one we use for `receiver`); `null` until the detail call has succeeded. |
-| `dimensions` | dict \| null | Parcel dimensions as `{height, width, length}` in centimeters. Same fetch path as `weight`. |
+| `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` — `text` is a pre-formatted `"L x W x H cm"` string for direct use in cards (integer values, lowercase `x`). Same fetch path as `weight`. |
 | `raw` | dict | The full original DPD API payload, **plus** `weight` and `dimensions` injected from the detail endpoint when available. |
 
 This is the same shape that DHL and PostNL use, so the

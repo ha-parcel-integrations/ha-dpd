@@ -38,6 +38,26 @@ def _refresh_interval(entry: ConfigEntry) -> timedelta:
     minutes = int(entry.options.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL))
     return timedelta(minutes=minutes)
 
+
+def _augment_dimensions(dims: dict | None) -> dict | None:
+    """Return a copy of ``dims`` with a ``text`` field added (``L x W x H cm``).
+
+    Suite-wide format: integer values, lowercase ``x`` separator, length
+    first per the L × W × H shipping convention. ``text`` is ``None`` when
+    any of the three required fields is missing so callers can still rely
+    on the key being present.
+    """
+    if not dims:
+        return None
+    length = dims.get("length")
+    width = dims.get("width")
+    height = dims.get("height")
+    if length is None or width is None or height is None:
+        text: str | None = None
+    else:
+        text = f"{int(round(length))} x {int(round(width))} x {int(round(height))} cm"
+    return {**dims, "text": text}
+
 # DPD status.description → canonical ParcelStatus. Every value in
 # KNOWN_DESCRIPTIONS is mapped here; anything else falls back to
 # ParcelStatus.UNKNOWN and triggers a one-shot info log via
@@ -531,7 +551,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             self._detail_cache[barcode] = {
                 "receiver_name": ((detail.get("receiver") or {}).get("name")),
                 "weight": detail.get("weight"),
-                "dimensions": detail.get("dimensions"),
+                "dimensions": _augment_dimensions(detail.get("dimensions")),
             }
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:
