@@ -14,6 +14,7 @@ from .const import (
     DPD_FMP_AUTHENTICATE_URL,
     DPD_FMP_SHIPMENT_URL,
     DPD_GUEST_TOKEN_URL,
+    DPD_PARCEL_DETAIL_URL,
     DPD_PARCELS_URL,
     KEYCLOAK_CLIENT_ID,
     KEYCLOAK_TOKEN_URL,
@@ -137,6 +138,44 @@ class DpdApiClient:
             return data
 
         return await self._async_call_with_reauth(_fetch)
+
+    async def async_get_parcel_detail(
+        self,
+        parcel_number: str,
+        *,
+        shipment_bu_code: str | None = None,
+        parcel_type: str = "INCOMING",
+    ) -> dict[str, Any] | None:
+        """Fetch /v10/parcels/details/{n}. Best-effort: returns None on any failure.
+
+        The list endpoint is a thin summary; this detail endpoint carries the
+        recipient block, weight, dimensions and current truck position. We use
+        it only to populate the canonical ``receiver`` field; failures are
+        swallowed so a broken detail call never breaks the main parcels poll.
+        """
+        params: dict[str, str] = {
+            "parcelType": parcel_type,
+            "businessUnit": f"DPD-{self._bu.upper()}",
+            "lang": "en",
+            "continueWithoutVerification": "false",
+        }
+        if shipment_bu_code:
+            params["shipmentBUCode"] = shipment_bu_code
+        try:
+            async with self._session.post(
+                f"{DPD_PARCEL_DETAIL_URL}/{parcel_number}",
+                params=params,
+                headers={
+                    "Authorization": f"Bearer {self._token}",
+                    "Content-Type": "application/json",
+                    "User-Agent": USER_AGENT,
+                },
+            ) as response:
+                if response.status != 200:
+                    return None
+                return await response.json(content_type=None)
+        except aiohttp.ClientError:
+            return None
 
     async def async_fmp_delivery_window(self, hashcode: str) -> dict[str, Any] | None:
         """Fetch the Follow My Parcel delivery window for a parcel hashcode.

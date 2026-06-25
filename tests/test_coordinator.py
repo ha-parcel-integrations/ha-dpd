@@ -199,6 +199,7 @@ async def test_delivered_filter_parcels_limits_count(hass):
 
 async def test_coordinator_splits_active_and_delivered(hass):
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [
             _shipment("ORDER_CREATED", parcel_number="A"),
@@ -218,6 +219,7 @@ async def test_coordinator_splits_active_and_delivered(hass):
 
 async def test_coordinator_handles_empty_response(hass):
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [],
         "sendingShipments": [],
@@ -235,6 +237,7 @@ async def test_coordinator_raises_config_entry_auth_failed_on_auth_error(hass):
     from homeassistant.exceptions import ConfigEntryAuthFailed
 
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(side_effect=DpdAuthError("bad creds"))
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
@@ -247,6 +250,7 @@ async def test_coordinator_raises_update_failed_on_api_error(hass):
     from homeassistant.helpers.update_coordinator import UpdateFailed
 
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(side_effect=DpdApiError(500))
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
@@ -413,6 +417,69 @@ async def test_enrich_with_fmp_leaves_shipment_alone_when_window_unavailable(has
 
 
 # ---------------------------------------------------------------------------
+# DpdCoordinator._enrich_receiver_cache
+# ---------------------------------------------------------------------------
+
+
+async def test_enrich_receiver_cache_populates_from_detail_endpoint(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(
+        return_value={"receiver": {"name": "Jane Doe"}}
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    shipment = _shipment("PARCEL_HANDED", parcel_number="01ABC")
+    shipment["shipmentBUCode"] = "021"
+    await coordinator._enrich_receiver_cache([shipment], [])
+
+    client.async_get_parcel_detail.assert_awaited_once_with(
+        "01ABC", shipment_bu_code="021", parcel_type="INCOMING"
+    )
+    assert coordinator._receiver_cache == {"01ABC": "Jane Doe"}
+
+
+async def test_enrich_receiver_cache_uses_outgoing_parcel_type(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(
+        return_value={"receiver": {"name": "Out Receiver"}}
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    shipment = _shipment("PARCEL_HANDED", parcel_number="01OUT")
+    await coordinator._enrich_receiver_cache([], [shipment])
+
+    args = client.async_get_parcel_detail.await_args
+    assert args.kwargs["parcel_type"] == "OUTGOING"
+
+
+async def test_enrich_receiver_cache_caches_none_when_detail_fails(hass):
+    """A failed detail call must still be cached as None so we don't retry
+    on every refresh and hammer DPD when the endpoint is flaky."""
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    shipment = _shipment("PARCEL_HANDED", parcel_number="01ABC")
+    await coordinator._enrich_receiver_cache([shipment], [])
+
+    assert coordinator._receiver_cache == {"01ABC": None}
+
+
+async def test_enrich_receiver_cache_skips_already_cached_barcodes(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock()
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    coordinator._receiver_cache = {"01ABC": "Cached Person"}
+
+    await coordinator._enrich_receiver_cache(
+        [_shipment("PARCEL_HANDED", parcel_number="01ABC")], []
+    )
+
+    client.async_get_parcel_detail.assert_not_called()
+    assert coordinator._receiver_cache["01ABC"] == "Cached Person"
+
+
+# ---------------------------------------------------------------------------
 # map_parcel_status
 # ---------------------------------------------------------------------------
 
@@ -475,6 +542,7 @@ def test_normalize_returns_carrier_agnostic_keys():
     assert normalized["carrier"] == "DPD"
     assert normalized["barcode"] == "01XYZ"
     assert normalized["sender"] == "Acme Webshop"
+    assert normalized["receiver"] is None
     assert normalized["status"] == ParcelStatus.OUT_FOR_DELIVERY
     assert normalized["raw_status"] == "PARCEL_OUT_FOR_DELIVERY"
     assert normalized["delivered"] is False
@@ -482,6 +550,12 @@ def test_normalize_returns_carrier_agnostic_keys():
     assert normalized["pickup_point"] is None
     assert normalized["url"].endswith("parcelNumber=01XYZ")
     assert normalized["raw"] is raw  # original payload preserved by identity
+
+
+def test_normalize_carries_receiver_when_provided():
+    raw = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01XYZ")
+    normalized = normalize_parcel(raw, receiver="Jane Doe")
+    assert normalized["receiver"] == "Jane Doe"
 
 
 def test_normalize_marks_pickup_for_parcelshop_delivery():
@@ -614,6 +688,7 @@ def test_planned_window_top_level_takes_precedence_over_full_day_fallback():
 
 async def test_coordinator_publishes_planned_window_without_touching_raw(hass):
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [
             _shipment("ORDER_CREATED", parcel_number="A", delivery_date="2026-06-17"),
@@ -658,6 +733,7 @@ def _capture(hass, event_type: str) -> list:
 async def test_first_refresh_suppresses_registered_events(hass):
     """Parcels present on the first poll do not yield registered events."""
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [
             _shipment("ORDER_CREATED", parcel_number="A"),
@@ -679,6 +755,7 @@ async def test_first_refresh_suppresses_registered_events(hass):
 async def test_second_refresh_fires_registered_event_for_new_parcel(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(side_effect=[
         {
             "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
@@ -711,6 +788,7 @@ async def test_status_change_fires_status_changed_event(hass):
     """A known parcel whose status transitions yields one status_changed event."""
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(side_effect=[
         {
             "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
@@ -745,6 +823,7 @@ async def test_unchanged_status_fires_no_event(hass):
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     # Same description across two polls — should not trigger a change.
     shipment = _shipment("PARCEL_HANDED", parcel_number="A")
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [shipment],
         "sendingShipments": [],
@@ -772,6 +851,7 @@ async def test_inter_in_transit_descriptions_do_not_fire(hass):
     """
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(side_effect=[
         {"incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
         {"incomingShipments": [_shipment("IN_TRANSIT", parcel_number="A")], "sendingShipments": []},
@@ -795,6 +875,7 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
         "timeRange": {"from": "10:34:00", "to": "11:34:00"},
     }
     client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(return_value={
         "incomingShipments": [
             _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="A", fmp_hashcode="hashA"),

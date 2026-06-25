@@ -9,11 +9,11 @@ Full reference for all sensors provided by the DPD integration.
 
 > **Parcel shape:** every parcel exposed on a sensor attribute carries
 > the carrier-agnostic top-level keys `carrier`, `barcode`, `sender`,
-> `status` (the canonical [`ParcelStatus`](#parcel-status-reference)
-> value), `raw_status` (the original DPD description string),
-> `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`,
-> `pickup_point`, `url`, plus the original DPD shipment payload under
-> `raw`.
+> `receiver`, `status` (the canonical
+> [`ParcelStatus`](#parcel-status-reference) value), `raw_status` (the
+> original DPD description string), `delivered`, `delivered_at`,
+> `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`, plus
+> the original DPD shipment payload under `raw`.
 
 ## Incoming parcels
 
@@ -58,6 +58,7 @@ no parcels have a known delivery time.
 |-----------|-------------|
 | `barcode` | Barcode of the parcel arriving soonest |
 | `sender` | Name of the sender of that parcel |
+| `receiver` | Recipient name of that parcel (lazy-fetched from the DPD detail endpoint; may be `null` on first refresh) |
 
 ### `DPD (account) En route to ParcelShop`
 

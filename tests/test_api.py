@@ -7,6 +7,7 @@ SSO), the parcels fetch, and the one-shot reauth-on-401/403 retry.
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from custom_components.dpd.api import DpdApiClient, DpdApiError, DpdAuthError
@@ -225,3 +226,42 @@ async def test_get_parcels_does_not_reauth_on_500():
 
     with pytest.raises(DpdApiError):
         await client.async_get_parcels()
+
+
+# ---------------------------------------------------------------------------
+# Per-parcel detail endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_parcel_detail_returns_body_on_200():
+    payload = {"parcelNumber": "01XXX", "receiver": {"name": "Jane Doe"}}
+    session = _mock_session(_mock_response(200, payload))
+    client = _client(session)
+    client._token = "main-token"
+    result = await client.async_get_parcel_detail("01XXX", shipment_bu_code="021")
+    assert result == payload
+
+
+@pytest.mark.asyncio
+async def test_get_parcel_detail_returns_none_on_non_200_so_main_poll_is_unaffected():
+    """Detail is best-effort enrichment — any non-200 must surface as None
+    rather than an exception that would crash the main parcels refresh."""
+    session = _mock_session(_mock_response(404, None))
+    client = _client(session)
+    client._token = "main-token"
+    assert await client.async_get_parcel_detail("01XXX") is None
+
+
+@pytest.mark.asyncio
+async def test_get_parcel_detail_returns_none_on_network_error():
+    @asynccontextmanager
+    async def _raise(*_a, **_k):
+        raise aiohttp.ClientError("boom")
+        yield  # pragma: no cover - never reached
+
+    session = MagicMock()
+    session.post = MagicMock(side_effect=_raise)
+    client = _client(session)
+    client._token = "main-token"
+    assert await client.async_get_parcel_detail("01XXX") is None

@@ -311,6 +311,7 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         return {
             "barcode": earliest.get("barcode"),
             "sender": earliest.get("sender"),
+            "receiver": earliest.get("receiver"),
         }
 
 

@@ -36,6 +36,11 @@ DPD_BASE_URL = "https://www.dpdgroup.com/concept/webservice"
 DPD_GUEST_TOKEN_URL = f"{DPD_BASE_URL}/oauth/token"
 DPD_CONSIGNEE_SSO_URL = f"{DPD_BASE_URL}/users/login/consignee-sso"
 DPD_PARCELS_URL = f"{DPD_BASE_URL}/v7/parcels"
+# Per-parcel detail endpoint. Carries the recipient block (`receiver.name`)
+# plus weight/dimensions/currentPosition/parcelHistory, none of which appear
+# in the list endpoint. Used to populate the canonical `receiver` field on
+# the parcel shape — cached per barcode so we only call it once per parcel.
+DPD_PARCEL_DETAIL_URL = f"{DPD_BASE_URL}/v10/parcels/details"
 
 # Follow My Parcel — DPD's same-day delivery-window sub-API. Per-parcel
 # auth flow: take the hashcode from
