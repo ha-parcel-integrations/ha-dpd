@@ -13,6 +13,7 @@ from custom_components.dpd.const import (
     CONF_BU,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_REFRESH_INTERVAL,
     DEFAULT_BU,
     DOMAIN,
 )
@@ -116,7 +117,7 @@ async def test_user_flow_aborts_when_already_configured(hass):
 
 
 @pytest.mark.asyncio
-async def test_options_flow_updates_filter(hass):
+async def test_options_flow_updates_filter_and_refresh_interval(hass):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
@@ -136,13 +137,19 @@ async def test_options_flow_updates_filter(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            CONF_DELIVERED_FILTER_TYPE: "parcels",
-            CONF_DELIVERED_FILTER_AMOUNT: 20,
+            "delivered": {
+                CONF_DELIVERED_FILTER_TYPE: "parcels",
+                CONF_DELIVERED_FILTER_AMOUNT: 20,
+            },
+            "polling": {
+                CONF_REFRESH_INTERVAL: "60",
+            },
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_DELIVERED_FILTER_TYPE] == "parcels"
     assert result["data"][CONF_DELIVERED_FILTER_AMOUNT] == 20
+    assert result["data"][CONF_REFRESH_INTERVAL] == 60
 
 
 @pytest.mark.asyncio

@@ -25,7 +25,7 @@ class ParcelStatus(StrEnum):
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
-POLL_INTERVAL = 900  # seconds (15 minutes)
+POLL_INTERVAL = 900  # seconds (15 minutes) — legacy hard-coded fallback
 
 KEYCLOAK_TOKEN_URL = (
     "https://login.dpdgroup.com/auth/realms/login/protocol/openid-connect/token"
@@ -101,3 +101,11 @@ CONF_DELIVERED_FILTER_TYPE = "delivered_filter_type"
 CONF_DELIVERED_FILTER_AMOUNT = "delivered_filter_amount"
 DEFAULT_DELIVERED_FILTER_TYPE = "days"
 DEFAULT_DELIVERED_FILTER_AMOUNT = 7
+
+# Refresh interval (minutes) controls how often the coordinator polls DPD.
+# Default 30 min — gentle on the consumer API which has shown to be flaky
+# during peak hours. Minimum 15 min for the same reason, maximum 240 min
+# (4h) for users who just want one or two checks a day.
+CONF_REFRESH_INTERVAL = "refresh_interval"
+REFRESH_INTERVAL_OPTIONS = (15, 30, 60, 120, 240)
+DEFAULT_REFRESH_INTERVAL = 30

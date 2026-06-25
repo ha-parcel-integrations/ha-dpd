@@ -12,6 +12,7 @@ from custom_components.dpd.const import (
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
+    _refresh_interval,
     _tracking_url,
     _unknown_descriptions_logged,
     filter_active_shipments,
@@ -893,6 +894,23 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
     by_barcode = {p["barcode"]: p for p in result["incoming_active"]}
     assert by_barcode["A"]["raw"]["fmpDeliveryDateAndTime"] == window
     assert "fmpDeliveryDateAndTime" not in by_barcode["B"]["raw"]
+
+
+# ---------------------------------------------------------------------------
+# _refresh_interval
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_interval_defaults_to_30_minutes_when_option_unset():
+    entry = MagicMock()
+    entry.options = {}
+    assert _refresh_interval(entry).total_seconds() == 30 * 60
+
+
+def test_refresh_interval_reads_minutes_from_options():
+    entry = MagicMock()
+    entry.options = {"refresh_interval": 120}
+    assert _refresh_interval(entry).total_seconds() == 120 * 60
 
 
 # ---------------------------------------------------------------------------

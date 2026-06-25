@@ -14,12 +14,13 @@ from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_REFRESH_INTERVAL,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
+    DEFAULT_REFRESH_INTERVAL,
     DELIVERED_DESCRIPTION,
     DOMAIN,
     KNOWN_DESCRIPTIONS,
-    POLL_INTERVAL,
     STATUS_AT_DELIVERY_CENTER,
     STATUS_DELIVERED,
     STATUS_IN_TRANSIT,
@@ -30,6 +31,12 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _refresh_interval(entry: ConfigEntry) -> timedelta:
+    """Return the configured refresh interval as a ``timedelta``."""
+    minutes = int(entry.options.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL))
+    return timedelta(minutes=minutes)
 
 # DPD status.description → canonical ParcelStatus. Every value in
 # KNOWN_DESCRIPTIONS is mapped here; anything else falls back to
@@ -328,7 +335,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=timedelta(seconds=POLL_INTERVAL),
+            update_interval=_refresh_interval(entry),
         )
         self._client = client
         # barcode -> last seen ParcelStatus. ``None`` on the first refresh so

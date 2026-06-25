@@ -8,6 +8,7 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
+from homeassistant.data_entry_flow import section
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -25,10 +26,13 @@ from .const import (
     CONF_BU,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_REFRESH_INTERVAL,
     DEFAULT_BU,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
+    DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    REFRESH_INTERVAL_OPTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -203,20 +207,30 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DpdOptionsFlowHandler(OptionsFlow):
-    """Handle DPD options (delivered parcels filter)."""
+    """Handle DPD options — delivered-parcels filter plus polling cadence.
+
+    The form is rendered with two collapsible sections (``delivered`` and
+    ``polling``) so the unrelated knobs don't compete for attention. HA
+    returns the user input nested by section name; we flatten it before
+    storing on the config entry so the coordinator can keep reading the
+    flat keys directly.
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show the options form."""
         if user_input is not None:
+            delivered = user_input.get("delivered", {})
+            polling = user_input.get("polling", {})
             return self.async_create_entry(
                 title="",
                 data={
-                    CONF_DELIVERED_FILTER_TYPE: user_input[CONF_DELIVERED_FILTER_TYPE],
+                    CONF_DELIVERED_FILTER_TYPE: delivered[CONF_DELIVERED_FILTER_TYPE],
                     CONF_DELIVERED_FILTER_AMOUNT: int(
-                        user_input[CONF_DELIVERED_FILTER_AMOUNT]
+                        delivered[CONF_DELIVERED_FILTER_AMOUNT]
                     ),
+                    CONF_REFRESH_INTERVAL: int(polling[CONF_REFRESH_INTERVAL]),
                 },
             )
 
@@ -225,19 +239,49 @@ class DpdOptionsFlowHandler(OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_DELIVERED_FILTER_TYPE,
-                        default=current.get(
-                            CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
+                    vol.Required("delivered"): section(
+                        vol.Schema(
+                            {
+                                vol.Required(
+                                    CONF_DELIVERED_FILTER_TYPE,
+                                    default=current.get(
+                                        CONF_DELIVERED_FILTER_TYPE,
+                                        DEFAULT_DELIVERED_FILTER_TYPE,
+                                    ),
+                                ): _FILTER_TYPE_SELECTOR,
+                                vol.Required(
+                                    CONF_DELIVERED_FILTER_AMOUNT,
+                                    default=current.get(
+                                        CONF_DELIVERED_FILTER_AMOUNT,
+                                        DEFAULT_DELIVERED_FILTER_AMOUNT,
+                                    ),
+                                ): _FILTER_AMOUNT_SELECTOR,
+                            }
                         ),
-                    ): _FILTER_TYPE_SELECTOR,
-                    vol.Required(
-                        CONF_DELIVERED_FILTER_AMOUNT,
-                        default=current.get(
-                            CONF_DELIVERED_FILTER_AMOUNT,
-                            DEFAULT_DELIVERED_FILTER_AMOUNT,
+                        {"collapsed": False},
+                    ),
+                    vol.Required("polling"): section(
+                        vol.Schema(
+                            {
+                                vol.Required(
+                                    CONF_REFRESH_INTERVAL,
+                                    default=current.get(
+                                        CONF_REFRESH_INTERVAL,
+                                        DEFAULT_REFRESH_INTERVAL,
+                                    ),
+                                ): selector.SelectSelector(
+                                    selector.SelectSelectorConfig(
+                                        options=[
+                                            selector.SelectOptionDict(value=str(m), label=f"{m} minutes")
+                                            for m in REFRESH_INTERVAL_OPTIONS
+                                        ],
+                                        mode=selector.SelectSelectorMode.DROPDOWN,
+                                    )
+                                ),
+                            }
                         ),
-                    ): _FILTER_AMOUNT_SELECTOR,
+                        {"collapsed": True},
+                    ),
                 }
             ),
         )
