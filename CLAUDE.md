@@ -39,7 +39,11 @@ re-propose these as improvements:
 - `PARALLEL_UPDATES = 0` in `sensor.py`
 - Coordinator takes `config_entry=entry` so `self.config_entry` is
   available on the base class
-- Per-parcel sensors self-remove via `async_remove(force_remove=True)`
+- Per-parcel sensors are removed by the summary sensor
+  (`DpdIncomingParcelsSensor`) via `entity_registry.async_remove(entity_id)`
+  when a barcode drops out of the coordinator data. The earlier
+  self-remove pattern raced with coordinator-listener cleanup and left
+  ghost entities behind — do not revert.
 - Reauth flow uses `async_update_reload_and_abort` (one helper call
   instead of update + reload + abort)
 - `aiohttp.ClientError` is intentionally not caught in the coordinator —
@@ -81,8 +85,39 @@ re-propose these as improvements:
   `carrier`, `barcode`, `sender`, `status` (enum), `raw_status`,
   `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`,
   `pickup_point`, `url`, plus the original DPD payload preserved under
-  `raw`. Sensors read from these top-level keys; the FMP-window and
-  raw description handling lives only inside the coordinator.
+  `raw`. (Extended in 2.1.0 with `receiver`, `weight`, `dimensions` —
+  see below.) Sensors read from these top-level keys; the FMP-window
+  and raw description handling lives only inside the coordinator.
+
+### Adopted in 2.1.0 (do not refactor away)
+
+- **Carrier-agnostic `receiver`, `weight`, `dimensions`** on every
+  parcel, lazily filled from the per-parcel detail endpoint
+  (`/v10/parcels/details/{n}`) via `_detail_cache`. The cache is keyed
+  by barcode and lasts the lifetime of the integration, so the detail
+  call fires at most once per parcel. `dimensions` carries the raw
+  float `length` / `width` / `height` plus a pre-formatted `text`
+  field (`"L x W x H cm"`, integer values, lowercase `x`). The same
+  `weight` and `dimensions` are also injected onto `raw` so power
+  users can read them via the original payload — the list endpoint
+  never populates those keys, so the addition is non-destructive.
+- **Configurable refresh interval** via the options flow
+  (`CONF_REFRESH_INTERVAL`; 15, 30, 60, 120 or 240 minutes; default 30).
+  The form is split into `delivered` and `polling` sections via
+  `data_entry_flow.section`.
+- **No `entry.add_update_listener`** — the OptionsFlow calls
+  `self.hass.config_entries.async_schedule_reload(entry.entry_id)` on
+  submit so a changed refresh interval takes effect immediately. Reauth
+  still reloads via `async_update_reload_and_abort` (that is correct and
+  unrelated). Combining an update listener with a reload-on-update flow
+  is logged as a deprecation today and becomes an error in HA 2026.12+ —
+  see the
+  [config_entry_listener deprecation](https://developers.home-assistant.io/blog/2026/05/07/config-entry-listener-together-with-reloading-methods/).
+- **Auth-tier 5xx surfaces as `ConfigEntryNotReady`** — `api.py` raises
+  `DpdApiError(status_code)` before parsing the response when Keycloak
+  returns a non-JSON 5xx page; `__init__.py` translates that to
+  `ConfigEntryNotReady` so HA retries with backoff instead of crashing
+  on `orjson.JSONDecodeError` or pushing the user into reauth.
 
 ## Planned for the next major bump
 
