@@ -114,19 +114,19 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `carrier` | string | `"DPD"` |
 | `barcode` | string | Parcel tracking number |
 | `sender` | string \| null | Sender name (e.g. webshop) |
-| `receiver` | string \| null | Recipient name fetched from DPD's per-parcel detail endpoint. The list endpoint doesn't carry it; the integration fetches it once per parcel and caches the result. `null` when the detail call has not yet succeeded for this barcode. |
+| `receiver` | string \| null | Recipient name. May briefly be `null` the first time a new barcode appears. |
 | `status` | `ParcelStatus` | Canonical status — see the [status reference](#parcel-status-reference) |
-| `raw_status` | string \| null | Original DPD status description (for power users) |
+| `raw_status` | string \| null | Original DPD status description |
 | `delivered` | bool | Whether the parcel has been delivered |
 | `delivered_at` | ISO 8601 \| null | Delivery moment, if known |
-| `planned_from` | ISO 8601 \| null | Expected delivery window start (Follow My Parcel hour on the day of delivery, else midnight on the planned date) |
-| `planned_to` | ISO 8601 \| null | Expected delivery window end (Follow My Parcel hour, else 23:59:59 on the planned date) |
+| `planned_from` | ISO 8601 \| null | Expected delivery window start (the precise hour on delivery day, otherwise midnight on the planned date) |
+| `planned_to` | ISO 8601 \| null | Expected delivery window end |
 | `pickup` | bool | Destined for a pickup point rather than a home address |
-| `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD has not yet exposed the field) |
+| `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD does not expose the field) |
 | `url` | string \| null | Deep link to the parcel's tracking page |
-| `weight` | float \| null | Parcel weight in kilograms. Fetched from the per-parcel detail endpoint (same one we use for `receiver`); `null` until the detail call has succeeded. |
-| `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` — `text` is a pre-formatted `"L x W x H cm"` string for direct use in cards (integer values, lowercase `x`). Same fetch path as `weight`. |
-| `raw` | dict | The full original DPD API payload, **plus** `weight` and `dimensions` injected from the detail endpoint when available. |
+| `weight` | float \| null | Parcel weight in kilograms |
+| `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` where `text` is a pre-formatted `"L x W x H cm"` string |
+| `raw` | dict | The original DPD API payload |
 
 This is the same shape that DHL and PostNL use, so the
 [parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
@@ -169,13 +169,11 @@ polling per-parcel sensors.
 
 | Event | When | Payload |
 |---|---|---|
-| `dpd_parcel_registered` | A new barcode appears in the active list | The full normalised parcel dict (`carrier`, `barcode`, `sender`, `receiver`, `status`, `raw_status`, `delivered`, `delivered_at`, `planned_from`, `planned_to`, `pickup`, `pickup_point`, `url`, `weight`, `dimensions`, `raw`) |
+| `dpd_parcel_registered` | A new barcode appears in the active list | The full parcel dict (see the table above) |
 | `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes | Same payload plus `old_status` and `new_status` |
-| `dpd_parcel_delivery_time_changed` | A known barcode's `planned_from` or `planned_to` ends up with a non-null value that differs from the previous one. Value-to-null transitions are intentionally silent. | Same payload plus `old_planned_from`, `new_planned_from`, `old_planned_to`, `new_planned_to` |
+| `dpd_parcel_delivery_time_changed` | A known barcode's expected delivery time changes to a new value | Same payload plus `old_planned_from`, `new_planned_from`, `old_planned_to`, `new_planned_to` |
 
-The coordinator suppresses events on the very first refresh after
-start-up so you don't get a stampede of "registered" events for
-parcels that were already in your account before HA started.
+Events do not fire for parcels that were already in your account when HA first started.
 
 See [`examples/automations/`](examples/automations/) for ready-to-paste
 event-driven automations, or the
