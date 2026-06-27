@@ -223,6 +223,7 @@ class DpdOptionsFlowHandler(OptionsFlow):
         if user_input is not None:
             delivered = user_input.get("delivered", {})
             polling = user_input.get("polling", {})
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
             return self.async_create_entry(
                 title="",
                 data={

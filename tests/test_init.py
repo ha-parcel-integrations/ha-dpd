@@ -13,7 +13,9 @@ from custom_components.dpd.const import (
     CONF_BU,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_REFRESH_INTERVAL,
     DEFAULT_BU,
+    DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
 
@@ -124,7 +126,8 @@ async def test_unload_entry_succeeds(hass):
 
 
 @pytest.mark.asyncio
-async def test_options_update_refreshes_coordinator(hass):
+async def test_options_flow_schedules_reload(hass):
+    """Submitting the options form schedules a reload of the config entry."""
     entry = _add_entry(hass)
     with (
         patch(
@@ -140,11 +143,18 @@ async def test_options_update_refreshes_coordinator(hass):
         await hass.async_block_till_done()
 
         baseline = mock_get.await_count
-        hass.config_entries.async_update_entry(
-            entry,
-            options={
-                CONF_DELIVERED_FILTER_TYPE: "parcels",
-                CONF_DELIVERED_FILTER_AMOUNT: 14,
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                "delivered": {
+                    CONF_DELIVERED_FILTER_TYPE: "parcels",
+                    CONF_DELIVERED_FILTER_AMOUNT: 14,
+                },
+                "polling": {
+                    CONF_REFRESH_INTERVAL: str(DEFAULT_REFRESH_INTERVAL),
+                },
             },
         )
         await hass.async_block_till_done()
