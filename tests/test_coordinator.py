@@ -896,6 +896,135 @@ async def test_inter_in_transit_descriptions_do_not_fire(hass):
     assert captured == []
 
 
+async def test_delivery_time_changed_fires_when_planned_time_appears(hass):
+    """A parcel that gains a planned_from value fires delivery_time_changed."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {
+            "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
+            "sendingShipments": [],
+        },
+        {
+            "incomingShipments": [
+                _shipment(
+                    "PARCEL_HANDED",
+                    parcel_number="A",
+                    delivery_date="2026-06-27",
+                ),
+            ],
+            "sendingShipments": [],
+        },
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_delivery_time_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(captured) == 1
+    payload = captured[0].data
+    assert payload["barcode"] == "A"
+    assert payload["old_planned_from"] is None
+    assert payload["new_planned_from"] is not None
+
+
+async def test_delivery_time_changed_fires_when_planned_time_shifts(hass):
+    """A parcel whose planned_from changes to a new value fires the event."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {
+            "incomingShipments": [
+                _shipment(
+                    "PARCEL_HANDED",
+                    parcel_number="A",
+                    delivery_date="2026-06-27",
+                ),
+            ],
+            "sendingShipments": [],
+        },
+        {
+            "incomingShipments": [
+                _shipment(
+                    "PARCEL_HANDED",
+                    parcel_number="A",
+                    delivery_date="2026-06-28",
+                ),
+            ],
+            "sendingShipments": [],
+        },
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_delivery_time_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(captured) == 1
+    assert captured[0].data["old_planned_from"] != captured[0].data["new_planned_from"]
+    assert captured[0].data["new_planned_from"] is not None
+
+
+async def test_no_delivery_time_changed_event_when_planned_time_clears(hass):
+    """value → null transitions are silent (don't page users on lost ETAs)."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {
+            "incomingShipments": [
+                _shipment(
+                    "PARCEL_HANDED",
+                    parcel_number="A",
+                    delivery_date="2026-06-27",
+                ),
+            ],
+            "sendingShipments": [],
+        },
+        {
+            "incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")],
+            "sendingShipments": [],
+        },
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_delivery_time_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert captured == []
+
+
+async def test_no_delivery_time_changed_event_when_planned_time_unchanged(hass):
+    """An unchanged planned_from does not fire the event."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    shipment = _shipment("PARCEL_HANDED", parcel_number="A", delivery_date="2026-06-27")
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [shipment],
+        "sendingShipments": [],
+    })
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_parcel_delivery_time_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert captured == []
+
+
 async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
     window = {
         "deliveryDate": "2026-06-17",

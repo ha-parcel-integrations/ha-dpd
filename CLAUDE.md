@@ -64,10 +64,15 @@ re-propose these as improvements:
   `ParcelStatus.UNKNOWN` (with one-shot info log) for anything not
   yet in `_DESCRIPTION_MAP`. The original DPD description lives on
   `raw_status`; do not re-introduce it on `status`.
-- **Events:** the coordinator fires `dpd_parcel_registered` and
-  `dpd_parcel_status_changed` on the HA event bus. Events are
-  suppressed on the very first refresh so we do not flood users with
-  "registered" events for parcels that already existed.
+- **Events:** the coordinator fires `dpd_parcel_registered`,
+  `dpd_parcel_status_changed` and `dpd_parcel_delivery_time_changed`
+  on the HA event bus. Events are suppressed on the very first refresh
+  so we do not flood users with "registered" events for parcels that
+  already existed. ``delivery_time_changed`` only fires when at least
+  one of ``planned_from`` / ``planned_to`` ends up with a non-null
+  value that differs from the previous one — ``value → null`` drops
+  the ETA and is intentionally silent (carrier just lost the window;
+  not worth a notification).
 - **`has_entity_name = True`** on every entity, with `translation_key`
   routing names through `strings.json` and the language files. Drop
   `_attr_name` is the rule — translations are the source of truth.

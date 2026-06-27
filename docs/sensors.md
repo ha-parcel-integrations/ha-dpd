@@ -136,6 +136,7 @@ The coordinator fires events on the HA event bus when something changes:
 |---|---|---|
 | `dpd_parcel_registered` | A new barcode appears in the active list | Full normalised parcel dict |
 | `dpd_parcel_status_changed` | A known barcode's canonical `status` changes | Normalised parcel dict plus `old_status` and `new_status` |
+| `dpd_parcel_delivery_time_changed` | A known barcode's `planned_from` or `planned_to` ends up with a non-null value different from the previous one. Value-to-null transitions are silent. | Normalised parcel dict plus `old_planned_from`, `new_planned_from`, `old_planned_to`, `new_planned_to` |
 
 Events are suppressed on the very first refresh after start-up to
 avoid a flood of "registered" events for parcels that already existed.
