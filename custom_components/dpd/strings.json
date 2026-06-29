@@ -107,6 +107,10 @@
       "en_route_to_parcel_shop": {
         "name": "En route to ParcelShop",
         "unit_of_measurement": "parcels"
+      },
+      "awaiting_pickup": {
+        "name": "Awaiting pickup",
+        "unit_of_measurement": "parcels"
       }
     }
   }

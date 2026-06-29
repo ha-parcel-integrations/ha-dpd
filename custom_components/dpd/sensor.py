@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import DpdConfigEntry
-from .const import DOMAIN
+from .const import DOMAIN, ParcelStatus
 from .coordinator import DpdCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ async def async_setup_entry(
         f"{entry_id}_delivered_parcels",
         f"{entry_id}_next_delivery",
         f"{entry_id}_en_route_to_parcel_shop",
+        f"{entry_id}_awaiting_pickup",
     }
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if (
@@ -70,6 +71,7 @@ async def async_setup_entry(
         DpdDeliveredParcelsSensor(coordinator, entry),
         DpdNextDeliverySensor(coordinator, entry),
         DpdEnRouteToParcelShopSensor(coordinator, entry),
+        DpdAwaitingPickupSensor(coordinator, entry),
     ]
     for parcel in current_parcels:
         barcode = parcel.get("barcode", "")
@@ -316,12 +318,12 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
 
 class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
-    """Active incoming DPD parcels destined for a ParcelShop pickup point.
+    """Active incoming DPD parcels still in transit to a ParcelShop pickup point.
 
-    Counts all non-delivered parcels with ``status.deliveryType == "PARCELSHOP"``.
-    DPD does not yet expose a distinct "arrived at ParcelShop" status, so this
-    sensor cannot separate in-transit from awaiting-collection parcels — a
-    separate awaiting-pickup sensor will be added once that status is mapped.
+    Counts non-delivered parcels with ``status.deliveryType == "PARCELSHOP"``
+    that have **not yet arrived** at the shop — parcels that are ready for
+    collection (``status == at_pickup_point``, the ``AVAILABLE_FOR_COLLECTION``
+    description) are counted by :class:`DpdAwaitingPickupSensor` instead.
     """
 
     _attr_has_entity_name = True
@@ -339,6 +341,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
         return [
             p for p in (self.coordinator.data or {}).get("incoming_active", [])
             if p.get("pickup")
+            and p.get("status") != ParcelStatus.AT_PICKUP_POINT
         ]
 
     @property
@@ -348,3 +351,39 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"parcels": self._get_parcelshop_parcels()}
+
+
+class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Incoming DPD parcels that have arrived at a ParcelShop and are ready to collect.
+
+    A parcel is counted when it is destined for a ParcelShop (``pickup``) and
+    its status is ``at_pickup_point`` — DPD's ``AVAILABLE_FOR_COLLECTION``
+    description. Mirrors the awaiting-pickup sensor on the DHL and PostNL
+    integrations.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "awaiting_pickup"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"parcels"})
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_awaiting_pickup"
+        self._attr_device_info = _build_device_info(entry)
+
+    def _get_awaiting_parcels(self) -> list[dict]:
+        return [
+            p for p in (self.coordinator.data or {}).get("incoming_active", [])
+            if p.get("pickup")
+            and p.get("status") == ParcelStatus.AT_PICKUP_POINT
+        ]
+
+    @property
+    def native_value(self) -> int:
+        return len(self._get_awaiting_parcels())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"parcels": self._get_awaiting_parcels()}

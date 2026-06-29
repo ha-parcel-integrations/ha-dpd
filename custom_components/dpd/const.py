@@ -82,6 +82,14 @@ STATUS_AT_DELIVERY_CENTER = "AT_DELIVERY_CENTER"        # 3 — at the regional 
 STATUS_PARCEL_OUT_FOR_DELIVERY = "PARCEL_OUT_FOR_DELIVERY"  # 4 — on the delivery vehicle today
 STATUS_DELIVERED = "DELIVERED"                          # 5 — terminal
 
+# Additional status.description values used by the myDPD consumer app's own
+# `parcel_status` taxonomy (confirmed from the myDPD Android app, 3.78.26).
+# We never saw these in sample data (no parcelshop / return / failed-attempt
+# parcel was on the account), but they are first-class consumer statuses.
+STATUS_AVAILABLE_FOR_COLLECTION = "AVAILABLE_FOR_COLLECTION"  # ready to collect at a ParcelShop
+STATUS_RETURN_TO_SENDER = "RETURN_TO_SENDER"                  # going back to the sender
+STATUS_UNSUCCESSFUL_DELIVERY = "UNSUCCESSFUL_DELIVERY_ATTEMPTED"  # missed attempt; will be retried
+
 # Terminal status — every other status.description is treated as "active".
 DELIVERED_DESCRIPTION = STATUS_DELIVERED
 
@@ -95,6 +103,9 @@ KNOWN_DESCRIPTIONS: frozenset[str] = frozenset({
     STATUS_AT_DELIVERY_CENTER,
     STATUS_PARCEL_OUT_FOR_DELIVERY,
     STATUS_DELIVERED,
+    STATUS_AVAILABLE_FOR_COLLECTION,
+    STATUS_RETURN_TO_SENDER,
+    STATUS_UNSUCCESSFUL_DELIVERY,
 })
 
 CONF_DELIVERED_FILTER_TYPE = "delivered_filter_type"

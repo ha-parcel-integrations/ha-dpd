@@ -107,6 +107,10 @@
       "en_route_to_parcel_shop": {
         "name": "Onderweg naar ParcelShop",
         "unit_of_measurement": "pakketten"
+      },
+      "awaiting_pickup": {
+        "name": "Klaar voor afhalen",
+        "unit_of_measurement": "pakketten"
       }
     }
   }

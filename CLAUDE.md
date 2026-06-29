@@ -178,11 +178,10 @@ re-propose these as improvements:
 - **Exception translations** (Gold-tier rule). `UpdateFailed(f"...")`
   still uses f-strings; the Gold push will move to `translation_key` +
   `translation_placeholders`.
-- **`at_pickup_point` mapping + a real awaiting-pickup sensor.**
-  Blocked on DPD shipping a distinct "arrived at ParcelShop" status —
-  see [issue #1](https://github.com/peternijssen/ha-dpd/issues/1).
 - **Populated `pickup_point` field.** Blocked on DPD exposing the
-  ParcelShop name/address.
+  ParcelShop name/address. The myDPD app (3.78.26) has a `pudoDetail`
+  block, so it may be derivable from the detail endpoint — needs a real
+  parcelshop parcel to confirm the field shape.
 
 ## Repo-specific quirks
 
@@ -197,11 +196,15 @@ re-propose these as improvements:
   pattern (`_tracking_url` in `coordinator.py`) hardcodes `/nl/` in the
   path. If you add another BU, update the URL builder too.
 - **`KNOWN_DESCRIPTIONS`** in `const.py` is the catalogue of all
-  observed DPD `status.description` values; `_DESCRIPTION_MAP` in
+  recognised DPD `status.description` values; `_DESCRIPTION_MAP` in
   `coordinator.py` is the source of truth for the ParcelStatus
   mapping. Both need updating when DPD introduces a new lifecycle
-  stage — the integration info-logs unknown descriptions once per HA
-  session so they are easy to spot.
+  stage — the integration warns about unknown descriptions once per HA
+  session so they are easy to spot. `AVAILABLE_FOR_COLLECTION`,
+  `RETURN_TO_SENDER` and `UNSUCCESSFUL_DELIVERY_ATTEMPTED` were taken
+  from the myDPD app's own `parcel_status` taxonomy (app 3.78.26); the
+  consumer app does **not** use the granular GSMT geo codes (`DODEI`
+  etc.), so those are history-only and probably never appear in our feed.
 - **`fmpDeliveryDateAndTime`** (under `raw`) is filled by the
   coordinator's per-parcel FMP fetch when DPD exposes a
   `FOLLOW_MY_PARCEL` action. The fetch is explicitly best-effort: any
@@ -209,10 +212,13 @@ re-propose these as improvements:
   parcels poll keeps going. `planned_from` / `planned_to` on the
   normalised dict reflect the FMP hour window when present, otherwise
   the calendar-day window in the parcel's local timezone.
-- **`DpdEnRouteToParcelShopSensor`** filters on the normalised
-  `pickup` bool — DPD does not yet expose a distinct "arrived at
-  ParcelShop" status, so the sensor cannot tell *en route* apart from
-  *awaiting collection*. Documented limitation, not a bug.
+- **ParcelShop sensors** mirror DHL/PostNL: `DpdEnRouteToParcelShopSensor`
+  counts `pickup` parcels whose `status != at_pickup_point` (still in
+  transit), and `DpdAwaitingPickupSensor` counts `pickup` parcels with
+  `status == at_pickup_point` (ready to collect, the
+  `AVAILABLE_FOR_COLLECTION` description). The split was unblocked by
+  finding `AVAILABLE_FOR_COLLECTION` in the myDPD app's `parcel_status`
+  enum — confirm against a real parcelshop parcel if one ever appears.
 
 ## Running tests
 

@@ -110,7 +110,8 @@ their entity_ids carry the same account suffix:
 | `DPD (account) Incoming parcels` | Number of active incoming parcels |
 | `DPD (account) Parcel <barcode>` | Canonical status of a single incoming shipment |
 | `DPD (account) Next delivery` | Earliest expected delivery datetime |
-| `DPD (account) En route to ParcelShop` | Active incoming parcels destined for a DPD ParcelShop pickup point |
+| `DPD (account) En route to ParcelShop` | Active incoming parcels still in transit to a DPD ParcelShop |
+| `DPD (account) Awaiting pickup` | Parcels that have arrived at a ParcelShop and are ready to collect |
 | `DPD (account) Delivered parcels` | Recently delivered parcels (configurable window) |
 | `DPD (account) Outgoing parcels` | Number of active outgoing parcels |
 
@@ -146,11 +147,11 @@ users.
 | `status` | Meaning | DPD raw description that maps here |
 |---|---|---|
 | `registered` | DPD knows about the label but the parcel is not yet in transit | `ORDER_CREATED` |
-| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER` |
+| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER`, `UNSUCCESSFUL_DELIVERY_ATTEMPTED` |
 | `out_for_delivery` | On the delivery vehicle today | `PARCEL_OUT_FOR_DELIVERY` |
-| `at_pickup_point` | Arrived at the ParcelShop, ready to collect | (not yet observed — DPD has no distinct "arrived at ParcelShop" status; ParcelShop-bound parcels surface as `out_for_delivery` on delivery day) |
+| `at_pickup_point` | Arrived at the ParcelShop, ready to collect | `AVAILABLE_FOR_COLLECTION` |
 | `delivered` | Handed over (mailbox, recipient, neighbour, picked up) | `DELIVERED` |
-| `returning` | Failed delivery, on the way back to the sender | (not yet observed) |
+| `returning` | Failed delivery, on the way back to the sender | `RETURN_TO_SENDER` |
 | `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
 | `unknown` | Raw description we have not mapped yet | anything else — logged once at warning level with a ready-to-paste issue link so it can be added to the map |
 

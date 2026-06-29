@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.sensor import (
+    DpdAwaitingPickupSensor,
     DpdDeliveredParcelsSensor,
     DpdEnRouteToParcelShopSensor,
     DpdIncomingParcelsSensor,
@@ -339,3 +340,42 @@ def test_en_route_attribute_lists_parcels():
     })
     sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
     assert sensor.extra_state_attributes == {"parcels": [parcel]}
+
+
+def test_en_route_excludes_parcels_ready_at_parcelshop():
+    """A parcel that has arrived (at_pickup_point) is awaiting pickup, not en route."""
+    parcels = [
+        _parcel("A", pickup=True, status=ParcelStatus.IN_TRANSIT),
+        _parcel("B", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),
+    ]
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
+    sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
+    assert sensor.native_value == 1
+    assert sensor.extra_state_attributes["parcels"][0]["barcode"] == "A"
+
+
+# ---------------------------------------------------------------------------
+# DpdAwaitingPickupSensor
+# ---------------------------------------------------------------------------
+
+
+def test_awaiting_pickup_counts_only_ready_parcelshop_parcels():
+    parcels = [
+        _parcel("A", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),   # ready
+        _parcel("B", pickup=True, status=ParcelStatus.IN_TRANSIT),        # still en route
+        _parcel("C", pickup=False, status=ParcelStatus.AT_PICKUP_POINT),  # not a pickup parcel
+    ]
+    coordinator = _make_coordinator({
+        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
+    })
+    sensor = DpdAwaitingPickupSensor(coordinator, _make_entry())
+    assert sensor.native_value == 1
+    assert sensor.extra_state_attributes["parcels"][0]["barcode"] == "A"
+
+
+def test_awaiting_pickup_zero_when_no_parcels():
+    sensor = DpdAwaitingPickupSensor(_make_coordinator(None), _make_entry())
+    assert sensor.native_value == 0
+    assert sensor.extra_state_attributes == {"parcels": []}

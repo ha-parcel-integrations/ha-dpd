@@ -534,6 +534,29 @@ def test_map_status_delivered_is_delivered():
     assert map_parcel_status(_shipment("DELIVERED")) == ParcelStatus.DELIVERED
 
 
+def test_map_status_parcelshop_and_return_statuses():
+    """Statuses confirmed from the myDPD app (never seen in early sample data)."""
+    assert (
+        map_parcel_status(_shipment("AVAILABLE_FOR_COLLECTION"))
+        == ParcelStatus.AT_PICKUP_POINT
+    )
+    assert map_parcel_status(_shipment("RETURN_TO_SENDER")) == ParcelStatus.RETURNING
+    assert (
+        map_parcel_status(_shipment("UNSUCCESSFUL_DELIVERY_ATTEMPTED"))
+        == ParcelStatus.IN_TRANSIT
+    )
+
+
+def test_new_parcelshop_statuses_are_known_and_not_logged(caplog):
+    """The new descriptions are in KNOWN_DESCRIPTIONS → no 'unrecognised' warning."""
+    log_unknown_descriptions([
+        _shipment("AVAILABLE_FOR_COLLECTION"),
+        _shipment("RETURN_TO_SENDER"),
+        _shipment("UNSUCCESSFUL_DELIVERY_ATTEMPTED"),
+    ])
+    assert "issues/new" not in caplog.text
+
+
 def test_map_status_unknown_description_falls_back_to_unknown():
     assert map_parcel_status(_shipment("INVENTED_BY_DPD")) == ParcelStatus.UNKNOWN
 

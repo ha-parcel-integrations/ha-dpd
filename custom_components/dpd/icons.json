@@ -18,6 +18,9 @@
       },
       "en_route_to_parcel_shop": {
         "default": "mdi:truck-delivery"
+      },
+      "awaiting_pickup": {
+        "default": "mdi:store-clock"
       }
     }
   }
