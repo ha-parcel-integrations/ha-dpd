@@ -25,6 +25,7 @@ A custom Home Assistant integration that tracks your DPD shipments.
 
 - Incoming and outgoing active-parcel count sensors
 - Per-parcel sensor per active incoming shipment, with full status details as attributes
+- Optional per-parcel status history timeline (opt-in; off by default)
 - Configurable delivered-parcels sensor (last N days, or N most recent)
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
@@ -67,7 +68,7 @@ A custom Home Assistant integration that tracks your DPD shipments.
 
 ## Options
 
-Click **Configure** on the integration card. The form is split into two
+Click **Configure** on the integration card. The form is split into three
 sections:
 
 ### Delivered parcels
@@ -76,6 +77,12 @@ sections:
 |---|---|
 | Filter by | `Days` keeps delivered parcels visible for the last N days. `Number of parcels` keeps only the N most recent regardless of age. |
 | Amount | The N used by the filter above. |
+
+### Parcel history
+
+| Option | Description |
+|---|---|
+| Include status history | Adds a `history` attribute to each parcel — the ordered list of status updates (timestamp, canonical status, original DPD text), capped to the most recent 20. **Off by default.** While on, the integration refetches parcel details when a parcel's status changes so the timeline stays current. The attribute is kept out of the recorder database. |
 
 ### Polling
 
@@ -126,6 +133,7 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `url` | string \| null | Deep link to the parcel's tracking page |
 | `weight` | float \| null | Parcel weight in kilograms |
 | `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` where `text` is a pre-formatted `"L x W x H cm"` string |
+| `history` | list \| null | Ordered status timeline (oldest → newest), each entry `{timestamp, status, raw_status}`, capped to the most recent 20. `null` unless the **Parcel history** option is enabled — see [Options](#options). |
 | `raw` | dict | The original DPD API payload |
 
 ## Parcel status reference
@@ -144,7 +152,7 @@ users.
 | `delivered` | Handed over (mailbox, recipient, neighbour, picked up) | `DELIVERED` |
 | `returning` | Failed delivery, on the way back to the sender | (not yet observed) |
 | `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
-| `unknown` | Raw description we have not mapped yet | anything else — logged once at info level so it can be added to the map |
+| `unknown` | Raw description we have not mapped yet | anything else — logged once at warning level with a ready-to-paste issue link so it can be added to the map |
 
 ## Events
 

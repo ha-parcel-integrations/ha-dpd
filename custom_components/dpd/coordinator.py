@@ -14,12 +14,15 @@ from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_INCLUDE_HISTORY,
     CONF_REFRESH_INTERVAL,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
+    DEFAULT_INCLUDE_HISTORY,
     DEFAULT_REFRESH_INTERVAL,
     DELIVERED_DESCRIPTION,
     DOMAIN,
+    HISTORY_MAX_EVENTS,
     KNOWN_DESCRIPTIONS,
     STATUS_AT_DELIVERY_CENTER,
     STATUS_DELIVERED,
@@ -71,9 +74,73 @@ _DESCRIPTION_MAP: dict[str, ParcelStatus] = {
     STATUS_DELIVERED: ParcelStatus.DELIVERED,
 }
 
-# Descriptions we have already info-logged once in this HA session, so
-# repeated polls do not flood the log with the same "new status" message.
+# DPD parcelEvents ``eventType`` → canonical ParcelStatus (history timeline).
+# History maps from the stable ``eventType`` code, not the ``eventTypeText``
+# (which is ``lang``-dependent and brittle). Unmapped codes resolve to
+# ``None`` (+ a one-shot warning, see feature B).
+#
+# Codes are DPD "Geo Event codes" from their GSMT matrix (2025-02-24); the
+# full 68-code reference lives in ``docs/api/parcels.md``. We deliberately map
+# only the subset a consumer parcel realistically emits (the ``CC*`` customs,
+# ``PK*``/``CR*`` sender-side, ``MT*``/``QR*``/``MI*`` contact codes are left
+# unmapped on purpose — feature B will surface any that actually appear).
+_EVENT_TYPE_MAP: dict[str, ParcelStatus] = {
+    # --- Data / registration ---
+    "ENA": ParcelStatus.REGISTERED,        # Data received and integrated
+    # --- In the network (origin, hub, sorting, destination depot) ---
+    "ORI": ParcelStatus.IN_TRANSIT,        # Origin depot – Inbound
+    "ORW": ParcelStatus.IN_TRANSIT,        # Origin depot – Held
+    "HUI": ParcelStatus.IN_TRANSIT,        # Hub – Inbound
+    "HUS": ParcelStatus.IN_TRANSIT,        # Hub – Sorted
+    "HUW": ParcelStatus.IN_TRANSIT,        # Hub – Held
+    "HUZ": ParcelStatus.IN_TRANSIT,        # Hub – Scan
+    "SPL": ParcelStatus.IN_TRANSIT,        # Status parcel – Loaded
+    "SPS": ParcelStatus.IN_TRANSIT,        # Status parcel – Sorted
+    "SPV": ParcelStatus.IN_TRANSIT,        # Status parcel – Control
+    "SPW": ParcelStatus.IN_TRANSIT,        # Status parcel – Held (benign)
+    "SPZ": ParcelStatus.IN_TRANSIT,        # Status parcel – Scan
+    "DLI": ParcelStatus.IN_TRANSIT,        # Destination depot – Inbound
+    "DLS": ParcelStatus.IN_TRANSIT,        # Destination depot – Sorted
+    "DLW": ParcelStatus.IN_TRANSIT,        # Destination depot – Held
+    "DLZ": ParcelStatus.IN_TRANSIT,        # Destination depot – Scan
+    "DLR": ParcelStatus.IN_TRANSIT,        # Destination depot – Driver's return (failed attempt, back to depot)
+    "MSDLO": ParcelStatus.IN_TRANSIT,      # Message Notification — a "delivery coming" heads-up, not the physical out-for-delivery scan (that's DLO)
+    # --- Out for delivery ---
+    "DLO": ParcelStatus.OUT_FOR_DELIVERY,  # Destination depot – Out for delivery
+    # --- Parcelshop / PUDO flow (not yet confirmed in consumer parcelEvents) ---
+    "DEHD": ParcelStatus.IN_TRANSIT,       # Handover by the driver to the PUDO (arriving)
+    "DEHDY": ParcelStatus.IN_TRANSIT,      # Proof of handover by the driver to the PUDO
+    "DOMSDLO": ParcelStatus.IN_TRANSIT,    # PUDO – Notification sent: available in PUDO
+    "DOPKY": ParcelStatus.IN_TRANSIT,      # PUDO – Drop Off (sender drop-off)
+    "DODEI": ParcelStatus.AT_PICKUP_POINT, # PUDO – Received and available for consignee collection
+    # --- Delivered / collected ---
+    "DEY": ParcelStatus.DELIVERED,         # Delivery – Delivered
+    "DEYY": ParcelStatus.DELIVERED,        # Delivery – Proof of delivery
+    "DODEY": ParcelStatus.DELIVERED,       # PUDO – Collected by the consignee
+    "DODEYY": ParcelStatus.DELIVERED,      # PUDO – Proof of delivery, signature in PUDO
+    # --- Returning to sender ---
+    "SPR": ParcelStatus.RETURNING,         # Status parcel – Return
+    "DEN": ParcelStatus.RETURNING,         # Delivery – Refusal
+    "DODEN": ParcelStatus.RETURNING,       # PUDO – Not collected by the consignee
+    "DODEH": ParcelStatus.RETURNING,       # PUDO – Handed back from PUDO to the driver
+    # --- Exceptions / anomalies (problem) ---
+    "ENX": ParcelStatus.PROBLEM,           # Data exchange – Exception
+    "ORX": ParcelStatus.PROBLEM,           # Origin depot – Exception
+    "HUX": ParcelStatus.PROBLEM,           # Hub – Exception
+    "SPX": ParcelStatus.PROBLEM,           # Status parcel – Exception
+    "DLX": ParcelStatus.PROBLEM,           # Destination depot – Exception
+    "DEX": ParcelStatus.PROBLEM,           # Delivery – Delivery Exception
+    "DODEX": ParcelStatus.PROBLEM,         # PUDO – Collection anomaly
+}
+
+# New-issue link surfaced in the unknown-status warnings so users can paste a
+# ready-made line into a bug report.
+_NEW_ISSUE_URL = "https://github.com/peternijssen/ha-dpd/issues/new"
+
+# Values we have already warned about once in this HA session, so repeated
+# polls do not flood the log with the same "new status" message.
 _unknown_descriptions_logged: set[str] = set()
+_unknown_event_types_logged: set[str] = set()
 
 
 def _description(shipment: dict) -> str | None:
@@ -93,11 +160,12 @@ def map_parcel_status(parcel: dict) -> ParcelStatus:
 
 
 def log_unknown_descriptions(shipments: list[dict]) -> None:
-    """Info-log any status.description we have not mapped yet, once per value.
+    """Warn about any status.description we have not mapped yet, once per value.
 
     Lets us extend ``_DESCRIPTION_MAP`` as new lifecycle stages surface
     in real accounts without spamming the log on every poll. Anything
     not in the map is reported as ``ParcelStatus.UNKNOWN`` until it is.
+    The message carries a copy-paste issue link (feature B).
     """
     for shipment in shipments:
         description = _description(shipment)
@@ -107,12 +175,96 @@ def log_unknown_descriptions(shipments: list[dict]) -> None:
             and description not in _unknown_descriptions_logged
         ):
             _unknown_descriptions_logged.add(description)
-            _LOGGER.info(
-                "DPD status.description %r is not in _DESCRIPTION_MAP — "
-                "will be reported as ParcelStatus.UNKNOWN. Please open "
-                "an issue so we can add the mapping.",
+            code = (shipment.get("status") or {}).get("status")
+            _LOGGER.warning(
+                "Unrecognised DPD status — help us map it. Open an issue and "
+                "paste this line: %s\n  [parcel] status.description=%s (code %s) "
+                "→ reported as 'unknown'",
+                _NEW_ISSUE_URL,
                 description,
+                code,
             )
+
+
+def map_event_status(
+    event_type: str | None, event_type_text: str | None = None
+) -> ParcelStatus | None:
+    """Map a DPD parcelEvents ``eventType`` to a canonical status.
+
+    Returns ``None`` for an unmapped (or absent) code — history entries keep
+    ``status: null`` rather than guessing — and surfaces a one-shot warning
+    with copy-paste issue text so users can help extend the map.
+    """
+    if not event_type:
+        return None
+    status = _EVENT_TYPE_MAP.get(event_type)
+    if status is not None:
+        return status
+
+    if event_type not in _unknown_event_types_logged:
+        _unknown_event_types_logged.add(event_type)
+        _LOGGER.warning(
+            "Unrecognised DPD status — help us map it. Open an issue and "
+            "paste this line: %s\n  [history] eventType=%s text=%r "
+            "→ reported as 'unknown'",
+            _NEW_ISSUE_URL,
+            event_type,
+            event_type_text,
+        )
+    return None
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    """Parse an ISO 8601 string to a datetime, or ``None`` on failure.
+
+    DPD event timestamps are naive (no offset); a naive value is treated as
+    UTC so a list always sorts without crashing on a mixed set.
+    """
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def build_history(
+    events: list[dict] | None, *, max_events: int = HISTORY_MAX_EVENTS
+) -> list[dict]:
+    """Build the canonical ``history`` list from DPD ``parcelEvents``.
+
+    Each entry is ``{timestamp, status, raw_status}`` — identical across all
+    suite carriers. ``timestamp`` combines the event ``date`` + ``time``;
+    ``status`` maps from the stable ``eventType``; ``raw_status`` is DPD's
+    own ``eventTypeText``. Sorted oldest → newest (unparseable timestamps keep
+    their original order, after the parseable ones) and capped to the most
+    recent ``max_events``.
+    """
+    parseable: list[tuple[datetime, dict]] = []
+    unparseable: list[dict] = []
+    for event in events or []:
+        date = event.get("date")
+        time = event.get("time")
+        if not date or not time:
+            continue
+        timestamp = f"{date}T{time}"
+        text = event.get("eventTypeText")
+        entry = {
+            "timestamp": timestamp,
+            "status": map_event_status(event.get("eventType"), text),
+            "raw_status": text,
+        }
+        dt = _parse_iso(timestamp)
+        if dt is None:
+            unparseable.append(entry)
+        else:
+            parseable.append((dt, entry))
+    parseable.sort(key=lambda item: item[0])
+    ordered = [entry for _, entry in parseable] + unparseable
+    return ordered[-max_events:]
 
 
 def filter_active_shipments(shipments: list[dict]) -> list[dict]:
@@ -147,6 +299,7 @@ def normalize_parcel(
     receiver: str | None = None,
     weight: float | None = None,
     dimensions: dict | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
     """Return a carrier-agnostic parcel dict with the DPD payload under ``raw``.
 
@@ -167,6 +320,10 @@ def normalize_parcel(
     coordinator fetches them lazily and passes them in. DPD's native
     units (kg + cm) already match the canonical contract, so no
     conversion is needed here.
+
+    ``history`` is the optional per-parcel status timeline (opt-in option,
+    default off → ``None``). It is also detail-endpoint sourced and stays
+    top-level so it survives the aggregator's ``strip_raw()``.
     """
     description = _description(parcel)
     delivered = description == DELIVERED_DESCRIPTION
@@ -197,6 +354,7 @@ def normalize_parcel(
         "url": _tracking_url(parcel),
         "weight": weight,
         "dimensions": dimensions,
+        "history": history,
         "raw": parcel,
     }
 
@@ -430,6 +588,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             cached = self._detail_cache.get(parcel.get("parcelNumber") or "") or {}
             weight = cached.get("weight")
             dimensions = cached.get("dimensions")
+            history = cached.get("history")
             # Mirror weight + dimensions back onto the raw payload too so
             # ``state_attr(..., 'raw').weight`` / ``.dimensions`` works for
             # users who want the native shape under raw rather than the
@@ -444,6 +603,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 receiver=cached.get("receiver_name"),
                 weight=weight,
                 dimensions=dimensions,
+                history=history,
             )
 
         normalized_active = sort_parcels_by_ts(
@@ -554,6 +714,15 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             if window:
                 shipment["fmpDeliveryDateAndTime"] = window
 
+    @property
+    def _include_history(self) -> bool:
+        """Whether the opt-in per-parcel history option is enabled."""
+        return bool(
+            self.config_entry.options.get(
+                CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
+            )
+        )
+
     async def _enrich_detail_cache(
         self,
         incoming: list[dict],
@@ -562,22 +731,39 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         """Populate ``self._detail_cache`` for any barcode we have not seen.
 
         Calls the per-parcel detail endpoint once per barcode and extracts
-        the three fields that aren't on the list endpoint: ``receiver.name``,
-        ``weight`` and ``dimensions``. Receivers, weight and dimensions
-        don't change for a known parcel so one call per parcel ever is
-        enough; the cache lives for the integration's lifetime (it resets
-        on HA restart, which then backfills active + delivered + outgoing
-        on the first refresh). Failures are swallowed by the API client
-        (returns ``None``); we cache ``None`` so we do not retry on every
-        refresh.
+        the fields that aren't on the list endpoint: ``receiver.name``,
+        ``weight``, ``dimensions`` and — when the history option is on — the
+        ``parcelEvents`` timeline. Receiver/weight/dimensions never change
+        for a known parcel, so by default one call per parcel ever is enough
+        and the cache lives for the integration's lifetime (it resets on HA
+        restart, which then backfills active + delivered + outgoing on the
+        first refresh).
+
+        History is the exception: it **grows** on every status change, so
+        when the option is on we refetch the detail for an already-cached
+        barcode whenever its ``status.description`` has moved since the last
+        fetch. No extra endpoint is needed — it is the same detail call.
+        Failures are swallowed by the API client (returns ``None``); we cache
+        ``None`` so we do not retry on every refresh.
         """
+        include_history = self._include_history
         for shipment, parcel_type in (
             *((s, "INCOMING") for s in incoming),
             *((s, "OUTGOING") for s in outgoing),
         ):
             barcode = shipment.get("parcelNumber")
-            if not barcode or barcode in self._detail_cache:
+            if not barcode:
                 continue
+            if barcode in self._detail_cache:
+                # Already fetched. Only refetch to refresh the history
+                # timeline, and only when the parcel's status has actually
+                # moved. With history off, the cached fields are immutable —
+                # never refetch.
+                if not include_history:
+                    continue
+                cached = self._detail_cache.get(barcode) or {}
+                if cached.get("_status_description") == _description(shipment):
+                    continue
             detail = await self._client.async_get_parcel_detail(
                 barcode,
                 shipment_bu_code=shipment.get("shipmentBUCode"),
@@ -590,6 +776,14 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 "receiver_name": ((detail.get("receiver") or {}).get("name")),
                 "weight": detail.get("weight"),
                 "dimensions": _augment_dimensions(detail.get("dimensions")),
+                "history": (
+                    build_history(detail.get("parcelEvents"))
+                    if include_history
+                    else None
+                ),
+                # Remembered so we can detect a status change and refetch the
+                # growing history timeline (see above).
+                "_status_description": _description(shipment),
             }
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:

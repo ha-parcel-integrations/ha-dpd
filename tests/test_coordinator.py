@@ -8,6 +8,7 @@ from custom_components.dpd.api import DpdApiError, DpdAuthError
 from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_INCLUDE_HISTORY,
 )
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
@@ -16,10 +17,12 @@ from custom_components.dpd.coordinator import (
     _refresh_interval,
     _tracking_url,
     _unknown_descriptions_logged,
+    build_history,
     filter_active_shipments,
     filter_delivered_shipments,
     fmp_hashcode,
     log_unknown_descriptions,
+    map_event_status,
     map_parcel_status,
     normalize_parcel,
     shipment_delivery_dt,
@@ -29,11 +32,17 @@ from custom_components.dpd.coordinator import (
 )
 
 
-def _mock_entry(filter_type: str = "days", filter_amount: int = 7) -> MagicMock:
+def _mock_entry(
+    filter_type: str = "days",
+    filter_amount: int = 7,
+    *,
+    include_history: bool = False,
+) -> MagicMock:
     entry = MagicMock()
     entry.options = {
         CONF_DELIVERED_FILTER_TYPE: filter_type,
         CONF_DELIVERED_FILTER_AMOUNT: filter_amount,
+        CONF_INCLUDE_HISTORY: include_history,
     }
     return entry
 
@@ -449,6 +458,9 @@ async def test_enrich_detail_cache_populates_receiver_weight_dimensions(hass):
                 "length": 31, "width": 23, "height": 17,
                 "text": "31 x 23 x 17 cm",
             },
+            # History off by default → None; status remembered for refresh.
+            "history": None,
+            "_status_description": "PARCEL_HANDED",
         }
     }
 
@@ -1151,3 +1163,248 @@ def test_sort_handles_z_suffix_timestamps():
 
 def test_sort_empty_input_returns_empty_list():
     assert sort_parcels_by_ts([], "planned_from") == []
+
+
+# ---------------------------------------------------------------------------
+# map_event_status
+# ---------------------------------------------------------------------------
+
+
+def test_map_event_status_known_codes():
+    assert map_event_status("ENA") == ParcelStatus.REGISTERED
+    assert map_event_status("ORI") == ParcelStatus.IN_TRANSIT
+    assert map_event_status("SPW") == ParcelStatus.IN_TRANSIT
+    assert map_event_status("DLO") == ParcelStatus.OUT_FOR_DELIVERY
+    assert map_event_status("MSDLO") == ParcelStatus.IN_TRANSIT  # notification, not the physical OFD scan
+    assert map_event_status("DEY") == ParcelStatus.DELIVERED
+    assert map_event_status("DEYY") == ParcelStatus.DELIVERED
+
+
+def test_map_event_status_gsmt_additions():
+    """Codes added from DPD's GSMT matrix (Tier 1 + parcelshop/PUDO)."""
+    # Hub / sort / scan / held / driver-return → in_transit
+    for code in ("HUI", "HUS", "HUZ", "SPS", "SPV", "SPZ", "DLZ",
+                 "ORW", "HUW", "DLW", "DLR"):
+        assert map_event_status(code) == ParcelStatus.IN_TRANSIT, code
+    # Exceptions / anomalies → problem
+    for code in ("ENX", "ORX", "HUX", "SPX", "DLX", "DEX", "DODEX"):
+        assert map_event_status(code) == ParcelStatus.PROBLEM, code
+    # Return leg → returning
+    for code in ("SPR", "DEN", "DODEN", "DODEH"):
+        assert map_event_status(code) == ParcelStatus.RETURNING, code
+    # Parcelshop / PUDO flow
+    assert map_event_status("DEHD") == ParcelStatus.IN_TRANSIT
+    assert map_event_status("DODEI") == ParcelStatus.AT_PICKUP_POINT  # ready for collection
+    assert map_event_status("DODEY") == ParcelStatus.DELIVERED       # collected
+    assert map_event_status("DODEYY") == ParcelStatus.DELIVERED
+
+
+def test_map_event_status_none_for_missing_code():
+    assert map_event_status(None) is None
+    assert map_event_status("") is None
+
+
+def test_map_event_status_none_for_unmapped_code(caplog):
+    # Distinct code so the one-shot dedupe set does not hide the warning.
+    assert map_event_status("ZZ9", "Some new event") is None
+    assert "ZZ9" in caplog.text
+    assert "issues/new" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# build_history
+# ---------------------------------------------------------------------------
+
+
+_EVENTS = [
+    {"date": "2026-06-24", "time": "08:00:00", "eventType": "ENA", "eventTypeText": "Data received and integrated"},
+    {"date": "2026-06-24", "time": "10:25:29", "eventType": "DLO", "eventTypeText": "Destination depot - Out for delivery"},
+    {"date": "2026-06-24", "time": "13:09:04", "eventType": "DEY", "eventTypeText": "Delivery - Delivered"},
+]
+
+
+def test_build_history_entry_shape_and_order():
+    history = build_history(_EVENTS)
+    assert [e["status"] for e in history] == [
+        ParcelStatus.REGISTERED,
+        ParcelStatus.OUT_FOR_DELIVERY,
+        ParcelStatus.DELIVERED,
+    ]
+    assert history[0]["timestamp"] == "2026-06-24T08:00:00"
+    assert history[-1]["raw_status"] == "Delivery - Delivered"
+    assert set(history[0]) == {"timestamp", "status", "raw_status"}
+
+
+def test_build_history_sorts_unsorted_input_oldest_first():
+    history = build_history(list(reversed(_EVENTS)))
+    assert history[0]["status"] == ParcelStatus.REGISTERED
+    assert history[-1]["status"] == ParcelStatus.DELIVERED
+
+
+def test_build_history_caps_to_max_events():
+    many = [
+        {"date": "2026-06-24", "time": f"{hour:02d}:00:00", "eventType": "ORI", "eventTypeText": "Origin depot"}
+        for hour in range(0, 24)
+    ]
+    history = build_history(many)
+    assert len(history) == 20
+    assert history[0]["timestamp"] == "2026-06-24T04:00:00"
+
+
+def test_build_history_respects_custom_cap():
+    assert len(build_history(_EVENTS, max_events=1)) == 1
+
+
+def test_build_history_unmapped_code_is_null_status():
+    history = build_history([
+        {"date": "2026-06-24", "time": "08:00:00", "eventType": "QQ1", "eventTypeText": "Onbekend"},
+    ])
+    assert history[0]["status"] is None
+    assert history[0]["raw_status"] == "Onbekend"
+
+
+def test_build_history_skips_entries_without_date_or_time():
+    history = build_history([
+        {"time": "08:00:00", "eventType": "ENA", "eventTypeText": "no date"},
+        {"date": "2026-06-24", "eventType": "ENA", "eventTypeText": "no time"},
+        {"date": "2026-06-24", "time": "09:00:00", "eventType": "ENA", "eventTypeText": "ok"},
+    ])
+    assert len(history) == 1
+    assert history[0]["raw_status"] == "ok"
+
+
+def test_build_history_empty_for_no_events():
+    assert build_history(None) == []
+    assert build_history([]) == []
+
+
+# ---------------------------------------------------------------------------
+# log_unknown_descriptions — feature B warning
+# ---------------------------------------------------------------------------
+
+
+def test_log_unknown_descriptions_warns_with_issue_link(caplog):
+    _unknown_descriptions_logged.discard("WARPED")
+    shipment = {"status": {"description": "WARPED", "status": 9}}
+    log_unknown_descriptions([shipment])
+    assert "WARPED" in caplog.text
+    assert "issues/new" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# normalize_parcel — history field
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_parcel_history_defaults_to_none():
+    raw = _shipment("PARCEL_HANDED", parcel_number="01XYZ")
+    assert normalize_parcel(raw)["history"] is None
+
+
+def test_normalize_parcel_history_passes_through_top_level():
+    raw = _shipment("PARCEL_HANDED", parcel_number="01XYZ")
+    events = [{"timestamp": "2026-06-24T13:09:04", "status": "delivered", "raw_status": "Delivery - Delivered"}]
+    normalized = normalize_parcel(raw, history=events)
+    assert normalized["history"] == events
+    # Top-level so it survives the aggregator's strip_raw(); not under raw.
+    assert "history" not in normalized["raw"]
+
+
+# ---------------------------------------------------------------------------
+# _enrich_detail_cache — history wiring
+# ---------------------------------------------------------------------------
+
+
+_DETAIL_WITH_EVENTS = {
+    "receiver": {"name": "Jane Doe"},
+    "weight": 2.0,
+    "dimensions": None,
+    "parcelEvents": _EVENTS,
+}
+
+
+async def test_enrich_detail_cache_builds_history_when_option_on(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
+    coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=True))
+
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01ABC")
+    await coordinator._enrich_detail_cache([shipment], [])
+
+    entry = coordinator._detail_cache["01ABC"]
+    assert entry["history"][-1]["status"] == ParcelStatus.DELIVERED
+    assert entry["_status_description"] == "PARCEL_OUT_FOR_DELIVERY"
+
+
+async def test_enrich_detail_cache_no_history_when_option_off(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
+    coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=False))
+
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01ABC")
+    await coordinator._enrich_detail_cache([shipment], [])
+
+    assert coordinator._detail_cache["01ABC"]["history"] is None
+
+
+async def test_enrich_detail_cache_refetches_on_status_change_when_history_on(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
+    coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=True))
+    coordinator._detail_cache = {
+        "01ABC": {
+            "receiver_name": "Jane Doe",
+            "weight": 2.0,
+            "dimensions": None,
+            "history": [],
+            "_status_description": "IN_TRANSIT",
+        }
+    }
+
+    # Status has moved IN_TRANSIT -> PARCEL_OUT_FOR_DELIVERY → refetch to grow history.
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01ABC")
+    await coordinator._enrich_detail_cache([shipment], [])
+
+    client.async_get_parcel_detail.assert_awaited_once()
+    assert coordinator._detail_cache["01ABC"]["_status_description"] == "PARCEL_OUT_FOR_DELIVERY"
+
+
+async def test_enrich_detail_cache_no_refetch_when_status_unchanged(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
+    coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=True))
+    coordinator._detail_cache = {
+        "01ABC": {
+            "receiver_name": "Jane Doe",
+            "weight": 2.0,
+            "dimensions": None,
+            "history": [],
+            "_status_description": "PARCEL_OUT_FOR_DELIVERY",
+        }
+    }
+
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01ABC")
+    await coordinator._enrich_detail_cache([shipment], [])
+
+    client.async_get_parcel_detail.assert_not_called()
+
+
+async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_change(hass):
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
+    coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=False))
+    coordinator._detail_cache = {
+        "01ABC": {
+            "receiver_name": "Jane Doe",
+            "weight": 2.0,
+            "dimensions": None,
+            "history": None,
+            "_status_description": "IN_TRANSIT",
+        }
+    }
+
+    # Even though status moved, history is off → immutable fields, never refetch.
+    shipment = _shipment("PARCEL_OUT_FOR_DELIVERY", parcel_number="01ABC")
+    await coordinator._enrich_detail_cache([shipment], [])
+
+    client.async_get_parcel_detail.assert_not_called()

@@ -128,6 +128,51 @@ re-propose these as improvements:
   `ConfigEntryNotReady` so HA retries with backoff instead of crashing
   on `orjson.JSONDecodeError` or pushing the user into reauth.
 
+### Adopted in 2.3.0 — history (do not refactor away)
+
+- **Per-parcel `history`** — a new top-level canonical field (alongside
+  `status`, `weight`, …): an ordered list (oldest → newest) of
+  `{timestamp, status, raw_status}` events, capped to the most recent
+  `HISTORY_MAX_EVENTS` (20). Built by `build_history` in
+  `coordinator.py` from the detail endpoint's `parcelEvents`
+  (`{date, time, eventType, eventTypeText}`). `timestamp` = `date` + `T`
+  + `time`; `status` maps from the stable `eventType`; `raw_status` =
+  `eventTypeText`. Kept identical across DHL / DPD / PostNL; top-level
+  (not under `raw`) so it survives the aggregator's `strip_raw()`.
+- **Opt-in, default OFF.** Options-flow boolean `CONF_INCLUDE_HISTORY`
+  in its own `history` section, `async_schedule_reload` on submit (same
+  pattern as `CONF_REFRESH_INTERVAL`). When off, `history` is `None` —
+  the key is never omitted.
+- **No new endpoint — reuse the detail call.** `_enrich_detail_cache`
+  already fetches per-parcel detail for receiver/weight/dimensions; it
+  now also keeps `parcelEvents`. The cache is **lifetime-per-barcode**
+  for the immutable fields, but history **grows** on a status change, so
+  when the option is on the cache stores `_status_description` and
+  refetches the detail when a barcode's `status.description` moves. With
+  the option off, the cache is never refetched (original behaviour). Do
+  not collapse this back into "fetch once, forever".
+- **Per-event status** maps from `eventType` via `_EVENT_TYPE_MAP` +
+  `map_event_status` (NOT the `lang`-dependent `eventTypeText`). Unmapped
+  codes → `null` (history) + a one-shot **warning**. The codes are DPD
+  "Geo Event codes"; the full **68-code GSMT reference** (and which we
+  map vs deliberately skip) lives in `docs/api/parcels.md` (local-only).
+  We map only the subset a consumer parcel realistically emits — `CC*`
+  customs, `PK*`/`CR*` sender-side and `MT*`/`QR*`/`MIDL*` contact codes
+  are intentionally left unmapped; map on demand when feature B surfaces
+  one. The parcelshop/PUDO codes (`DO*`, `DEHD*`, incl. `DODEI` →
+  `at_pickup_point`) are mapped but **not yet confirmed** in real consumer
+  `parcelEvents`.
+- **Feature B — unknown-status warnings.** Both the parcel
+  `status.description` (`log_unknown_descriptions`) and the history
+  `eventType` (`map_event_status`) log **once per distinct unmapped
+  value** at **WARNING** level with a copy-paste `issues/new` link
+  (`_NEW_ISSUE_URL`). Replaced the old terse info log. Two parallel
+  one-shot sets: `_unknown_descriptions_logged`,
+  `_unknown_event_types_logged`.
+- **Recorder:** `history` is in `_unrecorded_attributes` on
+  `DpdParcelSensor`. Summary sensors already keep the whole parcel list
+  out of the recorder via the `parcels` attribute.
+
 ## Planned for the next major bump
 
 - **Exception translations** (Gold-tier rule). `UpdateFailed(f"...")`
