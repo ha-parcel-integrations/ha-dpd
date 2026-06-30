@@ -379,3 +379,29 @@ def test_awaiting_pickup_zero_when_no_parcels():
     sensor = DpdAwaitingPickupSensor(_make_coordinator(None), _make_entry())
     assert sensor.native_value == 0
     assert sensor.extra_state_attributes == {"parcels": []}
+
+
+# ---------------------------------------------------------------------------
+# DpdLastUpdateSensor
+# ---------------------------------------------------------------------------
+
+
+def test_last_update_sensor_reports_coordinator_timestamp():
+    from datetime import timezone
+
+    from custom_components.dpd.sensor import DpdLastUpdateSensor
+
+    coordinator = _make_coordinator(None)
+    moment = datetime(2026, 6, 30, 12, 0, tzinfo=timezone.utc)
+    coordinator.last_success_time = moment
+    sensor = DpdLastUpdateSensor(coordinator, _make_entry())
+    assert sensor.native_value == moment
+
+
+def test_last_update_sensor_none_before_first_success():
+    from custom_components.dpd.sensor import DpdLastUpdateSensor
+
+    coordinator = _make_coordinator(None)
+    coordinator.last_success_time = None
+    sensor = DpdLastUpdateSensor(coordinator, _make_entry())
+    assert sensor.native_value is None

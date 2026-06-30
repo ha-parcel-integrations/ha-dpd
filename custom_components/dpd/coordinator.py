@@ -554,6 +554,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # device-trigger automations can filter to a specific DPD account.
         # ``None`` until the device exists (i.e. the sensors are set up).
         self._cached_device_id: str | None = None
+        # Timestamp of the last successful poll, surfaced by a diagnostic
+        # sensor so users can alert on a silently-stale integration (the
+        # count sensors only change when a value changes, not every poll).
+        self.last_success_time: datetime | None = None
 
     def _device_id(self) -> str | None:
         """Resolve (and cache) this account's device id for event payloads.
@@ -661,6 +665,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             if p.get("barcode")
         }
 
+        self.last_success_time = datetime.now(timezone.utc)
         return {
             "incoming_active": normalized_active,
             "incoming_delivered": normalized_delivered,

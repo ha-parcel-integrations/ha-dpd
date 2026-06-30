@@ -197,6 +197,14 @@ re-propose these as improvements:
   treating a `{entry_id}_*` unique_id as a per-parcel barcode. Without
   this guard it deletes the refresh button (`{entry_id}_refresh`) on every
   setup. Do not drop the domain check.
+- **Diagnostic `last_update` sensor** (`DpdLastUpdateSensor`, unique_id
+  `{entry_id}_last_update`, `EntityCategory.DIAGNOSTIC`, device class
+  TIMESTAMP). Reads `coordinator.last_success_time`, stamped with
+  `datetime.now(timezone.utc)` at the end of every successful
+  `_async_update_data`. Lets users alert on a silently stale integration.
+  **Must be in `non_parcel_unique_ids`** in `sensor.py` — it is a sensor
+  whose unique_id starts with `{entry_id}_`, so without the exclusion the
+  setup cleanup loop deletes it as a stale parcel.
 - **Deliveries `calendar`** (`Platform.CALENDAR` in `PLATFORMS`,
   `calendar.py`). One `DpdDeliveriesCalendar` per account, unique_id
   `{entry_id}_deliveries`, `translation_key="deliveries"`. Read-only view

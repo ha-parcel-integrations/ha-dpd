@@ -31,6 +31,9 @@
       },
       "awaiting_pickup": {
         "default": "mdi:store-clock"
+      },
+      "last_update": {
+        "default": "mdi:clock-check-outline"
       }
     }
   }

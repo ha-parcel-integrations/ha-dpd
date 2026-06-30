@@ -128,6 +128,9 @@
       "awaiting_pickup": {
         "name": "Awaiting pickup",
         "unit_of_measurement": "parcels"
+      },
+      "last_update": {
+        "name": "Last successful update"
       }
     }
   }

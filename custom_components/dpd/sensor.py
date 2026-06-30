@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType
@@ -53,6 +54,7 @@ async def async_setup_entry(
         f"{entry_id}_next_delivery",
         f"{entry_id}_en_route_to_parcel_shop",
         f"{entry_id}_awaiting_pickup",
+        f"{entry_id}_last_update",
     }
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         # Only per-parcel *sensors* are managed here; skip other platforms
@@ -75,6 +77,7 @@ async def async_setup_entry(
         DpdNextDeliverySensor(coordinator, entry),
         DpdEnRouteToParcelShopSensor(coordinator, entry),
         DpdAwaitingPickupSensor(coordinator, entry),
+        DpdLastUpdateSensor(coordinator, entry),
     ]
     for parcel in current_parcels:
         barcode = parcel.get("barcode", "")
@@ -390,3 +393,28 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"parcels": self._get_awaiting_parcels()}
+
+
+class DpdLastUpdateSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Diagnostic sensor reporting when DPD was last polled successfully.
+
+    Updates on every successful coordinator refresh, even when no parcel
+    value changes — so users can alert on a silently-stale integration
+    (e.g. expired auth) that the count sensors would not reveal.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "last_update"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_attribution = "Data provided by DPD"
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_last_update"
+        self._attr_device_info = _build_device_info(entry)
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the timestamp of the last successful poll."""
+        return self.coordinator.last_success_time
