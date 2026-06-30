@@ -13,6 +13,8 @@ A custom Home Assistant integration that tracks your DPD shipments.
 - [Sensors](#sensors)
 - [Parcel status reference](#parcel-status-reference)
 - [Events](#events)
+- [Device triggers](#device-triggers)
+- [Buttons](#buttons)
 - [Examples](#examples)
 - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
@@ -27,6 +29,8 @@ A custom Home Assistant integration that tracks your DPD shipments.
 - Per-parcel sensor per active incoming shipment, with full status details as attributes
 - Optional per-parcel status history timeline (opt-in; off by default)
 - Configurable delivered-parcels sensor (last N days, or N most recent)
+- Refresh button to force an immediate poll
+- Device triggers for no-code parcel automations
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
 - Country (business unit) selection during setup — Netherlands available today, more to come
@@ -167,7 +171,14 @@ polling per-parcel sensors.
 | `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes | Same payload plus `old_status` and `new_status` |
 | `dpd_parcel_delivery_time_changed` | A known barcode's expected delivery time changes to a new value | Same payload plus `old_planned_from`, `new_planned_from`, `old_planned_to`, `new_planned_to` |
 
+Every payload also carries a `device_id` identifying the DPD account the
+parcel belongs to, so automations can tell two accounts apart.
+
 Events do not fire for parcels that were already in your account when HA first started.
+
+Prefer the no-code [device triggers](#device-triggers) below if you build
+your automations in the UI; the raw events are there for templates and
+YAML automations.
 
 See [`examples/automations/`](examples/automations/) for ready-to-paste
 event-driven automations, or the
@@ -175,6 +186,27 @@ event-driven automations, or the
 for a carrier-agnostic re-emit layer that fires
 `parcel_aggregator_parcel_*` events covering every installed carrier
 in one go.
+
+## Device triggers
+
+Each DPD device exposes the parcel events above as **device triggers**, so
+you can build automations from the UI (**Settings → Automations → Create →
+Add trigger → Device**) without typing event names:
+
+| Trigger | Fires when |
+|---|---|
+| A parcel was registered | A new barcode appears in the active list |
+| A parcel's status changed | A parcel's canonical status changes |
+| A parcel's expected delivery time changed | A parcel gains or updates an expected delivery time |
+
+Triggers are scoped to the selected account's device, so a multi-account
+setup only fires for the device you picked.
+
+## Buttons
+
+| Friendly name pattern | Description |
+|---|---|
+| `DPD (account) Refresh` | Forces an immediate poll of DPD — handy when a parcel is expected and you don't want to wait for the next scheduled refresh. |
 
 ## Examples
 

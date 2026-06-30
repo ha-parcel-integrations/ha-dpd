@@ -173,6 +173,31 @@ re-propose these as improvements:
   `DpdParcelSensor`. Summary sensors already keep the whole parcel list
   out of the recorder via the `parcels` attribute.
 
+### Adopted in 2.4.0 — device triggers + refresh button (do not refactor away)
+
+- **`device_id` on every fired event.** `_fire_change_events` resolves the
+  account's device id once (cached in `self._cached_device_id`, looked up
+  via `dr.async_entries_for_config_entry`) and adds `device_id` to all
+  three event payloads. Stays `None` until the device exists, which is
+  fine — events are suppressed on the first refresh anyway. This is the
+  key that lets device triggers filter per-account.
+- **`device_trigger.py`** exposes the three bus events
+  (`parcel_registered` / `parcel_status_changed` /
+  `parcel_delivery_time_changed`) as no-code device triggers, delegating
+  to `homeassistant.components.homeassistant.triggers.event` with
+  `CONF_EVENT_DATA={device_id: ...}`. Trigger-type names live under
+  `device_automation.trigger_type` in strings/translations.
+- **Refresh `button`** (`Platform.BUTTON` in `PLATFORMS`, `button.py`).
+  One `DpdRefreshButton` per account, unique_id `{entry_id}_refresh`,
+  `translation_key="refresh"`. `async_press` calls
+  `async_request_refresh()` on the (single) coordinator. Lands on the
+  same `DPD (<email>)` device.
+- **Sensor cleanup is now sensor-scoped.** The setup-time stale-entity
+  loop in `sensor.py` filters on `entity_entry.domain == "sensor"` before
+  treating a `{entry_id}_*` unique_id as a per-parcel barcode. Without
+  this guard it deletes the refresh button (`{entry_id}_refresh`) on every
+  setup. Do not drop the domain check.
+
 ## Planned for the next major bump
 
 - **Exception translations** (Gold-tier rule). `UpdateFailed(f"...")`

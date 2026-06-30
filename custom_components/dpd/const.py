@@ -23,7 +23,7 @@ class ParcelStatus(StrEnum):
     PROBLEM = "problem"                     # Carrier reports an exception, intervention, or other issue
     UNKNOWN = "unknown"                     # Raw status we have not mapped yet — logged at info level
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.SENSOR]
 
 POLL_INTERVAL = 900  # seconds (15 minutes) — legacy hard-coded fallback
 

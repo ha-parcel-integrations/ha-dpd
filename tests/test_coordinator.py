@@ -1431,3 +1431,59 @@ async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_ch
     await coordinator._enrich_detail_cache([shipment], [])
 
     client.async_get_parcel_detail.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _device_id — resolved from the device registry, cached, attached to events
+# ---------------------------------------------------------------------------
+
+
+async def test_device_id_resolves_and_caches(hass):
+    """_device_id finds the account's device and caches it for later events."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from homeassistant.helpers import device_registry as dr
+
+    from custom_components.dpd.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="DPD-NL:user@example.com",
+        data={},
+        options={
+            CONF_DELIVERED_FILTER_TYPE: "days",
+            CONF_DELIVERED_FILTER_AMOUNT: 7,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+    )
+
+    coordinator = DpdCoordinator(hass, MagicMock(), entry)
+
+    assert coordinator._device_id() == device.id
+    # Second call returns the cached value (no second registry lookup).
+    assert coordinator._device_id() == device.id
+
+
+async def test_device_id_none_when_no_device(hass):
+    """_device_id stays None until a device has been registered."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.dpd.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="DPD-NL:nobody@example.com",
+        data={},
+        options={
+            CONF_DELIVERED_FILTER_TYPE: "days",
+            CONF_DELIVERED_FILTER_AMOUNT: 7,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    coordinator = DpdCoordinator(hass, MagicMock(), entry)
+    assert coordinator._device_id() is None
