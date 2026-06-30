@@ -1,0 +1,134 @@
+"""Calendar platform for the DPD integration."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
+
+from . import DpdConfigEntry
+from .const import DOMAIN
+from .coordinator import DpdCoordinator
+
+# The coordinator fans data out to this entity; no per-entity polling.
+PARALLEL_UPDATES = 0
+
+# Fallback window length for a parcel that has a start moment but no end.
+_DEFAULT_EVENT_DURATION = timedelta(hours=1)
+
+
+def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
+    """Return the DeviceInfo shared with this account's sensors."""
+    email = entry.title or ""
+    device_name = f"DPD ({email})" if email else "DPD"
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=device_name,
+        manufacturer="DPD",
+        entry_type=DeviceEntryType.SERVICE,
+        configuration_url="https://www.dpdgroup.com",
+    )
+
+
+def _parse(value: str | None) -> datetime | None:
+    """Parse an ISO 8601 string into a timezone-aware datetime, or ``None``."""
+    if not value:
+        return None
+    parsed = dt_util.parse_datetime(value)
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt_util.UTC)
+    return parsed
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: DpdConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the DPD deliveries calendar from a config entry."""
+    coordinator = entry.runtime_data.coordinator
+    async_add_entities([DpdDeliveriesCalendar(coordinator, entry)])
+
+
+class DpdDeliveriesCalendar(CoordinatorEntity[DpdCoordinator], CalendarEntity):
+    """A read-only calendar of expected DPD deliveries.
+
+    Each active incoming parcel with a known delivery moment becomes an
+    event. The window is the parcel's ``planned_from``/``planned_to``; when
+    only a single moment is known the event is given a one-hour duration.
+    No extra API calls — this is purely a view over coordinator data, so it
+    is enabled by default and can be turned off per entity if unwanted.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "deliveries"
+    _attr_attribution = "Data provided by DPD"
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialise the deliveries calendar."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_deliveries"
+        self._attr_device_info = _build_device_info(entry)
+
+    def _events(self) -> list[CalendarEvent]:
+        """Build calendar events from the active incoming parcels."""
+        parcels = (self.coordinator.data or {}).get("incoming_active", [])
+        events: list[CalendarEvent] = []
+        for parcel in parcels:
+            start = _parse(parcel.get("planned_from"))
+            if start is None:
+                continue
+            end = _parse(parcel.get("planned_to"))
+            if end is None or end <= start:
+                end = start + _DEFAULT_EVENT_DURATION
+
+            barcode = parcel.get("barcode") or ""
+            sender = parcel.get("sender")
+            summary = sender or (f"Parcel {barcode}" if barcode else "DPD parcel")
+            description_parts = [
+                f"Barcode: {barcode}" if barcode else None,
+                f"Status: {parcel.get('status')}" if parcel.get("status") else None,
+                parcel.get("url"),
+            ]
+            description = "\n".join(p for p in description_parts if p)
+            location = parcel.get("pickup_point") if parcel.get("pickup") else None
+
+            events.append(
+                CalendarEvent(
+                    start=start,
+                    end=end,
+                    summary=summary,
+                    description=description or None,
+                    location=location,
+                    uid=barcode or None,
+                )
+            )
+        return events
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        """Return the current or next upcoming delivery event."""
+        now = dt_util.now()
+        upcoming = [event for event in self._events() if event.end > now]
+        return min(upcoming, key=lambda event: event.start) if upcoming else None
+
+    async def async_get_events(
+        self,
+        hass: HomeAssistant,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> list[CalendarEvent]:
+        """Return all delivery events that overlap the requested range."""
+        return [
+            event
+            for event in self._events()
+            if event.start < end_date and event.end > start_date
+        ]
