@@ -20,7 +20,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import DpdApiClient, DpdAuthError
+from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
     BUSINESS_UNITS,
     CONF_BU,
@@ -127,7 +127,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._validate_credentials(email, password, bu)
             except DpdAuthError:
                 errors["base"] = "invalid_auth"
-            except aiohttp.ClientError:
+            except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:
                 await self.async_set_unique_id(f"{bu}:{email}")
@@ -190,9 +190,14 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._validate_credentials(email, password, bu)
             except DpdAuthError:
                 errors["base"] = "invalid_auth"
-            except aiohttp.ClientError:
+            except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:
+                # Guard against re-authenticating with a *different* DPD
+                # account — the entry (and all its entities) belong to the
+                # original account's unique_id.
+                await self.async_set_unique_id(f"{bu}:{email}")
+                self._abort_if_unique_id_mismatch()
                 return self.async_update_reload_and_abort(
                     reauth_entry,
                     data_updates={
