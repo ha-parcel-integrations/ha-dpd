@@ -60,7 +60,7 @@
               "include_history": "Include status history"
             },
             "data_description": {
-              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default — while on, the integration refetches parcel details when a parcel's status changes."
+              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default."
             }
           },
           "polling": {

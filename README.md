@@ -82,7 +82,7 @@ sections:
 
 | Option | Description |
 |---|---|
-| Include status history | Adds a `history` attribute to each parcel — the ordered list of status updates (timestamp, canonical status, original DPD text), capped to the most recent 20. **Off by default.** While on, the integration refetches parcel details when a parcel's status changes so the timeline stays current. The attribute is kept out of the recorder database. |
+| Include status history | Adds a `history` attribute to each parcel — the ordered list of status updates (timestamp, canonical status, original DPD text), capped to the most recent 20. **Off by default.** The attribute is kept out of the recorder database. |
 
 ### Polling
 
