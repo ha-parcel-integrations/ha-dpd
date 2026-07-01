@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
@@ -546,10 +547,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # doesn't carry these; the detail endpoint does, but it costs an
         # extra HTTP call per parcel. None of these fields change for a
         # known parcel, so we fetch the detail once per barcode and reuse
-        # the result for the integration's lifetime. ``None`` is cached when
-        # the detail call failed, so we don't hammer DPD when their endpoint
-        # is flaky.
-        self._detail_cache: dict[str, dict[str, Any] | None] = {}
+        # the result for the integration's lifetime. A failed detail call is
+        # cached as ``{"_failed": True, ...}`` so we don't hammer DPD when
+        # their endpoint is flaky — retried once the parcel's status moves.
+        self._detail_cache: dict[str, dict[str, Any]] = {}
         # Cached device id for this account, attached to every fired event so
         # device-trigger automations can filter to a specific DPD account.
         # ``None`` until the device exists (i.e. the sensors are set up).
@@ -781,8 +782,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         when the option is on we refetch the detail for an already-cached
         barcode whenever its ``status.description`` has moved since the last
         fetch. No extra endpoint is needed — it is the same detail call.
-        Failures are swallowed by the API client (returns ``None``); we cache
-        ``None`` so we do not retry on every refresh.
+        Failures are swallowed by the API client (returns ``None``); a
+        failure is cached as ``{"_failed": True}`` so we do not retry on
+        every refresh, but we do retry once the parcel's status moves.
         """
         include_history = self._include_history
         for shipment, parcel_type in (
@@ -793,14 +795,21 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             if not barcode:
                 continue
             if barcode in self._detail_cache:
-                # Already fetched. Only refetch to refresh the history
-                # timeline, and only when the parcel's status has actually
-                # moved. With history off, the cached fields are immutable —
-                # never refetch.
-                if not include_history:
-                    continue
                 cached = self._detail_cache.get(barcode) or {}
-                if cached.get("_status_description") == _description(shipment):
+                if cached.get("_failed"):
+                    # The last detail fetch failed. Don't hammer DPD on every
+                    # poll, but do try again once the parcel's status moves —
+                    # otherwise one hiccup means no receiver/weight/dimensions
+                    # until an HA restart.
+                    if cached.get("_status_description") == _description(shipment):
+                        continue
+                elif not include_history:
+                    # Successfully fetched and history is off: the cached
+                    # fields are immutable — never refetch.
+                    continue
+                elif cached.get("_status_description") == _description(shipment):
+                    # History on: only refetch to refresh the timeline, and
+                    # only when the status has actually moved.
                     continue
             detail = await self._client.async_get_parcel_detail(
                 barcode,
@@ -808,7 +817,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 parcel_type=parcel_type,
             )
             if detail is None:
-                self._detail_cache[barcode] = None
+                self._detail_cache[barcode] = {
+                    "_failed": True,
+                    "_status_description": _description(shipment),
+                }
                 continue
             self._detail_cache[barcode] = {
                 "receiver_name": ((detail.get("receiver") or {}).get("name")),

@@ -100,7 +100,10 @@ re-propose these as improvements:
   parcel, lazily filled from the per-parcel detail endpoint
   (`/v10/parcels/details/{n}`) via `_detail_cache`. The cache is keyed
   by barcode and lasts the lifetime of the integration, so the detail
-  call fires at most once per parcel. `dimensions` carries the raw
+  call fires at most once per parcel. A **failed** detail call is cached
+  as `{"_failed": True, "_status_description": ...}` (not retried every
+  poll) and retried once the parcel's `status.description` moves — one
+  DPD hiccup must not mean missing receiver/weight until an HA restart. `dimensions` carries the raw
   float `length` / `width` / `height` plus a pre-formatted `text`
   field (`"L x W x H cm"`, integer values, lowercase `x`). The same
   `weight` and `dimensions` are also injected onto `raw` so power
@@ -118,7 +121,9 @@ re-propose these as improvements:
   `self.hass.config_entries.async_schedule_reload(entry.entry_id)` on
   submit so a changed refresh interval takes effect immediately. Reauth
   still reloads via `async_update_reload_and_abort` (that is correct and
-  unrelated). Combining an update listener with a reload-on-update flow
+  unrelated); the reauth-confirm step guards with `async_set_unique_id`
+  + `_abort_if_unique_id_mismatch` so entering a *different* DPD
+  account's credentials aborts instead of rebinding the entry. Combining an update listener with a reload-on-update flow
   is logged as a deprecation today and becomes an error in HA 2026.12+ —
   see the
   [config_entry_listener deprecation](https://developers.home-assistant.io/blog/2026/05/07/config-entry-listener-together-with-reloading-methods/).

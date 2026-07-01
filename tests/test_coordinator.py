@@ -479,17 +479,46 @@ async def test_enrich_detail_cache_uses_outgoing_parcel_type(hass):
     assert args.kwargs["parcel_type"] == "OUTGOING"
 
 
-async def test_enrich_detail_cache_caches_none_when_detail_fails(hass):
-    """A failed detail call must still be cached as None so we don't retry
-    on every refresh and hammer DPD when the endpoint is flaky."""
+async def test_enrich_detail_cache_caches_failure_and_skips_same_status(hass):
+    """A failed detail call is cached so we don't retry on every refresh
+    and hammer DPD when the endpoint is flaky."""
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     shipment = _shipment("PARCEL_HANDED", parcel_number="01ABC")
     await coordinator._enrich_detail_cache([shipment], [])
+    assert coordinator._detail_cache == {
+        "01ABC": {"_failed": True, "_status_description": "PARCEL_HANDED"}
+    }
 
-    assert coordinator._detail_cache == {"01ABC": None}
+    # Same status again → no new call.
+    await coordinator._enrich_detail_cache([shipment], [])
+    assert client.async_get_parcel_detail.await_count == 1
+
+
+async def test_enrich_detail_cache_retries_failure_on_status_change(hass):
+    """A cached failure is retried once the parcel's status moves, so one
+    hiccup does not mean missing receiver/weight until an HA restart."""
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    await coordinator._enrich_detail_cache(
+        [_shipment("PARCEL_HANDED", parcel_number="01ABC")], []
+    )
+    assert client.async_get_parcel_detail.await_count == 1
+
+    client.async_get_parcel_detail = AsyncMock(
+        return_value={"receiver": {"name": "Jane Doe"}, "weight": 1.2, "dimensions": None}
+    )
+    await coordinator._enrich_detail_cache(
+        [_shipment("IN_TRANSIT", parcel_number="01ABC")], []
+    )
+    assert client.async_get_parcel_detail.await_count == 1
+    cached = coordinator._detail_cache["01ABC"]
+    assert cached["receiver_name"] == "Jane Doe"
+    assert not cached.get("_failed")
 
 
 async def test_enrich_detail_cache_skips_already_cached_barcodes(hass):
