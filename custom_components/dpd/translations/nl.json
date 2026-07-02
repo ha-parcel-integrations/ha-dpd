@@ -42,7 +42,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "DPD opties",
+        "title": "DPD-opties",
         "sections": {
           "delivered": {
             "name": "Bezorgde pakketten",
@@ -67,10 +67,10 @@
           "polling": {
             "name": "Verversen",
             "data": {
-              "refresh_interval": "Elke"
+              "refresh_interval": "Ververs elke"
             },
             "data_description": {
-              "refresh_interval": "Hoe vaak de integratie nieuwe parcel-informatie ophaalt. Een langer interval is vriendelijker voor DPD; de standaard van 30 minuten is voor de meeste pakketten ruim voldoende."
+              "refresh_interval": "Hoe vaak de integratie DPD controleert op pakketupdates. Een langzamer interval is vriendelijker voor DPD; de standaard van 30 minuten is ruim voldoende voor de meeste pakketten."
             }
           }
         }
@@ -114,7 +114,7 @@
     },
     "sensor": {
       "incoming_parcels": {
-        "name": "Binnenkomende pakketten",
+        "name": "Inkomende pakketten",
         "unit_of_measurement": "pakketten"
       },
       "parcel": {
@@ -129,7 +129,7 @@
         "unit_of_measurement": "pakketten"
       },
       "next_delivery": {
-        "name": "Eerstvolgende bezorging"
+        "name": "Volgende bezorging"
       },
       "en_route_to_parcel_shop": {
         "name": "Onderweg naar ParcelShop",

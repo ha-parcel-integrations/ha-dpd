@@ -70,7 +70,7 @@
               "refresh_interval": "Refresh every"
             },
             "data_description": {
-              "refresh_interval": "How often the integration checks DPD for parcel updates. A slower interval is gentler on DPD's consumer API; the default of 30 minutes is plenty for most parcels."
+              "refresh_interval": "How often the integration checks DPD for parcel updates. A slower interval is gentler on DPD's API; the default of 30 minutes is plenty for most parcels."
             }
           }
         }
