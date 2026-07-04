@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "DPD",
-        "description": "Missing your country? [Request it here](https://github.com/peternijssen/ha-dpd/issues/new?title=Add%20country%3A%20%3Cyour%20country%3E&labels=enhancement).",
+        "description": "Missing your country? [Request it here]({issue_url}).",
         "data": {
           "email": "Email",
           "password": "Password",

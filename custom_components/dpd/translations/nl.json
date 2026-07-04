@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "DPD",
-        "description": "Staat jouw land er niet bij? [Vraag het hier aan](https://github.com/peternijssen/ha-dpd/issues/new?title=Add%20country%3A%20%3Cyour%20country%3E&labels=enhancement).",
+        "description": "Staat jouw land er niet bij? [Vraag het hier aan]({issue_url}).",
         "data": {
           "email": "E-mailadres",
           "password": "Wachtwoord",

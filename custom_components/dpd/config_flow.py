@@ -34,6 +34,7 @@ from .const import (
     DEFAULT_INCLUDE_HISTORY,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    NEW_COUNTRY_ISSUE_URL,
     REFRESH_INTERVAL_OPTIONS,
 )
 
@@ -141,6 +142,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_USER_SCHEMA,
             errors=errors,
+            description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL},
         )
 
     async def async_step_delivered(

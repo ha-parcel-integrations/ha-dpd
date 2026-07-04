@@ -67,6 +67,14 @@ BUSINESS_UNITS = [
 
 DEFAULT_BU = "DPD-NL"
 
+# Pre-filled "add my country" GitHub issue, linked from the setup form so
+# users can request another DPD business unit. Passed as a description
+# placeholder (translation strings may not contain raw URLs).
+NEW_COUNTRY_ISSUE_URL = (
+    "https://github.com/peternijssen/ha-dpd/issues/new"
+    "?title=Add%20country%3A%20%3Cyour%20country%3E&labels=enhancement"
+)
+
 # Known DPD `status.description` strings, in roughly the order a parcel
 # moves through. The numeric `status.status` follows the same 0 → 5
 # progression in samples we have seen.
