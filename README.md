@@ -1,5 +1,10 @@
 # DPD Parcel Tracker
 
+[![Release](https://img.shields.io/github/v/release/peternijssen/ha-dpd.svg)](https://github.com/peternijssen/ha-dpd/releases)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://img.shields.io/github/downloads/peternijssen/ha-dpd/total.svg)](https://github.com/peternijssen/ha-dpd/releases)
+
 A custom Home Assistant integration that tracks your DPD shipments.
 
 ## Contents

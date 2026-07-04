@@ -247,7 +247,9 @@ re-propose these as improvements:
 - **Business Unit dropdown**: only `DPD-NL` is currently mapped in
   `BUSINESS_UNITS`. The setup code is BU-agnostic, but the tracking-URL
   pattern (`_tracking_url` in `coordinator.py`) hardcodes `/nl/` in the
-  path. If you add another BU, update the URL builder too.
+  path. If you add another BU, update the URL builder too. The user step's
+  `description` (strings/translations) links a pre-filled "Add country"
+  GitHub issue so users can request their BU.
 - **`KNOWN_DESCRIPTIONS`** in `const.py` is the catalogue of all
   recognised DPD `status.description` values; `_DESCRIPTION_MAP` in
   `coordinator.py` is the source of truth for the ParcelStatus
