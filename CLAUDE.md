@@ -226,6 +226,31 @@ re-propose these as improvements:
   documented in the README at all (discoverable in the HA UI). CLAUDE.md
   still documents everything.
 
+### Adopted in 2.5.0 — outgoing delivered parcels (do not refactor away)
+
+- **`DpdOutgoingDeliveredParcelsSensor`** (`{entry_id}_outgoing_delivered_parcels`,
+  `translation_key="outgoing_delivered_parcels"`) — the delivered
+  counterpart of `DpdOutgoingParcelsSensor`, mirroring how incoming has
+  both an active and a delivered sensor. Reads a new
+  `coordinator.data["outgoing_delivered"]` bucket, sorted by `delivered_at`
+  descending. Brings DPD in line with PostNL and DHL, which both expose
+  `outgoing_delivered_parcels`.
+- **`_async_update_data` now splits `sendingShipments` four ways** — before
+  2.5.0 delivered outgoing shipments were dropped; now
+  `filter_delivered_shipments(outgoing)` goes through the shared
+  `_apply_delivered_filter` (same days/count option as incoming delivered)
+  into `outgoing_delivered`. `_enrich_detail_cache` receives
+  `outgoing_active + outgoing_delivered` so delivered outgoing parcels get
+  the same receiver/weight/dimensions/history enrichment.
+- **Must be in `non_parcel_unique_ids`** in `sensor.py` (same reason as the
+  other summary sensors).
+- **Returns** — DPD splits server-side into `incomingShipments` /
+  `sendingShipments`, so a return the account holder ships back lands in
+  `sendingShipments` and flows into the outgoing sensors automatically. No
+  `isReturn`-style filtering is needed here (unlike DHL, whose sent-shipments
+  endpoint is empty for consumers). See the suite memory
+  `returns_outgoing_parity`.
+
 ## Planned for the next major bump
 
 - **Exception translations** (Gold-tier rule). `UpdateFailed(f"...")`

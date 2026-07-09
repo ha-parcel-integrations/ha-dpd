@@ -224,8 +224,28 @@ async def test_coordinator_splits_active_and_delivered(hass):
 
     assert [s["barcode"] for s in result["incoming_active"]] == ["A"]
     assert [s["barcode"] for s in result["incoming_delivered"]] == ["B"]
-    # Outgoing delivered shipments are dropped entirely.
     assert result["outgoing_active"] == []
+    # Delivered outgoing shipments now land in their own bucket.
+    assert [s["barcode"] for s in result["outgoing_delivered"]] == ["C"]
+
+
+async def test_coordinator_applies_delivered_filter_to_outgoing(hass):
+    recent = (datetime.now(timezone.utc) - timedelta(days=2)).date().isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    client = MagicMock()
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [],
+        "sendingShipments": [
+            _shipment("DELIVERED", parcel_number="new", event_dt=None, tz_id=None, delivery_date=recent),
+            _shipment("DELIVERED", parcel_number="old", event_dt=None, tz_id=None, delivery_date=old),
+        ],
+    })
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
+    result = await coordinator._async_update_data()
+
+    assert [s["barcode"] for s in result["outgoing_delivered"]] == ["new"]
 
 
 async def test_coordinator_handles_empty_response(hass):
@@ -241,6 +261,7 @@ async def test_coordinator_handles_empty_response(hass):
         "incoming_active": [],
         "incoming_delivered": [],
         "outgoing_active": [],
+        "outgoing_delivered": [],
     }
 
 
@@ -804,7 +825,7 @@ async def test_coordinator_publishes_planned_window_without_touching_raw(hass):
         assert parcel["planned_to"] is None
 
     # `raw` must be pristine — no derived plannedDelivery* fields leaked in.
-    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active"):
+    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active", "outgoing_delivered"):
         for parcel in result[bucket]:
             assert "plannedDeliveryFrom" not in parcel["raw"]
             assert "plannedDeliveryTo" not in parcel["raw"]

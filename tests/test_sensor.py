@@ -17,6 +17,7 @@ from custom_components.dpd.sensor import (
     DpdEnRouteToParcelShopSensor,
     DpdIncomingParcelsSensor,
     DpdNextDeliverySensor,
+    DpdOutgoingDeliveredParcelsSensor,
     DpdOutgoingParcelsSensor,
     DpdParcelSensor,
 )
@@ -194,6 +195,50 @@ def test_outgoing_sensor_zero_when_no_data():
     sensor = DpdOutgoingParcelsSensor(_make_coordinator(None), _make_entry())
     assert sensor.native_value == 0
     assert sensor.extra_state_attributes == {"parcels": []}
+
+
+# ---------------------------------------------------------------------------
+# DpdOutgoingDeliveredParcelsSensor
+# ---------------------------------------------------------------------------
+
+
+def test_outgoing_delivered_sensor_counts_delivered_shipments():
+    coordinator = _make_coordinator({
+        "incoming_active": [],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+        "outgoing_delivered": [
+            _parcel("X", status=ParcelStatus.DELIVERED, delivered=True),
+            _parcel("Y", status=ParcelStatus.DELIVERED, delivered=True),
+        ],
+    })
+    sensor = DpdOutgoingDeliveredParcelsSensor(coordinator, _make_entry())
+    assert sensor.native_value == 2
+
+
+def test_outgoing_delivered_sensor_zero_when_no_data():
+    sensor = DpdOutgoingDeliveredParcelsSensor(_make_coordinator(None), _make_entry())
+    assert sensor.native_value == 0
+    assert sensor.extra_state_attributes == {"parcels": []}
+
+
+def test_outgoing_delivered_sensor_attributes_pass_through_parcels():
+    parcel = _parcel(
+        "R1",
+        status=ParcelStatus.DELIVERED,
+        delivered=True,
+        delivered_at="2026-06-05T14:23:12+02:00",
+    )
+    coordinator = _make_coordinator({
+        "incoming_active": [],
+        "incoming_delivered": [],
+        "outgoing_active": [],
+        "outgoing_delivered": [parcel],
+    })
+    sensor = DpdOutgoingDeliveredParcelsSensor(coordinator, _make_entry())
+    attrs = sensor.extra_state_attributes
+    assert attrs["parcels"][0]["barcode"] == "R1"
+    assert attrs["parcels"][0]["delivered"] is True
 
 
 # ---------------------------------------------------------------------------

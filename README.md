@@ -118,8 +118,9 @@ their entity_ids carry the same account suffix:
 | `DPD (account) Next delivery` | Earliest expected delivery datetime |
 | `DPD (account) En route to ParcelShop` | Active incoming parcels still in transit to a DPD ParcelShop |
 | `DPD (account) Awaiting pickup` | Parcels that have arrived at a ParcelShop and are ready to collect |
-| `DPD (account) Delivered parcels` | Recently delivered parcels (configurable window) |
+| `DPD (account) Delivered parcels` | Recently delivered incoming parcels (configurable window) |
 | `DPD (account) Outgoing parcels` | Number of active outgoing parcels |
+| `DPD (account) Outgoing delivered parcels` | Recently delivered outgoing parcels (same configurable window) |
 
 Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 

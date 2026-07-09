@@ -600,21 +600,25 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             filter_delivered_shipments(incoming)
         )
         outgoing_active = filter_active_shipments(outgoing)
+        outgoing_delivered = self._apply_delivered_filter(
+            filter_delivered_shipments(outgoing)
+        )
 
         await self._enrich_with_fmp(incoming_active)
         await self._enrich_detail_cache(
             incoming_active + incoming_delivered,
-            outgoing_active,
+            outgoing_active + outgoing_delivered,
         )
 
         _LOGGER.debug(
             "DPD shipments fetched: %d incoming (%d active, %d delivered shown), "
-            "%d outgoing (%d active)",
+            "%d outgoing (%d active, %d delivered shown)",
             len(incoming),
             len(incoming_active),
             len(incoming_delivered),
             len(outgoing),
             len(outgoing_active),
+            len(outgoing_delivered),
         )
         if incoming or outgoing:
             _LOGGER.debug("DPD raw parcels payload: %s", payload)
@@ -652,6 +656,11 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         normalized_outgoing = sort_parcels_by_ts(
             [_normalize(p) for p in outgoing_active], "planned_from",
         )
+        normalized_outgoing_delivered = sort_parcels_by_ts(
+            [_normalize(p) for p in outgoing_delivered],
+            "delivered_at",
+            descending=True,
+        )
 
         self._fire_change_events(normalized_active)
 
@@ -671,6 +680,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             "incoming_active": normalized_active,
             "incoming_delivered": normalized_delivered,
             "outgoing_active": normalized_outgoing,
+            "outgoing_delivered": normalized_outgoing_delivered,
         }
 
     def _fire_change_events(self, parcels: list[dict]) -> None:

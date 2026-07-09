@@ -50,6 +50,7 @@ async def async_setup_entry(
     non_parcel_unique_ids = {
         f"{entry_id}_incoming_parcels",
         f"{entry_id}_outgoing_parcels",
+        f"{entry_id}_outgoing_delivered_parcels",
         f"{entry_id}_delivered_parcels",
         f"{entry_id}_next_delivery",
         f"{entry_id}_en_route_to_parcel_shop",
@@ -73,6 +74,7 @@ async def async_setup_entry(
             coordinator, entry, async_add_entities, current_numbers
         ),
         DpdOutgoingParcelsSensor(coordinator, entry),
+        DpdOutgoingDeliveredParcelsSensor(coordinator, entry),
         DpdDeliveredParcelsSensor(coordinator, entry),
         DpdNextDeliverySensor(coordinator, entry),
         DpdEnRouteToParcelShopSensor(coordinator, entry),
@@ -237,6 +239,33 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     @property
     def _shipments(self) -> list[dict]:
         return (self.coordinator.data or {}).get("outgoing_active", [])
+
+    @property
+    def native_value(self) -> int:
+        return len(self._shipments)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"parcels": self._shipments}
+
+
+class DpdOutgoingDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Sensor reporting recently delivered outgoing DPD shipments."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "outgoing_delivered_parcels"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_attribution = "Data provided by DPD"
+    _unrecorded_attributes = frozenset({"parcels"})
+
+    def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_outgoing_delivered_parcels"
+        self._attr_device_info = _build_device_info(entry)
+
+    @property
+    def _shipments(self) -> list[dict]:
+        return (self.coordinator.data or {}).get("outgoing_delivered", [])
 
     @property
     def native_value(self) -> int:
