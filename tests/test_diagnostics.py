@@ -17,6 +17,7 @@ def _entry_with_runtime_data(
     incoming_active: list[dict] | None = None,
     incoming_delivered: list[dict] | None = None,
     outgoing_active: list[dict] | None = None,
+    outgoing_delivered: list[dict] | None = None,
     last_update_success: bool = True,
 ) -> MagicMock:
     coordinator = MagicMock()
@@ -24,6 +25,7 @@ def _entry_with_runtime_data(
         "incoming_active": incoming_active or [],
         "incoming_delivered": incoming_delivered or [],
         "outgoing_active": outgoing_active or [],
+        "outgoing_delivered": outgoing_delivered or [],
     }
     coordinator.last_update_success = last_update_success
 
@@ -75,6 +77,7 @@ async def test_diagnostics_reports_counts_and_update_success():
         incoming_active=[{"parcelNumber": "A"}, {"parcelNumber": "B"}],
         incoming_delivered=[{"parcelNumber": "C"}],
         outgoing_active=[{"parcelNumber": "D"}],
+        outgoing_delivered=[{"parcelNumber": "E"}],
         last_update_success=False,
     )
     result = await async_get_config_entry_diagnostics(MagicMock(), entry)
@@ -82,7 +85,9 @@ async def test_diagnostics_reports_counts_and_update_success():
         "incoming_active": 2,
         "incoming_delivered": 1,
         "outgoing_active": 1,
+        "outgoing_delivered": 1,
     }
+    assert result["outgoing_delivered"][0]["parcelNumber"] == "**REDACTED**"
     assert result["last_update_success"] is False
 
 

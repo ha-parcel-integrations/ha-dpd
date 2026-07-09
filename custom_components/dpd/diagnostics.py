@@ -39,10 +39,14 @@ async def async_get_config_entry_diagnostics(
             "incoming_active": len(data.get("incoming_active", [])),
             "incoming_delivered": len(data.get("incoming_delivered", [])),
             "outgoing_active": len(data.get("outgoing_active", [])),
+            "outgoing_delivered": len(data.get("outgoing_delivered", [])),
         },
         "incoming_active": async_redact_data(data.get("incoming_active", []), TO_REDACT),
         "incoming_delivered": async_redact_data(
             data.get("incoming_delivered", []), TO_REDACT
         ),
         "outgoing_active": async_redact_data(data.get("outgoing_active", []), TO_REDACT),
+        "outgoing_delivered": async_redact_data(
+            data.get("outgoing_delivered", []), TO_REDACT
+        ),
     }
