@@ -35,8 +35,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DPD sensor entities from a config entry."""
+    # The coordinator is already refreshed by __init__.py before platforms are
+    # forwarded, so ConfigEntryNotReady is raised from the entry setup rather
+    # than (too late) from this forwarded platform.
     coordinator = entry.runtime_data.coordinator
-    await coordinator.async_config_entry_first_refresh()
 
     current_parcels: list[dict] = (coordinator.data or {}).get("incoming_active", [])
     current_numbers: set[str] = {

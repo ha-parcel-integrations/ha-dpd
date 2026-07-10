@@ -55,6 +55,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc
 
     coordinator = DpdCoordinator(hass, client, entry)
+
+    # Fetch initial data here, before forwarding to platforms. Raising
+    # ConfigEntryNotReady from a forwarded platform is too late for HA to catch
+    # cleanly (it logs a warning and half-sets-up the entry); doing the first
+    # refresh here lets a transient failure fail the whole entry so HA retries
+    # it with backoff.
+    await coordinator.async_config_entry_first_refresh()
+
     entry.runtime_data = DpdData(client=client, coordinator=coordinator)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

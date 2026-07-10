@@ -132,6 +132,13 @@ re-propose these as improvements:
   returns a non-JSON 5xx page; `__init__.py` translates that to
   `ConfigEntryNotReady` so HA retries with backoff instead of crashing
   on `orjson.JSONDecodeError` or pushing the user into reauth.
+- **First refresh runs in `__init__.py`, before `async_forward_entry_setups`**
+  — `async_setup_entry` awaits `coordinator.async_config_entry_first_refresh()`
+  before forwarding (not in the `sensor.py` platform). Raising
+  `ConfigEntryNotReady` from a *forwarded* platform is too late for HA to
+  catch — it logs a warning and half-sets-up the entry. Doing the first
+  refresh here lets a transient fetch failure fail the whole entry so HA
+  retries with backoff. Do not move it back into a platform.
 
 ### Adopted in 2.3.0 — history (do not refactor away)
 

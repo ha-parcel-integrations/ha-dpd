@@ -90,6 +90,31 @@ async def test_setup_entry_retries_on_connection_error(hass):
 
 
 @pytest.mark.asyncio
+async def test_setup_entry_retries_when_first_refresh_fails(hass):
+    """Login succeeds but the first data fetch fails.
+
+    The first refresh runs in __init__.py before platforms are forwarded, so a
+    failure raises ConfigEntryNotReady from the entry setup (SETUP_RETRY) rather
+    than — too late — from a forwarded platform.
+    """
+    entry = _add_entry(hass)
+    with (
+        patch(
+            "custom_components.dpd.DpdApiClient.async_login",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "custom_components.dpd.DpdApiClient.async_get_parcels",
+            new=AsyncMock(side_effect=DpdApiError(429)),
+        ),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+@pytest.mark.asyncio
 async def test_setup_entry_retries_when_dpd_auth_service_is_down(hass):
     """A 5xx during login (DPD's auth tier outage) must surface as SETUP_RETRY
     so HA backs off and tries again, not as a reauth-prompting auth failure.
