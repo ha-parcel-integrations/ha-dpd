@@ -953,6 +953,78 @@ async def test_unchanged_status_fires_no_event(hass):
     assert captured_changed == []
 
 
+async def test_first_refresh_suppresses_outgoing_events(hass):
+    """Outgoing parcels present on the first poll do not yield events."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(return_value={
+        "incomingShipments": [],
+        "sendingShipments": [_shipment("PARCEL_HANDED", parcel_number="S")],
+    })
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    changed = _capture(hass, "dpd_outgoing_parcel_status_changed")
+    delivered = _capture(hass, "dpd_outgoing_parcel_delivered")
+
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert changed == []
+    assert delivered == []
+
+
+async def test_outgoing_status_change_fires_outgoing_status_changed(hass):
+    """A sent shipment whose status transitions fires outgoing_parcel_status_changed."""
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {"incomingShipments": [], "sendingShipments": [_shipment("ORDER_CREATED", parcel_number="S")]},
+        {"incomingShipments": [], "sendingShipments": [_shipment("PARCEL_HANDED", parcel_number="S")]},
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+    await coordinator._async_update_data()
+
+    captured = _capture(hass, "dpd_outgoing_parcel_status_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(captured) == 1
+    payload = captured[0].data
+    assert payload["barcode"] == "S"
+    assert payload["old_status"] == ParcelStatus.REGISTERED
+    assert payload["new_status"] == ParcelStatus.IN_TRANSIT
+
+
+async def test_outgoing_delivered_fires_dedicated_event(hass):
+    """A sent shipment that transitions to delivered fires outgoing_parcel_delivered
+    and NOT outgoing_parcel_status_changed (delivered takes precedence)."""
+    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {"incomingShipments": [], "sendingShipments": [_shipment("PARCEL_HANDED", parcel_number="S")]},
+        {"incomingShipments": [], "sendingShipments": [
+            _shipment("DELIVERED", parcel_number="S", event_dt=None, tz_id=None, delivery_date=recent),
+        ]},
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
+    await coordinator._async_update_data()
+
+    delivered = _capture(hass, "dpd_outgoing_parcel_delivered")
+    changed = _capture(hass, "dpd_outgoing_parcel_status_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(delivered) == 1
+    assert delivered[0].data["barcode"] == "S"
+    assert changed == []
+
+
 async def test_inter_in_transit_descriptions_do_not_fire(hass):
     """PARCEL_HANDED → IN_TRANSIT → AT_DELIVERY_CENTER all map to IN_TRANSIT.
 

@@ -542,6 +542,12 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._known_delivery_times: (
             dict[str, tuple[str | None, str | None]] | None
         ) = None
+        # barcode -> last seen ParcelStatus for *outgoing* parcels (sent +
+        # returns), tracked across the active and delivered buckets so a status
+        # change or a transition-to-delivered fires an outgoing event. ``None``
+        # on the first refresh for the same suppression reason as
+        # ``_known_state``.
+        self._known_outgoing_state: dict[str, ParcelStatus] | None = None
         # barcode -> per-parcel fields fetched from the detail endpoint
         # (``receiver_name``, ``weight``, ``dimensions``). The list endpoint
         # doesn't carry these; the detail endpoint does, but it costs an
@@ -664,6 +670,11 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
 
         self._fire_change_events(normalized_active)
 
+        # Outgoing = active + delivered sent shipments, combined so a hop from
+        # in-transit to delivered is visible in one set.
+        outgoing_all = normalized_outgoing + normalized_outgoing_delivered
+        self._fire_outgoing_change_events(outgoing_all)
+
         self._known_state = {
             p["barcode"]: p["status"]
             for p in normalized_active
@@ -672,6 +683,11 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._known_delivery_times = {
             p["barcode"]: (p.get("planned_from"), p.get("planned_to"))
             for p in normalized_active
+            if p.get("barcode")
+        }
+        self._known_outgoing_state = {
+            p["barcode"]: p["status"]
+            for p in outgoing_all
             if p.get("barcode")
         }
 
@@ -744,6 +760,51 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                         "new_planned_from": new_from,
                         "old_planned_to": old_to,
                         "new_planned_to": new_to,
+                    },
+                )
+
+    def _fire_outgoing_change_events(self, parcels: list[dict]) -> None:
+        """Fire status/delivered events for outgoing parcels (sent + returns).
+
+        Silent on the very first refresh (``_known_outgoing_state is None``),
+        matching ``_fire_change_events``. From the second refresh onward, every
+        outgoing parcel whose normalised status transitions **to**
+        ``DELIVERED`` yields one ``dpd_outgoing_parcel_delivered`` event, and
+        every other status change yields one
+        ``dpd_outgoing_parcel_status_changed`` event. ``delivered`` takes
+        precedence over ``status_changed`` for that final transition, so the
+        terminal hop fires exactly one (dedicated) event, not both. A parcel
+        that is already delivered the first time it is seen never fires (its
+        status did not change). There is no outgoing ``registered`` or
+        ``delivery_time_changed`` event — those are intentionally out of scope.
+        """
+        if self._known_outgoing_state is None:
+            return
+
+        device_id = self._device_id()
+
+        for parcel in parcels:
+            barcode = parcel.get("barcode")
+            if not barcode or barcode not in self._known_outgoing_state:
+                continue
+            old_status = self._known_outgoing_state[barcode]
+            new_status = parcel["status"]
+            if new_status == old_status:
+                continue
+
+            if new_status == ParcelStatus.DELIVERED:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_outgoing_parcel_delivered",
+                    {**parcel, "device_id": device_id},
+                )
+            else:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_outgoing_parcel_status_changed",
+                    {
+                        **parcel,
+                        "device_id": device_id,
+                        "old_status": old_status,
+                        "new_status": new_status,
                     },
                 )
 
