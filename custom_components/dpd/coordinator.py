@@ -102,6 +102,7 @@ _EVENT_TYPE_MAP: dict[str, ParcelStatus] = {
     "HUS": ParcelStatus.IN_TRANSIT,        # Hub – Sorted
     "HUW": ParcelStatus.IN_TRANSIT,        # Hub – Held
     "HUZ": ParcelStatus.IN_TRANSIT,        # Hub – Scan
+    "SPE": ParcelStatus.IN_TRANSIT,        # Status parcel – Information (benign)
     "SPL": ParcelStatus.IN_TRANSIT,        # Status parcel – Loaded
     "SPS": ParcelStatus.IN_TRANSIT,        # Status parcel – Sorted
     "SPV": ParcelStatus.IN_TRANSIT,        # Status parcel – Control

@@ -1319,6 +1319,7 @@ def test_map_event_status_known_codes():
     assert map_event_status("ENA") == ParcelStatus.REGISTERED
     assert map_event_status("ORI") == ParcelStatus.IN_TRANSIT
     assert map_event_status("SPW") == ParcelStatus.IN_TRANSIT
+    assert map_event_status("SPE") == ParcelStatus.IN_TRANSIT  # Status parcel - Information (#4)
     assert map_event_status("DLO") == ParcelStatus.OUT_FOR_DELIVERY
     assert map_event_status("MSDLO") == ParcelStatus.IN_TRANSIT  # notification, not the physical OFD scan
     assert map_event_status("DEY") == ParcelStatus.DELIVERED
