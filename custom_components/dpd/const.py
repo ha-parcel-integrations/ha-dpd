@@ -71,7 +71,7 @@ DEFAULT_BU = "DPD-NL"
 # users can request another DPD business unit. Passed as a description
 # placeholder (translation strings may not contain raw URLs).
 NEW_COUNTRY_ISSUE_URL = (
-    "https://github.com/peternijssen/ha-dpd/issues/new"
+    "https://github.com/ha-parcel-integrations/ha-dpd/issues/new"
     "?title=Add%20country%3A%20%3Cyour%20country%3E&labels=enhancement"
 )
 

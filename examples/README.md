@@ -27,4 +27,4 @@ were already there before HA started.
 
 For a carrier-agnostic version of these automations that fires for any
 of your installed carriers in one go, see the
-[parcel aggregator examples](https://github.com/peternijssen/ha-parcel-aggregator/tree/main/examples).
+[parcel aggregator examples](https://github.com/ha-parcel-integrations/ha-parcel-aggregator/tree/main/examples).

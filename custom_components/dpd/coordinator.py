@@ -144,7 +144,7 @@ _EVENT_TYPE_MAP: dict[str, ParcelStatus] = {
 
 # New-issue link surfaced in the unknown-status warnings so users can paste a
 # ready-made line into a bug report.
-_NEW_ISSUE_URL = "https://github.com/peternijssen/ha-dpd/issues/new"
+_NEW_ISSUE_URL = "https://github.com/ha-parcel-integrations/ha-dpd/issues/new"
 
 # Values we have already warned about once in this HA session, so repeated
 # polls do not flood the log with the same "new status" message.

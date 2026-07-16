@@ -3,10 +3,10 @@
   "name": "DPD",
   "codeowners": ["@peternijssen"],
   "config_flow": true,
-  "documentation": "https://github.com/peternijssen/ha-dpd",
+  "documentation": "https://github.com/ha-parcel-integrations/ha-dpd",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/peternijssen/ha-dpd/issues",
+  "issue_tracker": "https://github.com/ha-parcel-integrations/ha-dpd/issues",
   "quality_scale": "silver",
   "requirements": [],
   "version": "2.6.0"

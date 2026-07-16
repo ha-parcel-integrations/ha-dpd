@@ -1,6 +1,6 @@
 # DPD Parcel Tracker
 
-[![Release](https://img.shields.io/github/v/release/peternijssen/ha-dpd.svg)](https://github.com/peternijssen/ha-dpd/releases)
+[![Release](https://img.shields.io/github/v/release/ha-parcel-integrations/ha-dpd.svg)](https://github.com/ha-parcel-integrations/ha-dpd/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -188,7 +188,7 @@ events above are there for templates and YAML automations.
 
 See [`examples/automations/`](examples/automations/) for ready-to-paste
 event-driven automations, or the
-[parcel aggregator](https://github.com/peternijssen/ha-parcel-aggregator)
+[parcel aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator)
 for a carrier-agnostic re-emit layer that fires
 `parcel_aggregator_parcel_*` events covering every installed carrier
 in one go.
@@ -236,10 +236,10 @@ Tracking parcels from other Dutch carriers:
 
 | Integration | Description |
 |---|---|
-| [ha-dhl-nl](https://github.com/peternijssen/ha-dhl-nl) | DHL eCommerce NL parcel tracker. |
-| [ha-postnl](https://github.com/peternijssen/ha-postnl) | PostNL parcel tracker — maintained version. The [arjenbos/ha-postnl](https://github.com/arjenbos/ha-postnl) original is the legacy version. |
-| [ha-gls](https://github.com/peternijssen/ha-gls) | GLS Netherlands parcel tracker — no account, you enter tracking numbers yourself. |
-| [ha-parcel-aggregator](https://github.com/peternijssen/ha-parcel-aggregator) | Rolls up counts and next-delivery timestamps from all installed carrier integrations into a single set of sensors. |
+| [ha-dhl-nl](https://github.com/ha-parcel-integrations/ha-dhl-nl) | DHL eCommerce NL parcel tracker. |
+| [ha-postnl](https://github.com/ha-parcel-integrations/ha-postnl) | PostNL parcel tracker — maintained version. The [arjenbos/ha-postnl](https://github.com/arjenbos/ha-postnl) original is the legacy version. |
+| [ha-gls](https://github.com/ha-parcel-integrations/ha-gls) | GLS Netherlands parcel tracker — no account, you enter tracking numbers yourself. |
+| [ha-parcel-aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) | Rolls up counts and next-delivery timestamps from all installed carrier integrations into a single set of sensors. |
 
 ## Disclaimer
 
