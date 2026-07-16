@@ -171,7 +171,8 @@ polling per-parcel sensors.
 | Event | When | Payload |
 |---|---|---|
 | `dpd_parcel_registered` | A new barcode appears in the active list | The full parcel dict (see the table above) |
-| `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes | Same payload plus `old_status` and `new_status` |
+| `dpd_parcel_status_changed` | A known barcode's canonical `status` value changes, except the final hop to delivered | Same payload plus `old_status` and `new_status` |
+| `dpd_parcel_delivered` | An incoming parcel is delivered | The full parcel dict |
 | `dpd_parcel_delivery_time_changed` | A known barcode's expected delivery time changes to a new value | Same payload plus `old_planned_from`, `new_planned_from`, `old_planned_to`, `new_planned_to` |
 | `dpd_outgoing_parcel_status_changed` | A known **outgoing** parcel (something you sent) changes status, except the final hop to delivered | Same payload plus `old_status` and `new_status` |
 | `dpd_outgoing_parcel_delivered` | An outgoing parcel reaches the recipient | The full parcel dict |

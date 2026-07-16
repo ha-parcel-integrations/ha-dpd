@@ -929,6 +929,60 @@ async def test_status_change_fires_status_changed_event(hass):
     assert payload["status"] == ParcelStatus.OUT_FOR_DELIVERY
 
 
+async def test_incoming_delivered_fires_dedicated_event(hass):
+    """An incoming parcel that transitions to delivered fires parcel_delivered
+    and NOT parcel_status_changed (delivered takes precedence)."""
+    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {"incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
+        {"incomingShipments": [
+            _shipment("DELIVERED", parcel_number="A", event_dt=None, tz_id=None, delivery_date=recent),
+        ], "sendingShipments": []},
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
+    await coordinator._async_update_data()
+
+    delivered = _capture(hass, "dpd_parcel_delivered")
+    changed = _capture(hass, "dpd_parcel_status_changed")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(delivered) == 1
+    assert delivered[0].data["barcode"] == "A"
+    assert delivered[0].data["status"] == ParcelStatus.DELIVERED
+    assert changed == []
+
+
+async def test_no_events_for_new_already_delivered_incoming(hass):
+    """A barcode first seen already delivered fires neither registered nor delivered."""
+    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(side_effect=[
+        {"incomingShipments": [_shipment("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
+        {"incomingShipments": [
+            _shipment("PARCEL_HANDED", parcel_number="A"),
+            _shipment("DELIVERED", parcel_number="B", event_dt=None, tz_id=None, delivery_date=recent),
+        ], "sendingShipments": []},
+    ])
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
+    await coordinator._async_update_data()
+
+    registered = _capture(hass, "dpd_parcel_registered")
+    delivered = _capture(hass, "dpd_parcel_delivered")
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert registered == []
+    assert delivered == []
+
+
 async def test_unchanged_status_fires_no_event(hass):
     """Polling the same parcel with the same mapped status fires nothing."""
     client = MagicMock()
