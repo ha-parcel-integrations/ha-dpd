@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 from . import DpdConfigEntry
 from .const import DOMAIN
 from .coordinator import DpdCoordinator
+from .device import build_device_info
 
 # The coordinator fans data out to this entity; no per-entity polling.
 PARALLEL_UPDATES = 0
@@ -23,17 +24,6 @@ PARALLEL_UPDATES = 0
 _DEFAULT_EVENT_DURATION = timedelta(hours=1)
 
 
-def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
-    """Return the DeviceInfo shared with this account's sensors."""
-    email = entry.title or ""
-    device_name = f"DPD ({email})" if email else "DPD"
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=device_name,
-        manufacturer="DPD",
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://www.dpdgroup.com",
-    )
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -76,7 +66,7 @@ class DpdDeliveriesCalendar(CoordinatorEntity[DpdCoordinator], CalendarEntity):
         """Initialise the deliveries calendar."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_deliveries"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     def _events(self) -> list[CalendarEvent]:
         """Build calendar events from the active incoming parcels."""

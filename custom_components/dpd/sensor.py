@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import DpdConfigEntry
 from .const import DOMAIN, ParcelStatus
 from .coordinator import DpdCoordinator
+from .device import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,24 +92,6 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
-    """Return a DeviceInfo dict shared by all sensors for this account.
-
-    Device name is ``"DPD (<email>)"`` so the auto-prefixed entity
-    friendly names read as ``"DPD (account@example.com) Incoming
-    parcels"``. Including the account in the device name disambiguates
-    users with multiple DPD accounts and matches mainstream HA style
-    for cloud-account integrations.
-    """
-    email = entry.title or ""
-    device_name = f"DPD ({email})" if email else "DPD"
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=device_name,
-        manufacturer="DPD",
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://www.dpdgroup.com",
-    )
 
 
 class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
@@ -142,7 +125,7 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         self._async_add_entities = async_add_entities
         self._known_parcel_numbers: set[str] = known_parcel_numbers or set()
         self._attr_unique_id = f"{entry.entry_id}_incoming_parcels"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def _parcels(self) -> list[dict]:
@@ -202,7 +185,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         self._barcode = barcode
         self._attr_unique_id = f"{entry.entry_id}_{barcode}"
         self._attr_translation_placeholders = {"barcode": barcode}
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     def _get_parcel(self) -> dict[str, Any] | None:
         for parcel in (self.coordinator.data or {}).get("incoming_active", []):
@@ -236,7 +219,7 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_outgoing_parcels"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def _shipments(self) -> list[dict]:
@@ -263,7 +246,7 @@ class DpdOutgoingDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], Senso
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_outgoing_delivered_parcels"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def _shipments(self) -> list[dict]:
@@ -290,7 +273,7 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_delivered_parcels"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def _parcels(self) -> list[dict]:
@@ -321,7 +304,7 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_next_delivery"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     def _delivery_moments(self) -> list[tuple[datetime, dict]]:
         result: list[tuple[datetime, dict]] = []
@@ -372,7 +355,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_en_route_to_parcel_shop"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     def _get_parcelshop_parcels(self) -> list[dict]:
         return [
@@ -408,7 +391,7 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_awaiting_pickup"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     def _get_awaiting_parcels(self) -> list[dict]:
         return [
@@ -443,7 +426,7 @@ class DpdLastUpdateSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_last_update"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def native_value(self) -> datetime | None:

@@ -10,27 +10,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import DpdConfigEntry
 from .const import DOMAIN
+from .device import build_device_info
 
 # A manual refresh is a single API round-trip; HA's per-entity throttling
 # adds nothing here.
 PARALLEL_UPDATES = 0
 
 
-def _build_device_info(entry: ConfigEntry) -> DeviceInfo:
-    """Return the DeviceInfo shared with this account's sensors.
-
-    Mirrors ``sensor._build_device_info`` so the button lands on the same
-    ``DPD (<email>)`` device rather than spawning a second one.
-    """
-    email = entry.title or ""
-    device_name = f"DPD ({email})" if email else "DPD"
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=device_name,
-        manufacturer="DPD",
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://www.dpdgroup.com",
-    )
 
 
 async def async_setup_entry(
@@ -57,7 +43,7 @@ class DpdRefreshButton(ButtonEntity):
         """Initialise the refresh button."""
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_refresh"
-        self._attr_device_info = _build_device_info(entry)
+        self._attr_device_info = build_device_info(entry)
 
     async def async_press(self) -> None:
         """Trigger an immediate refresh of the DPD coordinator."""
