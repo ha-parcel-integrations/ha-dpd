@@ -12,7 +12,6 @@ import pytest
 
 from custom_components.dpd.api import DpdApiClient, DpdApiError, DpdAuthError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

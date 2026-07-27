@@ -32,6 +32,7 @@ class DpdApiError(Exception):
     """Raised when a DPD API call returns a non-success status."""
 
     def __init__(self, status_code: int) -> None:
+        """Store the status code that triggered the error."""
         super().__init__(f"DPD API request failed with status {status_code}")
         self.status_code = status_code
 
@@ -46,6 +47,7 @@ class DpdApiClient:
         session: aiohttp.ClientSession,
         bu: str = DEFAULT_BU,
     ) -> None:
+        """Initialize the API client."""
         self._email = email
         self._password = password
         self._session = session

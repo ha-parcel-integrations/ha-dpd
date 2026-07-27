@@ -48,6 +48,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     def __init__(
         self, hass: HomeAssistant, client: DpdApiClient, entry: ConfigEntry
     ) -> None:
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,

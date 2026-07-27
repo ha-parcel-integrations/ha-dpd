@@ -9,8 +9,8 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
+    ParcelStatus,
 )
-from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
     _refresh_interval,
@@ -1619,8 +1619,8 @@ async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_ch
 
 async def test_device_id_resolves_and_caches(hass):
     """_device_id finds the account's device and caches it for later events."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
     from homeassistant.helpers import device_registry as dr
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.dpd.const import DOMAIN
 

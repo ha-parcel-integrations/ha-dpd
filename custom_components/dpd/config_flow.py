@@ -7,8 +7,6 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-
-from homeassistant.data_entry_flow import section
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -17,6 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -97,6 +96,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
+        """Initialize the config flow."""
         self._email: str = ""
         self._password: str = ""
         self._bu: str = DEFAULT_BU

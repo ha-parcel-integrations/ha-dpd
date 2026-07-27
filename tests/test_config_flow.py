@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
-
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResultType

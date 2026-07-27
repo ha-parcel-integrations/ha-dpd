@@ -14,8 +14,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.device_registry import DeviceEntryType
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -120,6 +118,7 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         async_add_entities: AddEntitiesCallback,
         known_parcel_numbers: set[str] | None = None,
     ) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._entry = entry
         self._async_add_entities = async_add_entities
@@ -133,10 +132,12 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._parcels)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._parcels}
 
     def _handle_coordinator_update(self) -> None:
@@ -181,6 +182,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         entry: ConfigEntry,
         barcode: str,
     ) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._barcode = barcode
         self._attr_unique_id = f"{entry.entry_id}_{barcode}"
@@ -195,6 +197,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> str | None:
+        """Return the native value of the sensor."""
         parcel = self._get_parcel()
         if not parcel:
             return None
@@ -202,6 +205,7 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         parcel = self._get_parcel()
         return dict(parcel) if parcel else {}
 
@@ -217,6 +221,7 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_outgoing_parcels"
         self._attr_device_info = build_device_info(entry)
@@ -227,10 +232,12 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._shipments)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._shipments}
 
 
@@ -244,6 +251,7 @@ class DpdOutgoingDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], Senso
     _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_outgoing_delivered_parcels"
         self._attr_device_info = build_device_info(entry)
@@ -254,10 +262,12 @@ class DpdOutgoingDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], Senso
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._shipments)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._shipments}
 
 
@@ -271,6 +281,7 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
     _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_delivered_parcels"
         self._attr_device_info = build_device_info(entry)
@@ -281,10 +292,12 @@ class DpdDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity)
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._parcels)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._parcels}
 
 
@@ -302,6 +315,7 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_attribution = "Data provided by DPD"
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_next_delivery"
         self._attr_device_info = build_device_info(entry)
@@ -321,11 +335,13 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
+        """Return the native value of the sensor."""
         moments = self._delivery_moments()
         return min(dt for dt, _ in moments) if moments else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         moments = self._delivery_moments()
         if not moments:
             return {}
@@ -353,6 +369,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_en_route_to_parcel_shop"
         self._attr_device_info = build_device_info(entry)
@@ -366,10 +383,12 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._get_parcelshop_parcels())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._get_parcelshop_parcels()}
 
 
@@ -389,6 +408,7 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _unrecorded_attributes = frozenset({"parcels"})
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_awaiting_pickup"
         self._attr_device_info = build_device_info(entry)
@@ -402,10 +422,12 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> int:
+        """Return the native value of the sensor."""
         return len(self._get_awaiting_parcels())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the extra state attributes."""
         return {"parcels": self._get_awaiting_parcels()}
 
 
@@ -424,6 +446,7 @@ class DpdLastUpdateSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     _attr_attribution = "Data provided by DPD"
 
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_last_update"
         self._attr_device_info = build_device_info(entry)
