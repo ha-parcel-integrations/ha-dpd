@@ -13,8 +13,10 @@ from custom_components.dpd.const import (
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.coordinator import (
     DpdCoordinator,
-    _augment_dimensions,
     _refresh_interval,
+)
+from custom_components.dpd.parcels import (
+    _augment_dimensions,
     _tracking_url,
     _unknown_descriptions_logged,
     build_history,
