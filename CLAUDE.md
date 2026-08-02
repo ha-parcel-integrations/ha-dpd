@@ -17,7 +17,7 @@ you act in one of these areas:
 | consider "fixing" a lint/pattern the skill flags (poll interval, inline client) | *Deliberate skill divergences* — likely intentional, don't re-flag |
 | commit, bump, tag, release, or write release notes; add a feature without a test | *Workflow / Commits / Versioning / Testing* |
 
-**API mechanics live in `docs/api/` (local-only, gitignored)** — the Keycloak
+**API mechanics live in `carrier-research/api/dpd/` (private research repo)** — the Keycloak
 auth flow (`auth.md`), the parcels/detail endpoints + status-description and 68-code
 GSMT event vocabulary (`parcels.md`), and the FMP delivery-window fetch (`fmp.md`).
 Do not duplicate them here.
@@ -72,7 +72,7 @@ entry. Runtime-only; the tests don't catch a regression here.
   the status and refetches detail when a barcode's status moves (history grows on a
   status change); with it off the cache is never refetched. **Do not collapse back
   into "fetch once, forever".** History reuses the parcel maps (we map only the
-  consumer-realistic subset of DPD's event codes — see `docs/api/`).
+  consumer-realistic subset of DPD's event codes — see `carrier-research/api/dpd/`).
 
 **Outgoing (own shipments + returns) & events**
 - DPD splits server-side into `incomingShipments` / `sendingShipments`, so a return
