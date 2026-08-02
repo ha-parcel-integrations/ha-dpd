@@ -19,6 +19,8 @@ from custom_components.dpd.const import (
     DOMAIN,
 )
 
+from .payloads import envelope
+
 _ENTRY_DATA = {
     CONF_EMAIL: "user@example.com",
     CONF_PASSWORD: "secret",
@@ -52,7 +54,7 @@ async def test_setup_entry_succeeds_and_stores_runtime_data(hass):
         ),
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
-            new=AsyncMock(return_value={"incomingShipments": [], "sendingShipments": []}),
+            new=AsyncMock(return_value=envelope()),
         ),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -139,7 +141,7 @@ async def test_unload_entry_succeeds(hass):
         ),
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
-            new=AsyncMock(return_value={"incomingShipments": [], "sendingShipments": []}),
+            new=AsyncMock(return_value=envelope()),
         ),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -161,7 +163,7 @@ async def test_options_flow_schedules_reload(hass):
         ),
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
-            new=AsyncMock(return_value={"incomingShipments": [], "sendingShipments": []}),
+            new=AsyncMock(return_value=envelope()),
         ) as mock_get,
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)

@@ -16,6 +16,8 @@ from custom_components.dpd.const import (
 )
 from custom_components.dpd.device_trigger import TRIGGER_TYPES, async_get_triggers
 
+from .payloads import envelope
+
 _ENTRY_DATA = {
     CONF_EMAIL: "user@example.com",
     CONF_PASSWORD: "secret",
@@ -50,7 +52,7 @@ async def _setup_and_get_device_id(hass):
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
             new=AsyncMock(
-                return_value={"incomingShipments": [], "sendingShipments": []}
+                return_value=envelope()
             ),
         ),
     ):

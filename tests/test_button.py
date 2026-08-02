@@ -13,6 +13,8 @@ from custom_components.dpd.const import (
     DOMAIN,
 )
 
+from .payloads import envelope
+
 _ENTRY_DATA = {
     CONF_EMAIL: "user@example.com",
     CONF_PASSWORD: "secret",
@@ -48,7 +50,7 @@ async def test_refresh_button_forces_a_poll(hass):
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
             new=AsyncMock(
-                return_value={"incomingShipments": [], "sendingShipments": []}
+                return_value=envelope()
             ),
         ) as mock_get_parcels,
     ):
