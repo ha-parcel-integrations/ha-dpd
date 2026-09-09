@@ -4,27 +4,27 @@
     "step": {
       "user": {
         "title": "DPD",
-        "description": "Missing your country? [Request it here]({issue_url}).",
+        "description": "Nie widzisz swojego kraju? [Zgłoś go tutaj]({issue_url}).",
         "data": {
-          "bu": "Country"
+          "bu": "Kraj"
         }
       },
       "delivered": {
-        "title": "Delivered parcels",
+        "title": "Dostarczone przesyłki",
         "data": {
-          "delivered_filter_type": "Filter by",
-          "delivered_filter_amount": "Amount"
+          "delivered_filter_type": "Filtruj według",
+          "delivered_filter_amount": "Liczba"
         },
         "data_description": {
-          "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
-          "delivered_filter_amount": "Number of days or parcels to show."
+          "delivered_filter_type": "Pokaż dostarczone przesyłki z ostatnich X dni lub ogranicz do X najnowszych.",
+          "delivered_filter_amount": "Liczba dni lub przesyłek do wyświetlenia."
         }
       },
       "reauth_confirm": {
-        "title": "Re-authenticate DPD",
+        "title": "Zaloguj się ponownie do DPD",
         "data": {
-          "email": "Email",
-          "password": "Password"
+          "email": "E-mail",
+          "password": "Hasło"
         }
       },
       "credentials": {
@@ -51,49 +51,49 @@
       }
     },
     "error": {
-      "cannot_connect": "Unable to reach DPD. Check your network.",
-      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Nie można połączyć się z DPD. Sprawdź swoje połączenie sieciowe.",
+      "invalid_auth": "Nieprawidłowy e-mail lub hasło.",
       "invalid_phone": "Podaj prawidłowy polski numer telefonu komórkowego (dziewięć cyfr, opcjonalnie z prefiksem +48 lub 0048).",
       "invalid_sms_code": "Kod SMS jest nieprawidłowy lub wygasł."
     },
     "abort": {
-      "already_configured": "This DPD account is already configured.",
-      "reauth_successful": "Re-authentication successful.",
-      "unique_id_mismatch": "Re-authenticate with the same DPD account this entry was set up with."
+      "already_configured": "To konto DPD jest już skonfigurowane.",
+      "reauth_successful": "Ponowne uwierzytelnienie zakończone powodzeniem.",
+      "unique_id_mismatch": "Zaloguj się ponownie tym samym kontem DPD, którym skonfigurowano ten wpis."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "DPD options",
+        "title": "Opcje DPD",
         "sections": {
           "delivered": {
-            "name": "Delivered parcels",
+            "name": "Dostarczone przesyłki",
             "data": {
-              "delivered_filter_type": "Filter by",
-              "delivered_filter_amount": "Amount"
+              "delivered_filter_type": "Filtruj według",
+              "delivered_filter_amount": "Liczba"
             },
             "data_description": {
-              "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
-              "delivered_filter_amount": "Number of days or parcels to show."
+              "delivered_filter_type": "Pokaż dostarczone przesyłki z ostatnich X dni lub ogranicz do X najnowszych.",
+              "delivered_filter_amount": "Liczba dni lub przesyłek do wyświetlenia."
             }
           },
           "history": {
-            "name": "Parcel history",
+            "name": "Historia przesyłki",
             "data": {
-              "include_history": "Include status history"
+              "include_history": "Uwzględnij historię statusów"
             },
             "data_description": {
-              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default."
+              "include_history": "Dodaje atrybut historii dla każdej przesyłki z listą aktualizacji statusu (znacznik czasu, status, oryginalny tekst). Domyślnie wyłączone."
             }
           },
           "polling": {
-            "name": "Polling",
+            "name": "Odpytywanie",
             "data": {
-              "refresh_interval": "Refresh every"
+              "refresh_interval": "Odświeżaj co"
             },
             "data_description": {
-              "refresh_interval": "How often the integration checks DPD for parcel updates. \"Automatic\" (the default for new installs) speeds up around an expected delivery and slows down overnight; a fixed interval polls at that constant rate around the clock instead."
+              "refresh_interval": "Jak często integracja sprawdza DPD w poszukiwaniu aktualizacji przesyłek. „Automatycznie” (domyślne dla nowych instalacji) przyspiesza w okolicach spodziewanej dostawy i zwalnia w nocy; stały interwał odpytuje ze stałą częstotliwością przez całą dobę."
             }
           }
         }
@@ -103,98 +103,98 @@
   "selector": {
     "refresh_interval": {
       "options": {
-        "auto": "Automatic (recommended)",
-        "15": "15 minutes",
-        "30": "30 minutes",
-        "60": "60 minutes",
-        "120": "120 minutes",
-        "240": "240 minutes"
+        "auto": "Automatycznie (zalecane)",
+        "15": "15 minut",
+        "30": "30 minut",
+        "60": "60 minut",
+        "120": "120 minut",
+        "240": "240 minut"
       }
     },
     "delivered_filter_type": {
       "options": {
-        "days": "Days",
-        "parcels": "Number of parcels"
+        "days": "Dni",
+        "parcels": "Liczba przesyłek"
       }
     },
     "bu": {
       "options": {
-        "dpd-nl": "Netherlands",
-        "dpd-ar": "Argentina",
-        "dpd-be": "Belgium",
-        "dpd-hr": "Croatia",
-        "dpd-cz": "Czech Republic",
+        "dpd-nl": "Holandia",
+        "dpd-ar": "Argentyna",
+        "dpd-be": "Belgia",
+        "dpd-hr": "Chorwacja",
+        "dpd-cz": "Czechy",
         "dpd-ee": "Estonia",
-        "dpd-fr": "France",
-        "dpd-hu": "Hungary",
-        "brt": "Italy",
-        "dpd-lv": "Latvia",
-        "dpd-lt": "Lithuania",
-        "dpd-lu": "Luxembourg",
-        "chr-pt": "Portugal",
-        "dpd-sk": "Slovakia",
-        "dpd-si": "Slovenia",
-        "dpd-ch": "Switzerland",
-        "dpd-uk": "United Kingdom",
-        "dpd-de": "Germany",
+        "dpd-fr": "Francja",
+        "dpd-hu": "Węgry",
+        "brt": "Włochy",
+        "dpd-lv": "Łotwa",
+        "dpd-lt": "Litwa",
+        "dpd-lu": "Luksemburg",
+        "chr-pt": "Portugalia",
+        "dpd-sk": "Słowacja",
+        "dpd-si": "Słowenia",
+        "dpd-ch": "Szwajcaria",
+        "dpd-uk": "Wielka Brytania",
+        "dpd-de": "Niemcy",
         "dpd-pl": "Polska"
       }
     }
   },
   "device_automation": {
     "trigger_type": {
-      "parcel_registered": "A parcel was registered",
-      "parcel_status_changed": "A parcel's status changed",
-      "parcel_delivered": "A parcel was delivered",
-      "parcel_delivery_time_changed": "A parcel's expected delivery time changed",
-      "outgoing_parcel_status_changed": "An outgoing parcel's status changed",
-      "outgoing_parcel_delivered": "An outgoing parcel was delivered"
+      "parcel_registered": "Zarejestrowano przesyłkę",
+      "parcel_status_changed": "Zmienił się status przesyłki",
+      "parcel_delivered": "Przesyłka została dostarczona",
+      "parcel_delivery_time_changed": "Zmienił się przewidywany czas dostawy przesyłki",
+      "outgoing_parcel_status_changed": "Zmienił się status wysyłanej przesyłki",
+      "outgoing_parcel_delivered": "Wysyłana przesyłka została dostarczona"
     }
   },
   "entity": {
     "button": {
       "refresh": {
-        "name": "Refresh"
+        "name": "Odśwież"
       }
     },
     "calendar": {
       "deliveries": {
-        "name": "Deliveries"
+        "name": "Dostawy"
       }
     },
     "sensor": {
       "incoming_parcels": {
-        "name": "Incoming parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Przychodzące przesyłki",
+        "unit_of_measurement": "przesyłki"
       },
       "parcel": {
-        "name": "Parcel {barcode}"
+        "name": "Przesyłka {barcode}"
       },
       "outgoing_parcels": {
-        "name": "Outgoing parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Wysyłane przesyłki",
+        "unit_of_measurement": "przesyłki"
       },
       "delivered_parcels": {
-        "name": "Delivered parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Dostarczone przesyłki",
+        "unit_of_measurement": "przesyłki"
       },
       "outgoing_delivered_parcels": {
-        "name": "Outgoing delivered parcels",
-        "unit_of_measurement": "parcels"
+        "name": "Dostarczone wysyłane przesyłki",
+        "unit_of_measurement": "przesyłki"
       },
       "next_delivery": {
-        "name": "Next delivery"
+        "name": "Następna dostawa"
       },
       "en_route_to_parcel_shop": {
-        "name": "En route to ParcelShop",
-        "unit_of_measurement": "parcels"
+        "name": "W drodze do punktu odbioru",
+        "unit_of_measurement": "przesyłki"
       },
       "awaiting_pickup": {
-        "name": "Awaiting pickup",
-        "unit_of_measurement": "parcels"
+        "name": "Oczekuje na odbiór",
+        "unit_of_measurement": "przesyłki"
       },
       "last_update": {
-        "name": "Last successful update"
+        "name": "Ostatnia udana aktualizacja"
       }
     }
   }
