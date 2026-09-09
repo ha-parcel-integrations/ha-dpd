@@ -65,6 +65,7 @@ KNOWN_CAPABILITIES = frozenset(
 #             normalize_parcel_de's "url" is always None.
 CAPABILITIES_BY_VARIANT = {
     "Germany": frozenset({"weight", "dimensions", "delivery_window", "pickup_point", "history"}),
+    "Poland": frozenset({"delivery_window", "history"}),
     "Other": frozenset(
         {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
     ),
@@ -145,7 +146,21 @@ DEFAULT_BU = "DPD-NL"
 # apart from BUSINESS_UNITS itself: that constant is also used to build
 # general-backend requests (bu query values sent to myDPD/Keycloak), and
 # "DPD-DE" must never flow into that path.
-COUNTRY_OPTIONS = BUSINESS_UNITS + [{"value": "DPD-DE", "label": "Germany"}]
+COUNTRY_OPTIONS = BUSINESS_UNITS + [
+    {"value": "DPD-DE", "label": "Germany"},
+    {"value": "DPD-PL", "label": "Poland"},
+]
+
+# Poland uses a separate public OAuth client and receiver-inbox API. It is
+# deliberately not a business unit: no DPD-PL value may reach the shared
+# myDPD backend.
+DPD_PL_SSO_URL = "https://dpdsso.dpd.com.pl"
+DPD_PL_API_URL = "https://mobapp.dpd.com.pl"
+DPD_PL_CLIENT_ID = "DPDClientMDU"
+DPD_PL_REDIRECT_URI = "https://dpdsso.dpd.com.pl/landing-page?messageType=activeAccount"
+CONF_PHONE = "phone"
+CONF_SMS_CODE = "sms_code"
+CONF_REFRESH_TOKEN = "refresh_token"
 
 # ``DPD-UK`` has no real business-unit code of its own on the shared myDPD
 # backend (confirmed absent from the myDPD app's own BU list) — but a UK
@@ -283,6 +298,7 @@ HISTORY_MAX_EVENTS = 20
 CONF_COUNTRY = "country"
 COUNTRY_GENERAL = "general"
 COUNTRY_DE = "de"
+COUNTRY_PL = "pl"
 DEFAULT_COUNTRY = COUNTRY_GENERAL
 
 # Persisted in entry.data (not entry.options) so a DE hub keeps the same

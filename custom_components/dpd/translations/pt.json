@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "O seu país não está na lista? [Peça aqui]({issue_url}).",
         "data": {
-          "email": "E-mail",
-          "password": "Palavra-passe",
           "bu": "País"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-mail",
           "password": "Palavra-passe"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-mail",
+          "password": "Palavra-passe"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Número de telemóvel polaco"
+        },
+        "data_description": {
+          "phone": "Introduza um número de telemóvel polaco. São aceites nove algarismos nacionais, +48 ou 0048 e enviados à DPD como nove algarismos. A DPD enviará um código SMS."
+        }
+      },
+      "sms": {
+        "title": "Confirmar código SMS",
+        "data": {
+          "sms_code": "Código SMS"
+        }
       }
     },
     "error": {
       "cannot_connect": "Não é possível contactar a DPD. Verifique a sua ligação de rede.",
-      "invalid_auth": "E-mail ou palavra-passe inválidos."
+      "invalid_auth": "E-mail ou palavra-passe inválidos.",
+      "invalid_phone": "Introduza um número de telemóvel polaco válido (nove algarismos, opcionalmente com +48 ou 0048).",
+      "invalid_sms_code": "Código SMS inválido ou expirado."
     },
     "abort": {
       "already_configured": "Esta conta DPD já está configurada.",
@@ -114,7 +136,8 @@
         "dpd-si": "Eslovénia",
         "dpd-ch": "Suíça",
         "dpd-uk": "Reino Unido",
-        "dpd-de": "Alemanha"
+        "dpd-de": "Alemanha",
+        "dpd-pl": "Polónia"
       }
     }
   },

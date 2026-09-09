@@ -30,31 +30,31 @@
       "credentials": {
         "title": "DPD",
         "data": {
-          "email": "Email",
-          "password": "Password"
+          "email": "E-mail",
+          "password": "Hasło"
         }
       },
       "phone": {
         "title": "DPD Polska",
         "data": {
-          "phone": "Polish mobile number"
+          "phone": "Polski numer telefonu komórkowego"
         },
         "data_description": {
-          "phone": "Enter a Polish mobile number. Nine national digits, +48, or 0048 are accepted and sent to DPD as nine digits. DPD will send one SMS code."
+          "phone": "Podaj polski numer telefonu komórkowego. Akceptowane jest dziewięć cyfr, +48 lub 0048; do DPD wysyłanych jest zawsze dziewięć cyfr. DPD wyśle jeden kod SMS."
         }
       },
       "sms": {
-        "title": "Confirm SMS code",
+        "title": "Potwierdź kod SMS",
         "data": {
-          "sms_code": "SMS code"
+          "sms_code": "Kod SMS"
         }
       }
     },
     "error": {
       "cannot_connect": "Unable to reach DPD. Check your network.",
       "invalid_auth": "Invalid email or password.",
-      "invalid_phone": "Enter a valid Polish mobile number (nine digits, optionally prefixed with +48 or 0048).",
-      "invalid_sms_code": "Invalid or expired SMS code."
+      "invalid_phone": "Podaj prawidłowy polski numer telefonu komórkowego (dziewięć cyfr, opcjonalnie z prefiksem +48 lub 0048).",
+      "invalid_sms_code": "Kod SMS jest nieprawidłowy lub wygasł."
     },
     "abort": {
       "already_configured": "This DPD account is already configured.",
@@ -137,7 +137,7 @@
         "dpd-ch": "Switzerland",
         "dpd-uk": "United Kingdom",
         "dpd-de": "Germany",
-        "dpd-pl": "Poland"
+        "dpd-pl": "Polska"
       }
     }
   },

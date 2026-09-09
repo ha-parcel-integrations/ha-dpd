@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Nincs ott az országod? [Kérd itt]({issue_url}).",
         "data": {
-          "email": "E-mail",
-          "password": "Jelszó",
           "bu": "Ország"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-mail",
           "password": "Jelszó"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-mail",
+          "password": "Jelszó"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Lengyel mobilszám"
+        },
+        "data_description": {
+          "phone": "Adjon meg egy lengyel mobilszámot. Kilenc belföldi számjegy, +48 vagy 0048 fogadható el; a DPD kilenc számjegyet kap. A DPD egy SMS-kódot küld."
+        }
+      },
+      "sms": {
+        "title": "SMS-kód megerősítése",
+        "data": {
+          "sms_code": "SMS-kód"
+        }
       }
     },
     "error": {
       "cannot_connect": "A DPD nem érhető el. Ellenőrizd a hálózati kapcsolatot.",
-      "invalid_auth": "Érvénytelen e-mail cím vagy jelszó."
+      "invalid_auth": "Érvénytelen e-mail cím vagy jelszó.",
+      "invalid_phone": "Adjon meg érvényes lengyel mobilszámot (kilenc számjegy, opcionálisan +48 vagy 0048 előtaggal).",
+      "invalid_sms_code": "Érvénytelen vagy lejárt SMS-kód."
     },
     "abort": {
       "already_configured": "Ez a DPD fiók már be van állítva.",
@@ -114,7 +136,8 @@
         "dpd-si": "Szlovénia",
         "dpd-ch": "Svájc",
         "dpd-uk": "Egyesült Királyság",
-        "dpd-de": "Németország"
+        "dpd-de": "Németország",
+        "dpd-pl": "Lengyelország"
       }
     }
   },

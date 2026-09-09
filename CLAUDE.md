@@ -96,6 +96,32 @@ against `["Other"]`'s full set; keep the two in lockstep with any change to
 either normalize function (2026-08-23, replacing the single flat
 `CAPABILITIES` that used to overclaim `url` for DE).
 
+**Poland (`countries/pl/`)** — wholly separate transport isolated in its own
+package: `countries/pl/session.py` owns a public-client OAuth session against
+`dpdsso.dpd.com.pl` (phone + SMS enrolment via `async_send_sms`/`async_register`,
+no client secret — a bogus code returns `invalid_grant`), with the returned
+refresh token persisted on the config entry and rotated via `token_updater`
+whenever a refresh response includes a new one; `countries/pl/__init__.py` owns
+derivation-first status mapping (`map_parcel_status_pl`, no closed vocabulary
+confirmed) and `normalize_parcel_pl`. `DpdCoordinator` dispatches on whether a
+`DpdPlSession` was constructed; `_async_fetch_pl` fetches the receiver inbox in
+one call, then enriches only the *active* parcels with a per-parcel detail call
+(bounded to 3 concurrent, a failed detail fetch falls back to the list-only
+record rather than dropping the parcel) — delivered/returned parcels are never
+detail-fetched. Unlike DE/general, PL has no outgoing shipments (the surface is
+a read-only receiver inbox) — `_async_fetch_pl` always returns an empty
+outgoing list. As of 2026-08-31 `carrier-research/dpd/dpd-pl.md` still carries
+`blocker: capture` — the status vocabulary and payload shapes here are sourced
+from an independent OSS implementation, not this suite's own consented
+list/detail poll, and should be treated as provisional until that capture
+happens; ship PL as a pre-release (`bN`), not a normal minor bump, until then.
+`normalize_parcel_pl` never populates `url`, `weight`, `dimensions` or
+`pickup_point` (PL's inbox payload carries none of them) though it does
+populate `delivery_window` via `planned_from` — `const.py`'s
+`CAPABILITIES_BY_VARIANT["Poland"]` reflects exactly that gap against
+`["Other"]`'s full set; keep the two in lockstep with any change to
+`normalize_parcel_pl`.
+
 **Parcel core (status/pickup, detail cache, history, outgoing, entities)** —
 unmapped `raw_status` falls to `ParcelStatus.UNKNOWN` with a one-shot WARNING;
 `pickup_point` is populated by repurposing the detail call's `receiver.name`

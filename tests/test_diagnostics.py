@@ -79,6 +79,26 @@ async def test_diagnostics_redacts_parcel_pii():
 
 
 @pytest.mark.asyncio
+async def test_diagnostics_redacts_sensitive_dpd_poland_raw_data():
+    entry = _entry_with_runtime_data(
+        incoming_active=[{
+            "raw": {
+                "waybill": "12345678901234",
+                "sender": {"name": "Shop", "address": {"city": "Warsaw"}},
+                "user_actions": [{"validation_token": "secret"}],
+                "mps": {"parcels": [{"waybill": "other"}]},
+            }
+        }],
+    )
+    result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    raw = result["incoming_active"][0]["raw"]
+    assert raw["waybill"] == REDACTED
+    assert raw["sender"] == REDACTED
+    assert raw["user_actions"][0]["validation_token"] == REDACTED
+    assert raw["mps"] == REDACTED
+
+
+@pytest.mark.asyncio
 async def test_diagnostics_reports_counts_and_update_success():
     entry = _entry_with_runtime_data(
         incoming_active=[{"parcelNumber": "A"}, {"parcelNumber": "B"}],

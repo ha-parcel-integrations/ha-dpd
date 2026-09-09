@@ -15,8 +15,11 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
+    CONF_PHONE,
     CONF_REFRESH_INTERVAL,
+    CONF_REFRESH_TOKEN,
     COUNTRY_DE,
+    COUNTRY_PL,
     DEFAULT_BU,
     DEFAULT_NEW_REFRESH_INTERVAL,
     DEFAULT_REFRESH_INTERVAL,
@@ -329,6 +332,101 @@ async def test_reauth_flow_aborts_on_different_account(hass):
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "unique_id_mismatch"
     assert entry.data[CONF_EMAIL] == _USER_INPUT[CONF_EMAIL]
+
+
+@pytest.mark.asyncio
+async def test_pl_reauth_updates_existing_entry_instead_of_aborting_as_duplicate(hass):
+    """The existing PL number is valid in reauth; it must not be a duplicate."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    phone = "612345678"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"PL:{phone}",
+        data={
+            CONF_COUNTRY: COUNTRY_PL.upper(),
+            CONF_PHONE: phone,
+            CONF_REFRESH_TOKEN: "expired-token",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    async def _register(session, _phone, _code):
+        session.refresh_token = "fresh-token"
+        return {}
+
+    with (
+        patch(
+            "custom_components.dpd.config_flow.DpdPlSession.async_send_sms",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "custom_components.dpd.config_flow.DpdPlSession.async_register",
+            new=_register,
+        ),
+        patch(
+            "homeassistant.config_entries.ConfigEntries.async_reload",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await entry.start_reauth_flow(hass)
+        assert result["step_id"] == "phone"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_PHONE: "+48 612 345 678"}
+        )
+        assert result["step_id"] == "sms"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"sms_code": "123456"}
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data[CONF_PHONE] == phone
+    assert entry.data[CONF_REFRESH_TOKEN] == "fresh-token"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_pl_creates_entry_titled_by_phone_number(hass):
+    """The PL flow never collects an email — the entry must not end up with
+    a blank title (regression: title used to default to self._email, which
+    stays "" for this country)."""
+    with (
+        patch(
+            "custom_components.dpd.config_flow.DpdPlSession.async_send_sms",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "custom_components.dpd.config_flow.DpdPlSession.async_register",
+            new=AsyncMock(return_value={}),
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_BU: "dpd-pl"}
+        )
+        assert result["step_id"] == "phone"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_PHONE: "612345678"}
+        )
+        assert result["step_id"] == "sms"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"sms_code": "123456"}
+        )
+        assert result["step_id"] == "delivered"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=_DELIVERED_INPUT
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "612345678"
+    assert result["data"][CONF_COUNTRY] == COUNTRY_PL.upper()
+    assert result["data"][CONF_PHONE] == "612345678"
+    assert CONF_EMAIL not in result["data"] or result["data"][CONF_EMAIL] == ""
 
 
 # ---------------------------------------------------------------------------

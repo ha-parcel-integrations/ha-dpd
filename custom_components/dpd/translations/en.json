@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Missing your country? [Request it here]({issue_url}).",
         "data": {
-          "email": "Email",
-          "password": "Password",
           "bu": "Country"
         }
       },
@@ -28,11 +26,35 @@
           "email": "Email",
           "password": "Password"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Polish mobile number"
+        },
+        "data_description": {
+          "phone": "Enter a Polish mobile number. Nine national digits, +48, or 0048 are accepted and sent to DPD as nine digits. DPD will send one SMS code."
+        }
+      },
+      "sms": {
+        "title": "Confirm SMS code",
+        "data": {
+          "sms_code": "SMS code"
+        }
       }
     },
     "error": {
       "cannot_connect": "Unable to reach DPD. Check your network.",
-      "invalid_auth": "Invalid email or password."
+      "invalid_auth": "Invalid email or password.",
+      "invalid_phone": "Enter a valid Polish mobile number (nine digits, optionally prefixed with +48 or 0048).",
+      "invalid_sms_code": "Invalid or expired SMS code."
     },
     "abort": {
       "already_configured": "This DPD account is already configured.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovenia",
         "dpd-ch": "Switzerland",
         "dpd-uk": "United Kingdom",
-        "dpd-de": "Germany"
+        "dpd-de": "Germany",
+        "dpd-pl": "Poland"
       }
     }
   },

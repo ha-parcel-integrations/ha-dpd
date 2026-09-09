@@ -17,13 +17,16 @@ from .const import (
     CONF_BU,
     CONF_COUNTRY,
     CONF_DE_HARDWARE_ID,
+    CONF_REFRESH_TOKEN,
     COUNTRY_DE,
     COUNTRY_GENERAL,
+    COUNTRY_PL,
     DEFAULT_BU,
     PLATFORMS,
 )
 from .coordinator import DpdCoordinator
 from .countries.de.session import DpdDeSession
+from .countries.pl.session import DpdPlSession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +38,7 @@ class DpdData:
     client: DpdApiClient | None
     coordinator: DpdCoordinator
     de_session: DpdDeSession | None = None
+    pl_session: DpdPlSession | None = None
 
 
 type DpdConfigEntry = ConfigEntry[DpdData]
@@ -47,6 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
 
     client: DpdApiClient | None = None
     de_session: DpdDeSession | None = None
+    pl_session: DpdPlSession | None = None
 
     try:
         if country == COUNTRY_DE.upper():
@@ -58,6 +63,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
                 hardware_id,
             )
             await de_session.async_login()
+        elif country == COUNTRY_PL.upper():
+            def _store_refresh_token(token: str) -> None:
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_REFRESH_TOKEN: token}
+                )
+            pl_session = DpdPlSession(
+                session, entry.data.get(CONF_REFRESH_TOKEN), _store_refresh_token
+            )
+            await pl_session.async_login()
         else:
             client = DpdApiClient(
                 entry.data[CONF_EMAIL],
@@ -67,6 +81,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
             )
             await client.async_login()
     except DpdAuthError as exc:
+        # Keep the cause in the integration log (without credentials) so an
+        # issue can contain the useful provider-side failure category. HA's
+        # ConfigEntryAuthFailed intentionally exposes only a generic message.
+        _LOGGER.warning(
+            "DPD authentication failed for country %s; reauthentication is "
+            "required (%s)",
+            country,
+            exc,
+        )
         raise ConfigEntryAuthFailed("DPD authentication failed") from exc
     except DpdApiError as exc:
         # Non-success HTTP status during the auth flow — almost always a 5xx
@@ -78,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     except aiohttp.ClientError as exc:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc
 
-    coordinator = DpdCoordinator(hass, client, entry, de_session=de_session)
+    coordinator = DpdCoordinator(hass, client, entry, de_session=de_session, pl_session=pl_session)
 
     # Fetch initial data here, before forwarding to platforms. Raising
     # ConfigEntryNotReady from a forwarded platform is too late for HA to catch
@@ -87,7 +110,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     # it with backoff.
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = DpdData(client=client, coordinator=coordinator, de_session=de_session)
+    # The PL provider can rotate refresh tokens during the first poll.
+    if pl_session and pl_session.refresh_token != entry.data.get(CONF_REFRESH_TOKEN):
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_REFRESH_TOKEN: pl_session.refresh_token})
+    entry.runtime_data = DpdData(client=client, coordinator=coordinator, de_session=de_session, pl_session=pl_session)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

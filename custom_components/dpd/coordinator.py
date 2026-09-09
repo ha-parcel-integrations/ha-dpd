@@ -1,11 +1,13 @@
 """Coordinator for the DPD integration."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -31,6 +33,8 @@ from .const import (
 )
 from .countries.de import async_get_all_parcels_de
 from .countries.de.session import DpdDeSession
+from .countries.pl import normalize_parcel_pl
+from .countries.pl.session import DpdPlSession
 from .parcels import (
     _apply_delivered_filter,
     _apply_delivered_filter_canonical,
@@ -148,6 +152,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         entry: ConfigEntry,
         *,
         de_session: DpdDeSession | None = None,
+        pl_session: DpdPlSession | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -164,6 +169,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         )
         self._client = client
         self._de_session = de_session
+        self._pl_session = pl_session
         # barcode -> last seen ParcelStatus. ``None`` on the first refresh so
         # we can suppress events for parcels that already existed when the
         # integration started (we do not know their previous state).
@@ -234,6 +240,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     async def _async_update_data(self) -> dict[str, list[dict]]:
         if self._de_session is not None:
             incoming_all, outgoing_all = await self._async_fetch_de()
+        elif self._pl_session is not None:
+            incoming_all, outgoing_all = await self._async_fetch_pl()
         else:
             incoming_all, outgoing_all = await self._async_fetch_general()
 
@@ -442,6 +450,43 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         incoming_all = normalized_active + normalized_delivered
         outgoing_all = normalized_outgoing + normalized_outgoing_delivered
         return incoming_all, outgoing_all
+
+    async def _async_fetch_pl(self) -> tuple[list[dict], list[dict]]:
+        """Fetch Poland's receiver inbox and enrich active parcels only."""
+        assert self._pl_session is not None
+        try:
+            parcels = await self._pl_session.async_get_parcels()
+            active = [p for p in parcels if ((p.get("main_status") or {}).get("status")) not in {"DELIVERED", "PICKED_UP", "RETURNED_TO_SENDER", "EXPIRED_PICKUP"}]
+            semaphore = asyncio.Semaphore(3)
+            async def detail(parcel: dict) -> dict:
+                waybill = parcel.get("waybill")
+                if not waybill:
+                    return parcel
+                try:
+                    async with semaphore:
+                        detail_payload = await self._pl_session.async_get_parcel_detail(
+                            str(waybill)
+                        )
+                        return {**parcel, **detail_payload}
+                except (DpdApiError, aiohttp.ClientError):
+                    return parcel
+            enriched = await asyncio.gather(*(detail(p) for p in active))
+        except DpdAuthError as err:
+            _LOGGER.error("DPD Poland authentication failed: %s", err)
+            raise ConfigEntryAuthFailed("DPD Poland authentication failed") from err
+        except DpdApiError as err:
+            raise UpdateFailed(f"DPD Poland error: {err}") from err
+        by_waybill = {p.get("waybill"): p for p in enriched}
+        normalized = [
+            normalize_parcel_pl(
+                by_waybill.get(parcel.get("waybill"), parcel),
+                include_history=self._include_history,
+            )
+            for parcel in parcels
+        ]
+        incoming_active = sort_parcels_by_ts([p for p in normalized if not p["delivered"]], "planned_from")
+        incoming_delivered = sort_parcels_by_ts(_apply_delivered_filter_canonical([p for p in normalized if p["delivered"]], self.config_entry), "delivered_at", descending=True)
+        return incoming_active + incoming_delivered, []
 
     def _fire_change_events(self, parcels: list[dict]) -> None:
         """Fire events for newly-registered parcels and parcel transitions.

@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Nematote savo šalies sąraše? [Paprašykite čia]({issue_url}).",
         "data": {
-          "email": "El. paštas",
-          "password": "Slaptažodis",
           "bu": "Šalis"
         }
       },
@@ -28,11 +26,35 @@
           "email": "El. paštas",
           "password": "Slaptažodis"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "El. paštas",
+          "password": "Slaptažodis"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Lenkijos mobiliojo telefono numeris"
+        },
+        "data_description": {
+          "phone": "Įveskite Lenkijos mobiliojo telefono numerį. Priimami devyni nacionaliniai skaitmenys, +48 arba 0048; DPD siunčiami devyni skaitmenys. DPD išsiųs vieną SMS kodą."
+        }
+      },
+      "sms": {
+        "title": "Patvirtinkite SMS kodą",
+        "data": {
+          "sms_code": "SMS kodas"
+        }
       }
     },
     "error": {
       "cannot_connect": "Nepavyksta pasiekti DPD. Patikrinkite tinklo ryšį.",
-      "invalid_auth": "Neteisingas el. paštas arba slaptažodis."
+      "invalid_auth": "Neteisingas el. paštas arba slaptažodis.",
+      "invalid_phone": "Įveskite galiojantį Lenkijos mobiliojo telefono numerį (devyni skaitmenys, pasirinktinai su +48 arba 0048).",
+      "invalid_sms_code": "Neteisingas arba pasibaigęs SMS kodas."
     },
     "abort": {
       "already_configured": "Ši DPD paskyra jau sukonfigūruota.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovėnija",
         "dpd-ch": "Šveicarija",
         "dpd-uk": "Jungtinė Karalystė",
-        "dpd-de": "Vokietija"
+        "dpd-de": "Vokietija",
+        "dpd-pl": "Lenkija"
       }
     }
   },

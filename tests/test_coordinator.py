@@ -455,6 +455,100 @@ async def test_coordinator_de_raises_update_failed_on_api_error(hass):
 
 
 # ---------------------------------------------------------------------------
+# DpdCoordinator._async_fetch_pl — DPD Poland's receiver inbox
+# ---------------------------------------------------------------------------
+
+
+def _pl_parcel(waybill: str, status: str = "HANDED_OVER_FOR_DELIVERY") -> dict:
+    return {
+        "waybill": waybill,
+        "sender": {"name": "Example Shop"},
+        "main_status": {"status": status, "date": "2026-09-09T08:00:00Z"},
+        "statuses": [],
+        "delivery": {"planned_delivery_date": None, "delivered_datetime": None},
+    }
+
+
+async def test_coordinator_pl_splits_active_and_delivered(hass):
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(
+        return_value=[
+            _pl_parcel("A"),
+            _pl_parcel("B", status="DELIVERED"),
+        ]
+    )
+    pl_session.async_get_parcel_detail = AsyncMock(return_value={})
+    coordinator = DpdCoordinator(hass, None, _mock_entry("days", 30), pl_session=pl_session)
+
+    result = await coordinator._async_update_data()
+
+    assert [p["barcode"] for p in result["incoming_active"]] == ["A"]
+    assert [p["barcode"] for p in result["incoming_delivered"]] == ["B"]
+    assert result["outgoing_active"] == []
+    assert result["outgoing_delivered"] == []
+    pl_session.async_get_parcel_detail.assert_awaited_once_with("A")
+
+
+async def test_coordinator_pl_merges_detail_payload_into_active_parcel(hass):
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(return_value=[_pl_parcel("A")])
+    pl_session.async_get_parcel_detail = AsyncMock(
+        return_value={"delivery": {"planned_delivery_date": "2026-09-10", "delivered_datetime": None}}
+    )
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
+
+    result = await coordinator._async_update_data()
+
+    assert result["incoming_active"][0]["planned_from"] == "2026-09-10T00:00:00"
+
+
+async def test_coordinator_pl_falls_back_to_undetailed_parcel_on_detail_failure(hass):
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(return_value=[_pl_parcel("A")])
+    pl_session.async_get_parcel_detail = AsyncMock(side_effect=DpdApiError(500))
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
+
+    result = await coordinator._async_update_data()
+
+    assert [p["barcode"] for p in result["incoming_active"]] == ["A"]
+
+
+async def test_coordinator_pl_does_not_fetch_detail_for_delivered_parcels(hass):
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(
+        return_value=[_pl_parcel("A", status="DELIVERED")]
+    )
+    pl_session.async_get_parcel_detail = AsyncMock(return_value={})
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
+
+    await coordinator._async_update_data()
+
+    pl_session.async_get_parcel_detail.assert_not_awaited()
+
+
+async def test_coordinator_pl_raises_config_entry_auth_failed_on_auth_error(hass):
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(side_effect=DpdAuthError("bad creds"))
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_coordinator_pl_raises_update_failed_on_api_error(hass):
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    pl_session = MagicMock()
+    pl_session.async_get_parcels = AsyncMock(side_effect=DpdApiError(500))
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+# ---------------------------------------------------------------------------
 # log_unknown_descriptions
 # ---------------------------------------------------------------------------
 

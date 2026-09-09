@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Vai jūsu valsts nav sarakstā? [Pieprasiet to šeit]({issue_url}).",
         "data": {
-          "email": "E-pasts",
-          "password": "Parole",
           "bu": "Valsts"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-pasts",
           "password": "Parole"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-pasts",
+          "password": "Parole"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Polijas mobilā tālruņa numurs"
+        },
+        "data_description": {
+          "phone": "Ievadiet Polijas mobilā tālruņa numuru. Tiek pieņemti deviņi vietējie cipari, +48 vai 0048; uz DPD tiek nosūtīti deviņi cipari. DPD nosūtīs vienu SMS kodu."
+        }
+      },
+      "sms": {
+        "title": "Apstipriniet SMS kodu",
+        "data": {
+          "sms_code": "SMS kods"
+        }
       }
     },
     "error": {
       "cannot_connect": "Nevar sasniegt DPD. Pārbaudiet tīkla savienojumu.",
-      "invalid_auth": "Nederīgs e-pasts vai parole."
+      "invalid_auth": "Nederīgs e-pasts vai parole.",
+      "invalid_phone": "Ievadiet derīgu Polijas mobilā tālruņa numuru (deviņi cipari, pēc izvēles ar +48 vai 0048).",
+      "invalid_sms_code": "Nederīgs vai beidzies SMS kods."
     },
     "abort": {
       "already_configured": "Šis DPD konts jau ir konfigurēts.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovēnija",
         "dpd-ch": "Šveice",
         "dpd-uk": "Apvienotā Karaliste",
-        "dpd-de": "Vācija"
+        "dpd-de": "Vācija",
+        "dpd-pl": "Polija"
       }
     }
   },

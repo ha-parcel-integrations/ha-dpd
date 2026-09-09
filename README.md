@@ -69,7 +69,7 @@ Or click the button below to open it directly in HACS:
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **DPD**
-3. Enter your DPD **email**, **password**, and pick your **country**
+3. Pick your **country**, then enter its account credentials. Poland uses a mobile number and one SMS code; other countries use email and password.
 4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
 5. Click **Submit**
 
@@ -77,9 +77,12 @@ Or click the button below to open it directly in HACS:
 
 | Field | Description |
 |---|---|
-| Email | The email address of your DPD consumer account (the one you use in the myDPD mobile app). |
-| Password | The password for that account. Stored in the HA config entry and refreshed automatically when the integration triggers a re-authentication. |
-| Country | The DPD business unit to query. Netherlands is wire-confirmed; the other 14 (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia) are confirmed to share the same myDPD account backend and auth flow, but a non-NL parcel payload hasn't been captured yet — if a parcel's status ever looks wrong, please [report it](https://github.com/ha-parcel-integrations/ha-dpd/issues/new?template=unrecognised_status.yml). The UK and Switzerland also work, riding on that same NL backend under the hood. **Germany** has its own entry in the dropdown — it runs on a wholly separate Paketnavigator backend, and while login and the parcel list are wire-confirmed, its status vocabulary is still being filled in against real accounts, so please [report it](https://github.com/ha-parcel-integrations/ha-dpd/issues/new?template=unrecognised_status.yml) if a German parcel's status ever looks wrong. Poland and Brazil each run their own separate stack and aren't supported here yet — [request one](https://github.com/ha-parcel-integrations/ha-dpd/issues/new?title=Add%20country%3A%20%3Cyour%20country%3E&labels=enhancement) if you need it. |
+| Country | Choose the country before entering credentials. Netherlands and the other shared-backend countries use a DPD account email and password. Germany uses its own backend. **Poland** uses a Polish nine-digit mobile number and a one-time SMS code; Home Assistant stores the refresh token only, never the SMS code. |
+
+For Poland, the phone field accepts the local nine-digit form as well as
+`+48`/`0048` prefixes (with spaces or dashes). It normalizes every accepted
+form to the nine digits expected by DPD Polska. The receiver inbox is read-only:
+outgoing parcels are not requested.
 
 ## Options
 

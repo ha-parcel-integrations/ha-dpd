@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Staat jouw land er niet bij? [Vraag het hier aan]({issue_url}).",
         "data": {
-          "email": "E-mailadres",
-          "password": "Wachtwoord",
           "bu": "Land"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-mailadres",
           "password": "Wachtwoord"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-mailadres",
+          "password": "Wachtwoord"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Pools mobiel nummer"
+        },
+        "data_description": {
+          "phone": "Voer een Pools mobiel nummer in. Negen nationale cijfers, +48 of 0048 worden geaccepteerd en als negen cijfers naar DPD gestuurd. DPD stuurt één sms-code."
+        }
+      },
+      "sms": {
+        "title": "SMS-code bevestigen",
+        "data": {
+          "sms_code": "SMS-code"
+        }
       }
     },
     "error": {
       "cannot_connect": "Kan DPD niet bereiken. Controleer je netwerkverbinding.",
-      "invalid_auth": "Ongeldig e-mailadres of wachtwoord."
+      "invalid_auth": "Ongeldig e-mailadres of wachtwoord.",
+      "invalid_phone": "Voer een geldig Pools mobiel nummer in (negen cijfers, eventueel voorafgegaan door +48 of 0048).",
+      "invalid_sms_code": "Ongeldige of verlopen sms-code."
     },
     "abort": {
       "already_configured": "Dit DPD-account is al geconfigureerd.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovenië",
         "dpd-ch": "Zwitserland",
         "dpd-uk": "Verenigd Koninkrijk",
-        "dpd-de": "Duitsland"
+        "dpd-de": "Duitsland",
+        "dpd-pl": "Polen"
       }
     }
   },

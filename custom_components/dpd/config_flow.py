@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
@@ -28,10 +29,14 @@ from .const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
+    CONF_PHONE,
     CONF_REFRESH_INTERVAL,
+    CONF_REFRESH_TOKEN,
+    CONF_SMS_CODE,
     COUNTRY_DE,
     COUNTRY_GENERAL,
     COUNTRY_OPTIONS,
+    COUNTRY_PL,
     DEFAULT_BU,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
@@ -44,12 +49,14 @@ from .const import (
     REFRESH_INTERVAL_OPTIONS,
 )
 from .countries.de.session import DpdDeSession
+from .countries.pl.session import DpdPlSession
 
 _LOGGER = logging.getLogger(__name__)
 
 # The one selected value that routes to DPD Germany instead of the general
 # backend — never added to BUSINESS_UNITS itself (see COUNTRY_OPTIONS).
 _DE_BU_VALUE = "DPD-DE"
+_PL_BU_VALUE = "DPD-PL"
 
 _BU_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
@@ -81,6 +88,9 @@ _FILTER_AMOUNT_SELECTOR = selector.NumberSelector(
     )
 )
 
+_COUNTRY_SCHEMA = vol.Schema(
+    {vol.Required(CONF_BU): _BU_SELECTOR}, extra=vol.ALLOW_EXTRA
+)
 _USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_EMAIL): str,
@@ -91,6 +101,9 @@ _USER_SCHEMA = vol.Schema(
         vol.Required(CONF_BU): _BU_SELECTOR,
     }
 )
+
+_PHONE_SCHEMA = vol.Schema({vol.Required(CONF_PHONE): str})
+_SMS_SCHEMA = vol.Schema({vol.Required(CONF_SMS_CODE): str})
 
 _REAUTH_SCHEMA = vol.Schema(
     {
@@ -123,6 +136,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         self._password: str = ""
         self._bu: str = DEFAULT_BU
         self._de_hardware_id: str = ""
+        self._phone: str = ""
+        self._pl_refresh_token: str = ""
 
     @staticmethod
     @callback
@@ -149,65 +164,109 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the credential + country/BU form and validate on submit.
+        """Select the country before asking for country-specific credentials.
 
         One dropdown for both: DPD Germany's separate SOAP backend sits
         alongside NL and the other business units (``COUNTRY_OPTIONS``) —
         picking it branches this same submit into the DE validation path
         instead of asking "which backend" as a question of its own.
         """
-        errors: dict[str, str] = {}
-
         if user_input is not None:
-            email = user_input[CONF_EMAIL]
-            password = user_input[CONF_PASSWORD]
             selected = user_input[CONF_BU].upper()
-
             if selected == _DE_BU_VALUE:
-                hardware_id = str(uuid4())
-                try:
+                self._country = COUNTRY_DE.upper()
+            elif selected == _PL_BU_VALUE:
+                self._country = COUNTRY_PL.upper()
+                return await self.async_step_phone()
+            else:
+                self._country, self._bu = COUNTRY_GENERAL.upper(), selected
+            # Kept solely for migration-compatible programmatic callers that
+            # supplied the old combined form. The UI schema renders country
+            # only, so users always see the country-first flow.
+            if CONF_EMAIL in user_input and CONF_PASSWORD in user_input:
+                return await self.async_step_credentials(
+                    {CONF_EMAIL: user_input[CONF_EMAIL], CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                )
+            return await self.async_step_credentials()
+        return self.async_show_form(step_id="user", data_schema=_COUNTRY_SCHEMA, description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL})
+
+    async def async_step_credentials(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Validate the email/password route used by general and German DPD."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            email, password = user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
+            hardware_id = str(uuid4())
+            try:
+                if self._country == COUNTRY_DE.upper():
                     await self._validate_de_credentials(email, password, hardware_id)
-                except DpdAuthError:
-                    errors["base"] = "invalid_auth"
-                except (DpdApiError, aiohttp.ClientError):
-                    errors["base"] = "cannot_connect"
                 else:
-                    await self.async_set_unique_id(f"DE:{email}")
-                    self._abort_if_unique_id_configured()
-                    self._email = email
-                    self._password = password
-                    self._country = COUNTRY_DE.upper()
-                    self._de_hardware_id = hardware_id
-                    return await self.async_step_delivered()
+                    await self._validate_general_credentials(email, password, self._bu)
+            except DpdAuthError:
+                errors["base"] = "invalid_auth"
+            except (DpdApiError, aiohttp.ClientError):
+                errors["base"] = "cannot_connect"
+            else:
+                await self.async_set_unique_id(f"DE:{email}" if self._country == COUNTRY_DE.upper() else f"{self._bu}:{email}")
+                self._abort_if_unique_id_configured()
+                self._email, self._password, self._de_hardware_id = email, password, hardware_id
+                return await self.async_step_delivered()
+        return self.async_show_form(step_id="credentials", data_schema=_USER_SCHEMA, errors=errors)
+
+    async def async_step_phone(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Send one SMS to the supplied Polish mobile number."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            phone = re.sub(r"\D", "", user_input[CONF_PHONE])
+            if phone.startswith("0048"):
+                phone = phone[4:]
+            elif len(phone) > 9 and phone.startswith("48"):
+                phone = phone[2:]
+            valid = len(phone) == 9 and phone.isdigit()
+            if not valid:
+                errors[CONF_PHONE] = "invalid_phone"
             else:
                 try:
-                    await self._validate_general_credentials(
-                        email, password, selected
-                    )
+                    await DpdPlSession(async_get_clientsession(self.hass)).async_send_sms(phone)
                 except DpdAuthError:
-                    errors["base"] = "invalid_auth"
+                    errors[CONF_PHONE] = "invalid_phone"
                 except (DpdApiError, aiohttp.ClientError):
                     errors["base"] = "cannot_connect"
                 else:
-                    await self.async_set_unique_id(f"{selected}:{email}")
-                    self._abort_if_unique_id_configured()
-                    self._email = email
-                    self._password = password
-                    self._bu = selected
-                    self._country = COUNTRY_GENERAL.upper()
-                    return await self.async_step_delivered()
+                    self._phone = phone
+                    return await self.async_step_sms()
+        return self.async_show_form(step_id="phone", data_schema=_PHONE_SCHEMA, errors=errors)
 
-        schema = (
-            self.add_suggested_values_to_schema(_USER_SCHEMA, user_input)
-            if user_input is not None
-            else _USER_SCHEMA
-        )
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-            errors=errors,
-            description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL},
-        )
+    async def async_step_sms(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Exchange the one-time SMS code for persistable OAuth tokens."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                pl = DpdPlSession(async_get_clientsession(self.hass))
+                await pl.async_register(self._phone, user_input[CONF_SMS_CODE])
+            except DpdAuthError:
+                errors[CONF_SMS_CODE] = "invalid_sms_code"
+            except (DpdApiError, aiohttp.ClientError):
+                errors["base"] = "cannot_connect"
+            else:
+                await self.async_set_unique_id(f"PL:{self._phone}")
+                self._pl_refresh_token = pl.refresh_token or ""
+                if self.source == "reauth":
+                    reauth_entry = self._get_reauth_entry()
+                    # The PL number is deliberately the entry's unique ID.
+                    # Do not run ``_abort_if_unique_id_configured`` here:
+                    # that would reject the very entry currently being
+                    # reauthenticated as "already configured".
+                    self._abort_if_unique_id_mismatch()
+                    return self.async_update_reload_and_abort(
+                        reauth_entry,
+                        data_updates={
+                            CONF_PHONE: self._phone,
+                            CONF_REFRESH_TOKEN: self._pl_refresh_token,
+                        },
+                    )
+                self._abort_if_unique_id_configured()
+                return await self.async_step_delivered()
+        return self.async_show_form(step_id="sms", data_schema=_SMS_SCHEMA, errors=errors)
 
     async def async_step_delivered(
         self, user_input: dict[str, Any] | None = None
@@ -221,10 +280,14 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             }
             if self._country == COUNTRY_GENERAL.upper():
                 data[CONF_BU] = self._bu
-            else:
+            elif self._country == COUNTRY_DE.upper():
                 data[CONF_DE_HARDWARE_ID] = self._de_hardware_id
+            else:
+                data[CONF_PHONE] = self._phone
+                data[CONF_REFRESH_TOKEN] = self._pl_refresh_token
+            title = self._phone if self._country == COUNTRY_PL.upper() else self._email
             return self.async_create_entry(
-                title=self._email,
+                title=title,
                 data=data,
                 options={
                     CONF_DELIVERED_FILTER_TYPE: user_input[CONF_DELIVERED_FILTER_TYPE],
@@ -257,6 +320,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         reauth_entry = self._get_reauth_entry()
         country = reauth_entry.data.get(CONF_COUNTRY, COUNTRY_GENERAL.upper())
+        if country == COUNTRY_PL.upper():
+            self._country = COUNTRY_PL.upper()
+            return await self.async_step_phone()
         bu = reauth_entry.data.get(CONF_BU, DEFAULT_BU)
 
         if user_input is not None:

@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Ali vaše države ni na seznamu? [Zahtevajte jo tukaj]({issue_url}).",
         "data": {
-          "email": "E-pošta",
-          "password": "Geslo",
           "bu": "Država"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-pošta",
           "password": "Geslo"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-pošta",
+          "password": "Geslo"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Poljska mobilna številka"
+        },
+        "data_description": {
+          "phone": "Vnesite poljsko mobilno številko. Sprejetih je devet nacionalnih številk, +48 ali 0048; DPD-ju se pošlje devet številk. DPD bo poslal eno SMS-kodo."
+        }
+      },
+      "sms": {
+        "title": "Potrdite SMS-kodo",
+        "data": {
+          "sms_code": "SMS-koda"
+        }
       }
     },
     "error": {
       "cannot_connect": "DPD ni dosegljiv. Preverite omrežno povezavo.",
-      "invalid_auth": "Neveljaven e-poštni naslov ali geslo."
+      "invalid_auth": "Neveljaven e-poštni naslov ali geslo.",
+      "invalid_phone": "Vnesite veljavno poljsko mobilno številko (devet številk, po želji s predpono +48 ali 0048).",
+      "invalid_sms_code": "Neveljavna ali potekla SMS-koda."
     },
     "abort": {
       "already_configured": "Ta DPD račun je že konfiguriran.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovenija",
         "dpd-ch": "Švica",
         "dpd-uk": "Združeno kraljestvo",
-        "dpd-de": "Nemčija"
+        "dpd-de": "Nemčija",
+        "dpd-pl": "Poljska"
       }
     }
   },

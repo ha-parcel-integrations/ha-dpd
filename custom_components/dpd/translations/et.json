@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Kas teie riiki nimekirjas pole? [Küsige seda siin]({issue_url}).",
         "data": {
-          "email": "E-post",
-          "password": "Parool",
           "bu": "Riik"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-post",
           "password": "Parool"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-post",
+          "password": "Parool"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Poola mobiilinumber"
+        },
+        "data_description": {
+          "phone": "Sisesta Poola mobiilinumber. Lubatud on üheksa riigisisest numbrit, +48 või 0048; DPD-le saadetakse üheksa numbrit. DPD saadab ühe SMS-koodi."
+        }
+      },
+      "sms": {
+        "title": "Kinnita SMS-kood",
+        "data": {
+          "sms_code": "SMS-kood"
+        }
       }
     },
     "error": {
       "cannot_connect": "DPD-ga ei saa ühendust. Kontrolli võrguühendust.",
-      "invalid_auth": "Vale e-post või parool."
+      "invalid_auth": "Vale e-post või parool.",
+      "invalid_phone": "Sisesta kehtiv Poola mobiilinumber (üheksa numbrit, soovi korral eesliitega +48 või 0048).",
+      "invalid_sms_code": "Vigane või aegunud SMS-kood."
     },
     "abort": {
       "already_configured": "See DPD konto on juba seadistatud.",
@@ -114,7 +136,8 @@
         "dpd-si": "Sloveenia",
         "dpd-ch": "Šveits",
         "dpd-uk": "Ühendkuningriik",
-        "dpd-de": "Saksamaa"
+        "dpd-de": "Saksamaa",
+        "dpd-pl": "Poola"
       }
     }
   },

@@ -8,12 +8,15 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from . import DpdConfigEntry
-from .const import CONF_DE_HARDWARE_ID
+from .const import CONF_DE_HARDWARE_ID, CONF_PHONE, CONF_REFRESH_TOKEN, CONF_SMS_CODE
 
 TO_REDACT = {
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_DE_HARDWARE_ID,
+    CONF_PHONE,
+    CONF_SMS_CODE,
+    CONF_REFRESH_TOKEN,
     "email",
     "parcelNumber",
     "senderName",
@@ -23,6 +26,24 @@ TO_REDACT = {
     "houseNumber",
     "city",
     "phoneNumber",
+    "courier_phone",
+    "latitude",
+    "longitude",
+    "waybill",
+    "access_token",
+    "refresh_token",
+    # DPD Polska's full carrier response is intentionally exposed in ``raw``.
+    # Diagnostics must still be safe to attach to an issue.
+    "sender",
+    "receiver",
+    "address",
+    "phone",
+    "coordinates",
+    "validation_token",
+    "mps",
+    "pickup_pin",
+    "pick_up_pin",
+    "zabka_barcode",
     # DPD Germany field names (different casing/shape from the general
     # backend above) — the session token and every address/contact field
     # an AddressType can carry.

@@ -6,8 +6,6 @@
         "title": "DPD",
         "description": "Nevidíte svoju krajinu v zozname? [Vyžiadajte si ju tu]({issue_url}).",
         "data": {
-          "email": "E-mail",
-          "password": "Heslo",
           "bu": "Krajina"
         }
       },
@@ -28,11 +26,35 @@
           "email": "E-mail",
           "password": "Heslo"
         }
+      },
+      "credentials": {
+        "title": "DPD",
+        "data": {
+          "email": "E-mail",
+          "password": "Heslo"
+        }
+      },
+      "phone": {
+        "title": "DPD Polska",
+        "data": {
+          "phone": "Poľské mobilné číslo"
+        },
+        "data_description": {
+          "phone": "Zadajte poľské mobilné číslo. Prijíma sa deväť číslic, +48 alebo 0048; do DPD sa odosiela deväť číslic. DPD odošle jeden SMS kód."
+        }
+      },
+      "sms": {
+        "title": "Potvrďte SMS kód",
+        "data": {
+          "sms_code": "SMS kód"
+        }
       }
     },
     "error": {
       "cannot_connect": "Nedá sa pripojiť k DPD. Skontrolujte pripojenie k sieti.",
-      "invalid_auth": "Neplatný e-mail alebo heslo."
+      "invalid_auth": "Neplatný e-mail alebo heslo.",
+      "invalid_phone": "Zadajte platné poľské mobilné číslo (deväť číslic, voliteľne s +48 alebo 0048).",
+      "invalid_sms_code": "Neplatný alebo expirovaný SMS kód."
     },
     "abort": {
       "already_configured": "Tento účet DPD je už nakonfigurovaný.",
@@ -114,7 +136,8 @@
         "dpd-si": "Slovinsko",
         "dpd-ch": "Švajčiarsko",
         "dpd-uk": "Spojené kráľovstvo",
-        "dpd-de": "Nemecko"
+        "dpd-de": "Nemecko",
+        "dpd-pl": "Poľsko"
       }
     }
   },
