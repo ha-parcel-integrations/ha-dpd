@@ -3,12 +3,20 @@
 Home Assistant custom integration for DPD parcel tracking. Distributed via HACS;
 not part of HA core. **Silver** quality tier, minimum HA `2024.12.0`. No DTO layer.
 
+Three places hold the knowledge, and they do not overlap:
+
+| What | Where |
+|---|---|
+| How this integration is built, and why it is built that way | [`ARCHITECTURE.md`](ARCHITECTURE.md) — read it before touching the coordinator's dispatch, a `countries/` package, or the business-unit tables |
+| Endpoint mechanics, auth flows, status vocabularies | `carrier-research/dpd/api/` (private repo) — the Keycloak flow (`auth.md`), parcels/detail endpoints + the 68-code GSMT event vocabulary (`parcels.md`), the FMP delivery-window fetch (`fmp.md`). **Never** duplicated into this repo |
+| Suite-wide conventions | [`.github/CONVENTIONS.md`](https://github.com/ha-parcel-integrations/.github/blob/main/CONVENTIONS.md) |
+
+This file is the short list of things an agent must not get wrong.
+
 ## Shared conventions — fetch when relevant
 
-Suite-wide rules live in
-[`.github/CONVENTIONS.md`](https://github.com/ha-parcel-integrations/.github/blob/main/CONVENTIONS.md)
-and are **not** repeated here. Don't fetch it every session — fetch it **before**
-you act in one of these areas:
+Don't fetch `CONVENTIONS.md` every session — fetch it **before** you act in one
+of these areas:
 
 | Before you … | Fetch `CONVENTIONS.md` § |
 |---|---|
@@ -16,11 +24,6 @@ you act in one of these areas:
 | add/rename a parcel field, a `ParcelStatus`, or a bus event; change first-refresh or unmapped-status logging | *Parcel contract* (this repo implements it; below is only where DPD deviates) |
 | consider "fixing" a lint/pattern the skill flags (poll interval, inline client) | *Deliberate skill divergences* — likely intentional, don't re-flag |
 | commit, bump, tag, release, or write release notes; add a feature without a test | *Workflow / Commits / Versioning / Testing* |
-
-**API mechanics live in `carrier-research/dpd/api/` (private research repo)** — the Keycloak
-auth flow (`auth.md`), the parcels/detail endpoints + status-description and 68-code
-GSMT event vocabulary (`parcels.md`), and the FMP delivery-window fetch (`fmp.md`).
-Do not duplicate them here.
 
 **Suite-wide tripwire, kept inline on purpose:** the first refresh runs in
 `__init__.py` *before* `async_forward_entry_setups`, never in a platform — from a
@@ -42,108 +45,78 @@ entry. Runtime-only; the tests don't catch a regression here.
   `"auto"` (dynamic, status-driven polling — see below). New config entries
   default to `"auto"`; an entry created before this option existed keeps its
   numeric value untouched.
-
-**Dynamic polling (Phase 1 of `carrier-research/dynamic-polling.md`, account-based
-model, Section 2.2)** — `"auto"` is one more selectable `CONF_REFRESH_INTERVAL`
-value, not a replacement for the numeric options. When selected, the coordinator
-recomputes `update_interval` at the end of every `_async_update_data` (both the
-general/BU path and the DE SOAP path funnel through the same recompute, since
-`_async_update_data` is the one dispatch point past the fetch): a 15 min hot tier
-the moment any active incoming *or* outgoing parcel is `out_for_delivery`
-(starting 1h before `planned_from`, or immediately if missing), a 45 min mid
-tier otherwise — which never stops, since the account call is the only way to
-discover a new shipment that appears without going through this integration —
-and a 00:00–06:00 local-time quiet window with anchor polls at each end, plus a
-small deterministic per-`entry_id` stagger. `problem`/`returning` stay in the
-mid tier, not hot. Surfaced in diagnostics under `"polling"`
-(`current_tier_minutes`, `update_interval_seconds`). Do not build a Phase 2
-(making `auto` unconditional / dropping the dropdown) without a separate
-maintainer decision — that is explicitly out of scope for this rollout.
 - `aiohttp.ClientError` is not caught in the coordinator (wrapped automatically).
   Config: `ConfigEntry.runtime_data` (`DpdData`), `PARALLEL_UPDATES = 0`,
   coordinator takes `config_entry=entry`.
 
-**Business unit** — `BUSINESS_UNITS` in `const.py` holds NL plus 14 more BUs
-(confirmed 2026-08-13 to share NL's Keycloak backend) plus `DPD-CH` (confirmed
-2026-08-17). `DPD-DE` is deliberately **not** in `BUSINESS_UNITS` — it runs its
-own SOAP stack, routed via `_DE_BU_VALUE` in `config_flow.py` (see *Germany*
-below). `DPD-UK` rides on `DPD-NL` under the hood via `BU_API_OVERRIDES` in
-`const.py`, with its own live tracking-URL resolution against a keyless
-`apis.track.dpd.co.uk` endpoint. `BU_COUNTRY_OVERRIDES` and
-`BU_TRACKING_URL_OVERRIDES` in `const.py` handle the BUs whose country or
-tracking domain doesn't follow the default template (`CHR-PT`→`pt`, `BRT`→
-`mybrt.it`). BU selector option values are lower-case (hassfest requirement)
-and `.upper()`'d immediately in `config_flow.py`; a new BU needs an entry in
-`const.py` **and** in every `translations/<lang>.json`'s `selector.bu.options`.
-Full history and evidence trail: [.claude/rules/business-unit.md](.claude/rules/business-unit.md).
+**Dynamic polling (Phase 1 of `carrier-research/dynamic-polling.md`, account-based
+model, Section 2.2)** — `"auto"` is one more selectable `CONF_REFRESH_INTERVAL`
+value, not a replacement for the numeric options. When selected, the coordinator
+recomputes `update_interval` at the end of every `_async_update_data` (all three
+transports funnel through the same recompute, since `_async_update_data` is the
+one dispatch point past the fetch): a 15 min hot tier the moment any active
+incoming *or* outgoing parcel is `out_for_delivery` (starting 1h before
+`planned_from`, or immediately if missing), a 45 min mid tier otherwise — which
+never stops, since the account call is the only way to discover a new shipment
+that appears without going through this integration — and a 00:00–06:00
+local-time quiet window with anchor polls at each end, plus a small
+deterministic per-`entry_id` stagger. `problem`/`returning` stay in the mid
+tier, not hot. Surfaced in diagnostics under `"polling"`
+(`current_tier_minutes`, `update_interval_seconds`). Do not build a Phase 2
+(making `auto` unconditional / dropping the dropdown) without a separate
+maintainer decision — that is explicitly out of scope for this rollout.
 
-**Germany (`countries/de/`)** — wholly separate transport isolated in its own
-package: `countries/de/session.py` owns the SOAP session (double-wrapped
-envelope, two-stage login discovered by capturing a working client against a
-real account, not from the decompiled app the first notes were based on);
-`countries/de/__init__.py`
-owns derivation-first status mapping (`map_parcel_status_de`, no closed
-`StatusID` vocabulary) and `normalize_parcel_de`. `DpdCoordinator` dispatches
-on whether a `DpdDeSession` was constructed; everything past that one point
-(sorting, filtering, event-firing) is shared with the general path. As of
-2026-08-17 only login + an empty inbox are wire-confirmed on a real account —
-treat every mapped status/slot as provisional. Full envelope shape, error-code
-handling, and hardware-ID persistence: [.claude/rules/germany.md](.claude/rules/germany.md).
-`normalize_parcel_de` never populates `url` (DE exposes no tracking-page
-link) though it does populate weight/dimensions/delivery_window/pickup_point
-— `const.py`'s `CAPABILITIES_BY_VARIANT["Germany"]` reflects exactly that gap
-against `["Other"]`'s full set; keep the two in lockstep with any change to
-either normalize function (2026-08-23, replacing the single flat
-`CAPABILITIES` that used to overclaim `url` for DE).
+**Three transports, one dispatch point** — `DpdCoordinator._async_update_data`
+branches on which session `__init__.py` constructed (`_de_session` →
+`_async_fetch_de`, `_pl_session` → `_async_fetch_pl`, else the general/BU path
+through `api.py`). Everything past that branch — sorting, filtering, event
+firing, the polling recompute — is shared. **Never add a fourth branch
+downstream of it.** Full model, per-transport detail and the evidence trail:
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-**Poland (`countries/pl/`)** — wholly separate transport isolated in its own
-package: `countries/pl/session.py` owns a public-client OAuth session against
-`dpdsso.dpd.com.pl` (phone + SMS enrolment via `async_send_sms`/`async_register`,
-no client secret — a bogus code returns `invalid_grant`), with the returned
-refresh token persisted on the config entry and rotated via `token_updater`
-whenever a refresh response includes a new one; `countries/pl/__init__.py` owns
-derivation-first status mapping (`map_parcel_status_pl`, no closed vocabulary
-confirmed) and `normalize_parcel_pl`. `DpdCoordinator` dispatches on whether a
-`DpdPlSession` was constructed; `_async_fetch_pl` fetches the receiver inbox in
-one call, then enriches only the *active* parcels with a per-parcel detail call
-(bounded to 3 concurrent, a failed detail fetch falls back to the list-only
-record rather than dropping the parcel) — delivered/returned parcels are never
-detail-fetched. Unlike DE/general, PL has no outgoing shipments (the surface is
-a read-only receiver inbox) — `_async_fetch_pl` always returns an empty
-outgoing list. As of 2026-08-31 `carrier-research/dpd/dpd-pl.md` still carries
-`blocker: capture` — the status vocabulary and payload shapes here are sourced
-from an independent OSS implementation, not this suite's own consented
-list/detail poll, and should be treated as provisional until that capture
-happens; ship PL as a pre-release (`bN`), not a normal minor bump, until then.
-`normalize_parcel_pl` never populates `url`, `weight`, `dimensions` or
-`pickup_point` (PL's inbox payload carries none of them) though it does
-populate `delivery_window` via `planned_from` — `const.py`'s
-`CAPABILITIES_BY_VARIANT["Poland"]` reflects exactly that gap against
-`["Other"]`'s full set; keep the two in lockstep with any change to
-`normalize_parcel_pl`.
+**Business unit** — `DPD-DE` is deliberately **not** in `BUSINESS_UNITS`; it
+runs its own SOAP stack, routed via `_DE_BU_VALUE` in `config_flow.py`.
+`DPD-UK` is in the list but rides on `DPD-NL` for every wire call via
+`BU_API_OVERRIDES`. Two tripwires: BU selector option values are **lower-case**
+(hassfest) and `.upper()`'d immediately in `config_flow.py` — don't "simplify"
+that to one case, DPD's API expects upper — and a new BU needs an entry in
+`const.py` **and** in *every* `translations/<lang>.json`'s
+`selector.bu.options`, not just `en.json`.
 
-**Parcel core (status/pickup, detail cache, history, outgoing, entities)** —
-unmapped `raw_status` falls to `ParcelStatus.UNKNOWN` with a one-shot WARNING;
-`pickup_point` is populated by repurposing the detail call's `receiver.name`
-for `PARCELSHOP` deliveries (confirmed live 2026-08-20 against a real DPD-CZ
-AlzaBox parcel). DE derives the same string shape via `_address_name()` on
-`DeliveryParcelShop.ParcelShop` — not yet wire-confirmed on a real PUDO
-delivery, unlike the general path. `_detail_cache` is
-barcode-keyed and integration-lifetime (at most one detail call per parcel,
-retried only once status moves); FMP delivery-window fetch is best-effort.
-Outgoing parcels come from DPD's own `sendingShipments` split (no `isReturn`
-filtering needed, unlike DHL); events fire over active+delivered for incoming
-and `outgoing_active`+`outgoing_delivered` for outgoing, with no outgoing
-`registered`/`delivery_time_changed`. Per-parcel sensors self-remove via the
-summary sensor, not individually, to avoid a ghost race; setup cleanup is
-sensor-domain-scoped and `non_parcel_unique_ids` must list every non-parcel
-`{entry_id}_*` sensor. Full detail: [.claude/rules/parcel-core.md](.claude/rules/parcel-core.md).
+**Germany (`countries/de/`)** — separate SOAP transport. A SOAP fault raises
+`DpdApiError`, **never** `DpdAuthError`: a fault is a shape bug, not a rejected
+login, and must not push a user into reauth. Reauth on
+`ERROR_SESSION_NOT_VALID`/`ERROR_KEYPHASE` happens **once**, never in a loop.
+As of 2026-08-17 only login and an empty inbox are wire-confirmed on a real
+account — **treat every mapped status/slot as provisional.**
+
+**Poland (`countries/pl/`)** — separate OAuth transport, receiver inbox only
+(always returns an empty outgoing list). As of 2026-08-31
+`carrier-research/dpd/dpd-pl.md` still carries `blocker: capture`: payload
+shapes come from an independent OSS implementation, not our own consented poll.
+**Ship PL as a pre-release (`bN`), not a normal minor bump, until that capture
+happens.**
+
+**`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — three keys,
+`Germany` / `Poland` / `Other`, because the transports populate different
+fields. It feeds the docs-site comparison table, so a wrong entry is a wrong
+claim on the website. **Keep it in lockstep with any change to any of the three
+`normalize_parcel*` functions.**
+
+**Parcel core** — unmapped `raw_status` falls to `ParcelStatus.UNKNOWN` with a
+one-shot WARNING (`KNOWN_DESCRIPTIONS` / `_DESCRIPTION_MAP` both need updating
+on a new DPD lifecycle stage). Per-parcel sensors are removed **by the summary
+sensor**, not individually — self-removal races and leaves ghosts. Setup
+cleanup is scoped to `domain == "sensor"` (else it deletes the refresh button)
+and every non-parcel `{entry_id}_*` sensor **must** be listed in
+`non_parcel_unique_ids`.
 
 ## Planned / skipped
 
 - **Planned (next major)**: exception translations (`UpdateFailed` f-strings →
   `translation_key` + placeholders).
-- **Shipped (2026-08-20)**: `pickup_point` — see *Status & pickup* above.
+- **Shipped (2026-08-20)**: `pickup_point` — see *Status and pickup point* in
+  [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Running tests
 
@@ -152,4 +125,5 @@ python -m pytest tests/ --cov=custom_components.dpd
 ```
 
 Coverage must stay **above 95%** (silver `test-coverage` rule). Run before
-committing.
+committing. A code change updates the README, `ARCHITECTURE.md` and this file
+in the same commit; API mechanics go to `carrier-research/dpd/`, never here.
