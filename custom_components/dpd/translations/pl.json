@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Dodaje atrybut historii dla każdej przesyłki z listą aktualizacji statusu (znacznik czasu, status, oryginalny tekst). Domyślnie wyłączone."
             }
-          },
-          "polling": {
-            "name": "Odpytywanie",
-            "data": {
-              "refresh_interval": "Odświeżaj co"
-            },
-            "data_description": {
-              "refresh_interval": "Jak często integracja sprawdza DPD w poszukiwaniu aktualizacji przesyłek. „Automatycznie” (domyślne dla nowych instalacji) przyspiesza w okolicach spodziewanej dostawy i zwalnia w nocy; stały interwał odpytuje ze stałą częstotliwością przez całą dobę."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Automatycznie (zalecane)",
-        "15": "15 minut",
-        "30": "30 minut",
-        "60": "60 minut",
-        "120": "120 minut",
-        "240": "240 minut"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Dni",

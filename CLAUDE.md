@@ -22,7 +22,7 @@ of these areas:
 |---|---|
 | touch entities, sensors, config/options flow, coordinator, diagnostics, translations | *Home Assistant developer docs* (its table points on to the canonical HA page — don't rely on memory) |
 | add/rename a parcel field, a `ParcelStatus`, or a bus event; change first-refresh or unmapped-status logging | *Parcel contract* (this repo implements it; below is only where DPD deviates) |
-| consider "fixing" a lint/pattern the skill flags (poll interval, inline client) | *Deliberate skill divergences* — likely intentional, don't re-flag |
+| consider "fixing" a lint/pattern the skill flags (inline client) | *Deliberate skill divergences* — likely intentional, don't re-flag |
 | commit, bump, tag, release, or write release notes; add a feature without a test | *Workflow / Commits / Versioning / Testing* |
 
 **Suite-wide tripwire, kept inline on purpose:** the first refresh runs in
@@ -41,30 +41,27 @@ entry. Runtime-only; the tests don't catch a regression here.
   `async_set_unique_id` + `_abort_if_unique_id_mismatch` so a *different* account's
   credentials abort instead of rebinding.
 - **Options flow** has no `entry.add_update_listener` — `async_schedule_reload` on
-  submit. `CONF_REFRESH_INTERVAL` = 15/30/60/120/240 min, default 30, plus
-  `"auto"` (dynamic, status-driven polling — see below). New config entries
-  default to `"auto"`; an entry created before this option existed keeps its
-  numeric value untouched.
+  submit. Two sections left, `delivered` and `history`; polling is not among
+  them (see below).
 - `aiohttp.ClientError` is not caught in the coordinator (wrapped automatically).
   Config: `ConfigEntry.runtime_data` (`DpdData`), `PARALLEL_UPDATES = 0`,
   coordinator takes `config_entry=entry`.
 
-**Dynamic polling (Phase 1 of `carrier-research/dynamic-polling.md`, account-based
-model, Section 2.2)** — `"auto"` is one more selectable `CONF_REFRESH_INTERVAL`
-value, not a replacement for the numeric options. When selected, the coordinator
-recomputes `update_interval` at the end of every `_async_update_data` (all three
-transports funnel through the same recompute, since `_async_update_data` is the
-one dispatch point past the fetch): a 15 min hot tier the moment any active
-incoming *or* outgoing parcel is `out_for_delivery` (starting 1h before
+**Polling cadence is not configurable — don't add the option back.** The
+account-based algorithm (Section 2.2 of `carrier-research/dynamic-polling.md`)
+always runs: the coordinator recomputes `update_interval` at the end of every
+`_async_update_data`, at the single shared point past the transport dispatch,
+so all three transports get the same cadence. A 15 min hot tier the moment any
+active incoming *or* outgoing parcel is `out_for_delivery` (starting 1h before
 `planned_from`, or immediately if missing), a 45 min mid tier otherwise — which
 never stops, since the account call is the only way to discover a new shipment
 that appears without going through this integration — and a 00:00–06:00
 local-time quiet window with anchor polls at each end, plus a small
 deterministic per-`entry_id` stagger. `problem`/`returning` stay in the mid
 tier, not hot. Surfaced in diagnostics under `"polling"`
-(`current_tier_minutes`, `update_interval_seconds`). Do not build a Phase 2
-(making `auto` unconditional / dropping the dropdown) without a separate
-maintainer decision — that is explicitly out of scope for this rollout.
+(`current_tier_minutes`, `update_interval_seconds`). The `refresh_interval`
+dropdown (Phase 1, shipped 2.12.0) is gone; a stale stored value is never read.
+Full model: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 **Three transports, one dispatch point** — `DpdCoordinator._async_update_data`
 branches on which session `__init__.py` constructed (`_de_session` →

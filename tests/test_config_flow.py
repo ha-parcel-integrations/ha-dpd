@@ -16,15 +16,11 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
     CONF_PHONE,
-    CONF_REFRESH_INTERVAL,
     CONF_REFRESH_TOKEN,
     COUNTRY_DE,
     COUNTRY_PL,
     DEFAULT_BU,
-    DEFAULT_NEW_REFRESH_INTERVAL,
-    DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
-    REFRESH_INTERVAL_AUTO,
 )
 
 _USER_INPUT = {
@@ -69,8 +65,8 @@ async def test_user_flow_creates_entry(hass):
     assert result["data"][CONF_EMAIL] == _USER_INPUT[CONF_EMAIL]
     assert result["data"][CONF_BU] == DEFAULT_BU
     assert result["options"][CONF_DELIVERED_FILTER_AMOUNT] == 14
-    assert result["options"][CONF_REFRESH_INTERVAL] == DEFAULT_NEW_REFRESH_INTERVAL
-    assert DEFAULT_NEW_REFRESH_INTERVAL == REFRESH_INTERVAL_AUTO
+    # Polling cadence is not an option — nothing is stored for it.
+    assert "refresh_interval" not in result["options"]
 
 
 @pytest.mark.asyncio
@@ -131,7 +127,7 @@ async def test_user_flow_aborts_when_already_configured(hass):
 
 
 @pytest.mark.asyncio
-async def test_options_flow_updates_filter_and_refresh_interval(hass):
+async def test_options_flow_updates_filter_and_history(hass):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
@@ -158,20 +154,24 @@ async def test_options_flow_updates_filter_and_refresh_interval(hass):
             "history": {
                 CONF_INCLUDE_HISTORY: True,
             },
-            "polling": {
-                CONF_REFRESH_INTERVAL: "60",
-            },
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_DELIVERED_FILTER_TYPE] == "parcels"
     assert result["data"][CONF_DELIVERED_FILTER_AMOUNT] == 20
     assert result["data"][CONF_INCLUDE_HISTORY] is True
-    assert result["data"][CONF_REFRESH_INTERVAL] == 60
+    # The polling section is gone; nothing is written for it.
+    assert "refresh_interval" not in result["data"]
 
 
 @pytest.mark.asyncio
-async def test_options_flow_can_switch_to_auto(hass):
+async def test_options_flow_ignores_a_legacy_refresh_interval_option(hass):
+    """An entry saved while the polling dropdown still existed keeps working.
+
+    The stale ``refresh_interval`` value stays in the stored options until the
+    user next saves the form, and is simply never read; submitting the form
+    drops it without the flow tripping over it.
+    """
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
@@ -181,12 +181,15 @@ async def test_options_flow_can_switch_to_auto(hass):
         options={
             CONF_DELIVERED_FILTER_TYPE: "days",
             CONF_DELIVERED_FILTER_AMOUNT: 7,
-            CONF_REFRESH_INTERVAL: 30,
+            CONF_INCLUDE_HISTORY: False,
+            "refresh_interval": 30,
         },
     )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -195,49 +198,11 @@ async def test_options_flow_can_switch_to_auto(hass):
                 CONF_DELIVERED_FILTER_AMOUNT: 7,
             },
             "history": {CONF_INCLUDE_HISTORY: False},
-            "polling": {CONF_REFRESH_INTERVAL: REFRESH_INTERVAL_AUTO},
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_REFRESH_INTERVAL] == REFRESH_INTERVAL_AUTO
-
-
-@pytest.mark.asyncio
-async def test_options_flow_refresh_interval_default_is_string(hass):
-    """Regression: the refresh-interval default must be a string so a stored
-    int doesn't trip the SelectSelector's 'expected str' validation when the
-    polling section is submitted without an explicit value."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        unique_id=f"{DEFAULT_BU}:{_USER_INPUT[CONF_EMAIL]}",
-        data=_USER_INPUT,
-        # A config previously saved by this integration stores an int.
-        options={
-            CONF_DELIVERED_FILTER_TYPE: "days",
-            CONF_DELIVERED_FILTER_AMOUNT: 7,
-            CONF_REFRESH_INTERVAL: 30,
-            CONF_INCLUDE_HISTORY: False,
-        },
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            "delivered": {
-                CONF_DELIVERED_FILTER_TYPE: "parcels",
-                CONF_DELIVERED_FILTER_AMOUNT: 20,
-            },
-            "history": {CONF_INCLUDE_HISTORY: True},
-            "polling": {},  # omitted → default applied; must validate
-        },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_REFRESH_INTERVAL] == DEFAULT_REFRESH_INTERVAL
+    assert "refresh_interval" not in result["data"]
 
 
 @pytest.mark.asyncio

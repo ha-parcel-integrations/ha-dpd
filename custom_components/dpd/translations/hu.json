@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Minden csomaghoz hozzáad egy előzmény attribútumot, amely felsorolja az egyes állapotfrissítéseket (időbélyeg, állapot, eredeti szöveg). Alapértelmezés szerint kikapcsolva."
             }
-          },
-          "polling": {
-            "name": "Frissítés",
-            "data": {
-              "refresh_interval": "Frissítés gyakorisága"
-            },
-            "data_description": {
-              "refresh_interval": "Milyen gyakran ellenőrzi az integráció a DPD-nél a csomagfrissítéseket. Az „Automatikus” (az új telepítések alapértelmezett értéke) felgyorsítja az ellenőrzést a várható kézbesítés körül, és éjszaka lelassítja; a rögzített időköz ehelyett éjjel-nappal állandó ütemben ellenőriz."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Automatikus (ajánlott)",
-        "15": "15 perc",
-        "30": "30 perc",
-        "60": "60 perc",
-        "120": "120 perc",
-        "240": "240 perc"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Nap",

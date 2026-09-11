@@ -248,21 +248,10 @@ CONF_DELIVERED_FILTER_AMOUNT = "delivered_filter_amount"
 DEFAULT_DELIVERED_FILTER_TYPE = "days"
 DEFAULT_DELIVERED_FILTER_AMOUNT = 7
 
-# Refresh interval (minutes) controls how often the coordinator polls DPD.
-# Default 30 min — gentle on the consumer API which has shown to be flaky
-# during peak hours. Minimum 15 min for the same reason, maximum 240 min
-# (4h) for users who just want one or two checks a day.
-CONF_REFRESH_INTERVAL = "refresh_interval"
-REFRESH_INTERVAL_AUTO = "auto"
-REFRESH_INTERVAL_OPTIONS = (15, 30, 60, 120, 240)
-DEFAULT_REFRESH_INTERVAL = 30  # minutes — default for entries that predate "auto"
-# New config entries default to "auto" (dynamic-polling rollout, Phase 1); an
-# existing entry keeps whatever it already has, numeric or "auto".
-DEFAULT_NEW_REFRESH_INTERVAL = REFRESH_INTERVAL_AUTO
-
-# Dynamic, status-driven polling — selected via "auto" above. Account-based
-# model: applies to both the general/BU backend and DPD Germany's SOAP
-# backend, dispatched the same way as everything else in the coordinator.
+# Dynamic, status-driven polling — unconditional, no user-facing interval
+# option. Account-based model: applies to all three transports (general/BU,
+# DPD Germany's SOAP backend and DPD Poland's OAuth backend), which share the
+# single recompute point past the coordinator's dispatch branch.
 #
 # Quiet window: no polling between these local hours except the two anchors
 # below, for overnight / end-of-day catch-up.

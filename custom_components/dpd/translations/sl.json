@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Vsakemu paketu doda atribut zgodovine s seznamom vsake posodobitve stanja (časovni žig, stanje, izvirno besedilo). Privzeto izklopljeno."
             }
-          },
-          "polling": {
-            "name": "Osveževanje",
-            "data": {
-              "refresh_interval": "Osveži vsakih"
-            },
-            "data_description": {
-              "refresh_interval": "Kako pogosto integracija preverja DPD za posodobitve paketov. „Samodejno” (privzeto za nove namestitve) pospeši preverjanje okoli pričakovane dostave in ga upočasni čez noč; fiksni interval namesto tega preverja s konstantno hitrostjo ves čas."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Samodejno (priporočeno)",
-        "15": "15 minut",
-        "30": "30 minut",
-        "60": "60 minut",
-        "120": "120 minut",
-        "240": "240 minut"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Dnevi",

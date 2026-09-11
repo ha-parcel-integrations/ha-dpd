@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Pievieno katrai pakai vēstures atribūtu, kas uzskaita katru statusa atjauninājumu (laika zīmogs, statuss, oriģinālais teksts). Pēc noklusējuma izslēgts."
             }
-          },
-          "polling": {
-            "name": "Atjaunināšana",
-            "data": {
-              "refresh_interval": "Atjaunināt ik pēc"
-            },
-            "data_description": {
-              "refresh_interval": "Cik bieži integrācija pārbauda DPD paku atjauninājumus. „Automātiski” (jauniem instalējumiem noklusējums) paātrina pārbaudes ap paredzēto piegādi un palēnina tās naktī; fiksēts intervāls tā vietā pārbauda ar nemainīgu ātrumu visu diennakti."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Automātiski (ieteicams)",
-        "15": "15 minūtes",
-        "30": "30 minūtes",
-        "60": "60 minūtes",
-        "120": "120 minūtes",
-        "240": "240 minūtes"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Dienas",

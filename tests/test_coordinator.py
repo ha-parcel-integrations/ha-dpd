@@ -10,11 +10,9 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
-    CONF_REFRESH_INTERVAL,
     HOT_INTERVAL_MINUTES,
     KNOWN_CAPABILITIES,
     MID_INTERVAL_MINUTES,
-    REFRESH_INTERVAL_AUTO,
     STAGGER_MINUTES,
     ParcelStatus,
 )
@@ -24,8 +22,6 @@ from custom_components.dpd.coordinator import (
     _in_quiet_window,
     _next_anchor,
     _next_update_interval,
-    _refresh_interval,
-    _refresh_setting,
     _stagger_minutes,
 )
 from custom_components.dpd.parcels import (
@@ -55,7 +51,7 @@ def _mock_entry(
     filter_amount: int = 7,
     *,
     include_history: bool = False,
-    refresh_interval: str | int | None = None,
+    legacy_refresh_interval: str | int | None = None,
 ) -> MagicMock:
     entry = MagicMock()
     entry.entry_id = "test-entry-id"
@@ -64,8 +60,9 @@ def _mock_entry(
         CONF_DELIVERED_FILTER_AMOUNT: filter_amount,
         CONF_INCLUDE_HISTORY: include_history,
     }
-    if refresh_interval is not None:
-        entry.options[CONF_REFRESH_INTERVAL] = refresh_interval
+    if legacy_refresh_interval is not None:
+        # A value left behind by the removed polling dropdown; never read.
+        entry.options["refresh_interval"] = legacy_refresh_interval
     return entry
 
 
@@ -1701,34 +1698,7 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
 
 
 # ---------------------------------------------------------------------------
-# _refresh_interval
-# ---------------------------------------------------------------------------
-
-
-def test_refresh_interval_defaults_to_30_minutes_when_option_unset():
-    entry = MagicMock()
-    entry.options = {}
-    assert _refresh_interval(entry).total_seconds() == 30 * 60
-
-
-def test_refresh_interval_reads_minutes_from_options():
-    entry = MagicMock()
-    entry.options = {"refresh_interval": 120}
-    assert _refresh_interval(entry).total_seconds() == 120 * 60
-
-
-def test_refresh_interval_starts_hot_when_auto():
-    entry = _mock_entry(refresh_interval=REFRESH_INTERVAL_AUTO)
-    assert _refresh_interval(entry).total_seconds() == HOT_INTERVAL_MINUTES * 60
-
-
-def test_refresh_setting_passes_through_auto():
-    entry = _mock_entry(refresh_interval=REFRESH_INTERVAL_AUTO)
-    assert _refresh_setting(entry) == REFRESH_INTERVAL_AUTO
-
-
-# ---------------------------------------------------------------------------
-# Dynamic polling (dynamic-polling.md Section 2.2, account-based) — pure
+# Dynamic polling (Section 2.2, account-based) — pure
 # helpers
 # ---------------------------------------------------------------------------
 
@@ -1837,9 +1807,17 @@ def test_candidate_landing_in_quiet_window_clamps_to_the_midnight_anchor():
 # ---------------------------------------------------------------------------
 
 
-async def test_auto_mode_recomputes_interval_and_never_stops(hass):
+def test_coordinator_starts_on_the_hot_cadence(hass):
+    """Before any refresh has run, the first poll is scheduled hot."""
+    coordinator = DpdCoordinator(hass, MagicMock(), _mock_entry())
+
+    assert coordinator.update_interval == timedelta(minutes=HOT_INTERVAL_MINUTES)
+    assert coordinator.current_tier_minutes is None
+
+
+async def test_polling_recomputes_interval_and_never_stops(hass):
     """Zero pending parcels must not suspend polling — it's the only discovery path."""
-    entry = _mock_entry(refresh_interval=REFRESH_INTERVAL_AUTO)
+    entry = _mock_entry()
     client = MagicMock()
     client.bu = "DPD-NL"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
@@ -1852,8 +1830,8 @@ async def test_auto_mode_recomputes_interval_and_never_stops(hass):
     assert coordinator.update_interval is not None
 
 
-async def test_auto_mode_goes_hot_for_out_for_delivery(hass):
-    entry = _mock_entry(refresh_interval=REFRESH_INTERVAL_AUTO)
+async def test_polling_goes_hot_for_out_for_delivery(hass):
+    entry = _mock_entry()
     client = MagicMock()
     client.bu = "DPD-NL"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
@@ -1873,8 +1851,13 @@ async def test_auto_mode_goes_hot_for_out_for_delivery(hass):
     assert coordinator.current_tier_minutes == HOT_INTERVAL_MINUTES
 
 
-async def test_fixed_mode_keeps_configured_interval(hass):
-    entry = _mock_entry(refresh_interval=60)
+async def test_a_legacy_refresh_interval_option_is_ignored(hass):
+    """An entry saved while the polling dropdown existed still polls dynamically.
+
+    The stale ``refresh_interval`` value stays in the stored options until the
+    user next saves the options form, and is simply never read.
+    """
+    entry = _mock_entry(legacy_refresh_interval=60)
     client = MagicMock()
     client.bu = "DPD-NL"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
@@ -1883,8 +1866,8 @@ async def test_fixed_mode_keeps_configured_interval(hass):
 
     await coordinator._async_update_data()
 
-    assert coordinator.current_tier_minutes is None
-    assert coordinator.update_interval == timedelta(minutes=60)
+    assert coordinator.current_tier_minutes == MID_INTERVAL_MINUTES
+    assert coordinator.update_interval != timedelta(minutes=60)
 
 
 # ---------------------------------------------------------------------------

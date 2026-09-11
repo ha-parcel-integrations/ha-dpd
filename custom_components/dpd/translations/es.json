@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Añade un atributo de historial por paquete con cada actualización de estado (fecha y hora, estado, texto original). Desactivado por defecto."
             }
-          },
-          "polling": {
-            "name": "Actualización",
-            "data": {
-              "refresh_interval": "Actualizar cada"
-            },
-            "data_description": {
-              "refresh_interval": "Con qué frecuencia la integración consulta a DPD las actualizaciones de los paquetes. «Automático» (el valor predeterminado para instalaciones nuevas) acelera la consulta cerca de una entrega prevista y la ralentiza durante la noche; un intervalo fijo consulta a ese ritmo constante durante todo el día."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Automático (recomendado)",
-        "15": "15 minutos",
-        "30": "30 minutos",
-        "60": "60 minutos",
-        "120": "120 minutos",
-        "240": "240 minutos"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Días",

@@ -86,31 +86,12 @@
             "data_description": {
               "include_history": "Prideda kiekvienai siuntai istorijos atributą, kuriame išvardijamas kiekvienas būsenos atnaujinimas (laiko žyma, būsena, originalus tekstas). Pagal numatytuosius nustatymus išjungta."
             }
-          },
-          "polling": {
-            "name": "Atnaujinimas",
-            "data": {
-              "refresh_interval": "Atnaujinti kas"
-            },
-            "data_description": {
-              "refresh_interval": "Kaip dažnai integracija tikrina DPD siuntų atnaujinimus. „Automatinis“ (numatytasis naujiems diegimams) pagreitina tikrinimą prieš numatomą pristatymą ir sulėtina naktį; fiksuotas intervalas vietoj to tikrina pastoviu greičiu visą parą."
-            }
           }
         }
       }
     }
   },
   "selector": {
-    "refresh_interval": {
-      "options": {
-        "auto": "Automatinis (rekomenduojama)",
-        "15": "15 minučių",
-        "30": "30 minučių",
-        "60": "60 minučių",
-        "120": "120 minučių",
-        "240": "240 minučių"
-      }
-    },
     "delivered_filter_type": {
       "options": {
         "days": "Dienos",

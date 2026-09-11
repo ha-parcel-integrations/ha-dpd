@@ -300,6 +300,42 @@ The FMP delivery-window fetch is best-effort — any failure yields `None` and
 the poll continues. `planned_from` / `planned_to` reflect the FMP hour window
 when present, else the calendar-day window in the parcel's local timezone.
 
+### Dynamic polling is unconditional
+
+There is no user-facing polling interval — a deliberate suite-wide choice, not
+a gap. It shipped as an opt-in `"auto"` dropdown value in 2.12.0, then
+converged to unconditional: the `refresh_interval` option is gone entirely,
+and an entry that still carries a stale value in its stored options is simply
+never read for one.
+
+The coordinator's initial interval is merely a starting point — the hot
+cadence, so the first poll after setup happens promptly — and
+`_async_update_data` recomputes it every refresh via `_next_update_interval`,
+at the one shared point past the transport dispatch, so all three transports
+get the same cadence logic:
+
+- **Quiet window** (`QUIET_WINDOW_START_HOUR` 0 → `QUIET_WINDOW_END_HOUR` 6):
+  no polling between those local hours except two daily anchors (00:00 and
+  06:00). A computed next-due time that would land inside the window is
+  clamped forward to the next anchor.
+- **Hot tier** (`HOT_INTERVAL_MINUTES` 15) whenever any active incoming *or*
+  outgoing parcel is `out_for_delivery`, from `HOT_LOOKAHEAD_HOURS` (1h)
+  before its `planned_from` — or immediately when `planned_from` is missing or
+  unparseable.
+- **Mid tier** (`MID_INTERVAL_MINUTES` 45) otherwise. `problem` / `returning`
+  deliberately stay here, not hot.
+- **It never stops.** This is the account-based model: the mid-tier poll is
+  also the only way to discover a shipment that appeared on the account
+  without going through Home Assistant, so `update_interval` is never set to
+  `None` even with nothing in flight.
+- A deterministic per-`entry_id` stagger (`STAGGER_MINUTES` 7, hashed) is
+  added to every computed interval so installs don't all hit a tier boundary
+  or an anchor in the same second.
+
+Diagnostics surfaces the result under `"polling"` (`current_tier_minutes`,
+`update_interval_seconds`); `current_tier_minutes` is `None` until the first
+successful refresh.
+
 ### History is opt-in, default OFF
 
 `CONF_INCLUDE_HISTORY` adds **no new endpoint** — it reuses the detail call.
