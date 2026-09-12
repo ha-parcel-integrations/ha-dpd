@@ -71,8 +71,6 @@ CAPABILITIES_BY_VARIANT = {
     ),
 }
 
-POLL_INTERVAL = 900  # seconds (15 minutes) — legacy hard-coded fallback
-
 KEYCLOAK_TOKEN_URL = (
     "https://login.dpdgroup.com/auth/realms/login/protocol/openid-connect/token"
 )
