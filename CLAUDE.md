@@ -48,8 +48,8 @@ entry. Runtime-only; the tests don't catch a regression here.
   coordinator takes `config_entry=entry`.
 
 **Polling cadence is not configurable — don't add the option back.** The
-account-based algorithm (Section 2.2 of `carrier-research/dynamic-polling.md`)
-always runs: the coordinator recomputes `update_interval` at the end of every
+account-based dynamic-polling algorithm always runs: the coordinator
+recomputes `update_interval` at the end of every
 `_async_update_data`, at the single shared point past the transport dispatch,
 so all three transports get the same cadence. A 15 min hot tier the moment any
 active incoming *or* outgoing parcel is `out_for_delivery` (starting 1h before
