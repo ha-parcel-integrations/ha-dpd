@@ -166,7 +166,7 @@
       "next_delivery": {
         "name": "Prossima consegna"
       },
-      "en_route_to_parcel_shop": {
+      "en_route_to_pickup_point": {
         "name": "In viaggio verso il ParcelShop",
         "unit_of_measurement": "pacchi"
       },

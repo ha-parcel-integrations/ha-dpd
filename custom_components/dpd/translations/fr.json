@@ -166,7 +166,7 @@
       "next_delivery": {
         "name": "Prochaine livraison"
       },
-      "en_route_to_parcel_shop": {
+      "en_route_to_pickup_point": {
         "name": "En route vers un ParcelShop",
         "unit_of_measurement": "colis"
       },

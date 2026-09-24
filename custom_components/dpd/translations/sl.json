@@ -166,7 +166,7 @@
       "next_delivery": {
         "name": "Naslednja dostava"
       },
-      "en_route_to_parcel_shop": {
+      "en_route_to_pickup_point": {
         "name": "Na poti do ParcelShopa",
         "unit_of_measurement": "paketov"
       },

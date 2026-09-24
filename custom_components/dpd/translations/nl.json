@@ -166,7 +166,7 @@
       "next_delivery": {
         "name": "Volgende bezorging"
       },
-      "en_route_to_parcel_shop": {
+      "en_route_to_pickup_point": {
         "name": "Onderweg naar ParcelShop",
         "unit_of_measurement": "pakketten"
       },

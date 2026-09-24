@@ -271,7 +271,7 @@ The raw description lives on `raw_status`, never `status`; unmapped falls to
 / `_unknown_event_types_logged`). `KNOWN_DESCRIPTIONS` and `_DESCRIPTION_MAP`
 both need updating on a new DPD lifecycle stage.
 
-**ParcelShop sensors**: `DpdEnRouteToParcelShopSensor` counts `pickup` parcels
+**Pickup-point sensors**: `DpdEnRouteToPickupPointSensor` counts `pickup` parcels
 with `status != at_pickup_point`; `DpdAwaitingPickupSensor` counts
 `status == at_pickup_point`. Confirmed against a real DPD-CZ AlzaBox parcel
 (2026-08-20, maintainer-supplied diagnostics) — both counted and transitioned

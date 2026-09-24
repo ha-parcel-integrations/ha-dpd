@@ -28,6 +28,25 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
 
 
+def _migrate_summary_unique_ids(registry: er.EntityRegistry, entry_id: str) -> None:
+    """Preserve entity customisations while adopting canonical pickup IDs."""
+    for old_suffix, new_suffix in (
+        ("en_route_to_parcel_shop", "en_route_to_pickup_point"),
+    ):
+        old_unique_id = f"{entry_id}_{old_suffix}"
+        new_unique_id = f"{entry_id}_{new_suffix}"
+        old_entity_id = registry.async_get_entity_id("sensor", DOMAIN, old_unique_id)
+        if old_entity_id is None:
+            continue
+        if registry.async_get_entity_id("sensor", DOMAIN, new_unique_id) is not None:
+            _LOGGER.warning(
+                "Both legacy and canonical pickup summary entities exist; "
+                "reconcile %s and %s manually", old_unique_id, new_unique_id
+            )
+            continue
+        registry.async_update_entity(old_entity_id, new_unique_id=new_unique_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: DpdConfigEntry,
@@ -48,13 +67,15 @@ async def async_setup_entry(
     # handles parcels that were delivered between HA restarts.
     registry = er.async_get(hass)
     entry_id = entry.entry_id
+    _migrate_summary_unique_ids(registry, entry_id)
     non_parcel_unique_ids = {
         f"{entry_id}_incoming_parcels",
         f"{entry_id}_outgoing_parcels",
         f"{entry_id}_outgoing_delivered_parcels",
         f"{entry_id}_delivered_parcels",
         f"{entry_id}_next_delivery",
-        f"{entry_id}_en_route_to_parcel_shop",
+        f"{entry_id}_en_route_to_pickup_point",
+        f"{entry_id}_en_route_to_parcel_shop",  # collision: preserve for reconciliation
         f"{entry_id}_awaiting_pickup",
         f"{entry_id}_last_update",
     }
@@ -78,7 +99,7 @@ async def async_setup_entry(
         DpdOutgoingDeliveredParcelsSensor(coordinator, entry),
         DpdDeliveredParcelsSensor(coordinator, entry),
         DpdNextDeliverySensor(coordinator, entry),
-        DpdEnRouteToParcelShopSensor(coordinator, entry),
+        DpdEnRouteToPickupPointSensor(coordinator, entry),
         DpdAwaitingPickupSensor(coordinator, entry),
         DpdLastUpdateSensor(coordinator, entry),
     ]
@@ -353,8 +374,8 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         }
 
 
-class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
-    """Active incoming DPD parcels still in transit to a ParcelShop pickup point.
+class DpdEnRouteToPickupPointSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+    """Active incoming DPD parcels still in transit to a pickup point.
 
     Counts non-delivered parcels with ``status.deliveryType == "PARCELSHOP"``
     that have **not yet arrived** at the shop — parcels that are ready for
@@ -363,7 +384,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     """
 
     _attr_has_entity_name = True
-    _attr_translation_key = "en_route_to_parcel_shop"
+    _attr_translation_key = "en_route_to_pickup_point"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_attribution = ATTRIBUTION
     _unrecorded_attributes = frozenset({"parcels"})
@@ -371,7 +392,7 @@ class DpdEnRouteToParcelShopSensor(CoordinatorEntity[DpdCoordinator], SensorEnti
     def __init__(self, coordinator: DpdCoordinator, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_en_route_to_parcel_shop"
+        self._attr_unique_id = f"{entry.entry_id}_en_route_to_pickup_point"
         self._attr_device_info = build_device_info(entry)
 
     def _get_parcelshop_parcels(self) -> list[dict]:
@@ -416,8 +437,7 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     def _get_awaiting_parcels(self) -> list[dict]:
         return [
             p for p in (self.coordinator.data or {}).get("incoming_active", [])
-            if p.get("pickup")
-            and p.get("status") == ParcelStatus.AT_PICKUP_POINT
+            if p.get("status") == ParcelStatus.AT_PICKUP_POINT
         ]
 
     @property

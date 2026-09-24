@@ -10,16 +10,20 @@ transformation tested in ``test_coordinator.py``.
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from custom_components.dpd.const import ParcelStatus
+import pytest
+from homeassistant.helpers import entity_registry as er
+
+from custom_components.dpd.const import DOMAIN, ParcelStatus
 from custom_components.dpd.sensor import (
     DpdAwaitingPickupSensor,
     DpdDeliveredParcelsSensor,
-    DpdEnRouteToParcelShopSensor,
+    DpdEnRouteToPickupPointSensor,
     DpdIncomingParcelsSensor,
     DpdNextDeliverySensor,
     DpdOutgoingDeliveredParcelsSensor,
     DpdOutgoingParcelsSensor,
     DpdParcelSensor,
+    _migrate_summary_unique_ids,
 )
 
 
@@ -347,7 +351,7 @@ def test_next_delivery_none_when_no_planned_from():
 
 
 # ---------------------------------------------------------------------------
-# DpdEnRouteToParcelShopSensor
+# DpdEnRouteToPickupPointSensor
 # ---------------------------------------------------------------------------
 
 
@@ -360,7 +364,7 @@ def test_en_route_counts_pickup_parcels():
     coordinator = _make_coordinator({
         "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
     })
-    sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
+    sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
 
@@ -369,12 +373,12 @@ def test_en_route_excludes_home_delivery():
     coordinator = _make_coordinator({
         "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
     })
-    sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
+    sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 0
 
 
 def test_en_route_zero_when_no_parcels():
-    sensor = DpdEnRouteToParcelShopSensor(_make_coordinator(None), _make_entry())
+    sensor = DpdEnRouteToPickupPointSensor(_make_coordinator(None), _make_entry())
     assert sensor.native_value == 0
 
 
@@ -383,7 +387,7 @@ def test_en_route_attribute_lists_parcels():
     coordinator = _make_coordinator({
         "incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": [],
     })
-    sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
+    sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.extra_state_attributes == {"parcels": [parcel]}
 
 
@@ -396,7 +400,7 @@ def test_en_route_excludes_parcels_ready_at_parcelshop():
     coordinator = _make_coordinator({
         "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
     })
-    sensor = DpdEnRouteToParcelShopSensor(coordinator, _make_entry())
+    sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 1
     assert sensor.extra_state_attributes["parcels"][0]["barcode"] == "A"
 
@@ -406,18 +410,18 @@ def test_en_route_excludes_parcels_ready_at_parcelshop():
 # ---------------------------------------------------------------------------
 
 
-def test_awaiting_pickup_counts_only_ready_parcelshop_parcels():
+def test_awaiting_pickup_counts_every_parcel_at_pickup_point():
     parcels = [
         _parcel("A", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),   # ready
         _parcel("B", pickup=True, status=ParcelStatus.IN_TRANSIT),        # still en route
-        _parcel("C", pickup=False, status=ParcelStatus.AT_PICKUP_POINT),  # not a pickup parcel
+        _parcel("C", pickup=False, status=ParcelStatus.AT_PICKUP_POINT),
     ]
     coordinator = _make_coordinator({
         "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
     })
     sensor = DpdAwaitingPickupSensor(coordinator, _make_entry())
-    assert sensor.native_value == 1
-    assert sensor.extra_state_attributes["parcels"][0]["barcode"] == "A"
+    assert sensor.native_value == 2
+    assert {p["barcode"] for p in sensor.extra_state_attributes["parcels"]} == {"A", "C"}
 
 
 def test_awaiting_pickup_zero_when_no_parcels():
@@ -450,3 +454,56 @@ def test_last_update_sensor_none_before_first_success():
     coordinator.last_success_time = None
     sensor = DpdLastUpdateSensor(coordinator, _make_entry())
     assert sensor.native_value is None
+
+
+# ---------------------------------------------------------------------------
+# Canonical pickup-summary unique-ID migration
+# ---------------------------------------------------------------------------
+
+_SCOPE = "test_entry"
+_RENAMES = [
+    ("en_route_to_parcel_shop", "en_route_to_pickup_point"),
+]
+
+
+@pytest.mark.parametrize(("old_suffix", "new_suffix"), _RENAMES)
+async def test_migration_keeps_custom_entity_id(hass, old_suffix, new_suffix):
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}")
+    registry.async_update_entity(old.entity_id, new_entity_id="sensor.my_pickup_parcels")
+
+    _migrate_summary_unique_ids(registry, _SCOPE)
+
+    new_id = registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{new_suffix}")
+    assert new_id == "sensor.my_pickup_parcels"
+    assert registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}") is None
+
+
+@pytest.mark.parametrize(("old_suffix", "new_suffix"), _RENAMES)
+async def test_migration_is_idempotent(hass, old_suffix, new_suffix):
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}")
+
+    _migrate_summary_unique_ids(registry, _SCOPE)
+    _migrate_summary_unique_ids(registry, _SCOPE)
+
+    new_id = registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{new_suffix}")
+    assert new_id == old.entity_id
+    assert len(registry.entities) == 1
+
+
+@pytest.mark.parametrize(("old_suffix", "new_suffix"), _RENAMES)
+async def test_migration_collision_keeps_both_and_warns(
+    hass, caplog, old_suffix, new_suffix
+):
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}")
+    new = registry.async_get_or_create("sensor", DOMAIN, f"{_SCOPE}_{new_suffix}")
+
+    _migrate_summary_unique_ids(registry, _SCOPE)
+
+    old_id = registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}")
+    new_id = registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{new_suffix}")
+    assert old_id == old.entity_id
+    assert new_id == new.entity_id
+    assert "reconcile" in caplog.text

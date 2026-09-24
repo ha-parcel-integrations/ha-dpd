@@ -166,7 +166,7 @@
       "next_delivery": {
         "name": "Következő kézbesítés"
       },
-      "en_route_to_parcel_shop": {
+      "en_route_to_pickup_point": {
         "name": "Úton a ParcelShophoz",
         "unit_of_measurement": "csomag"
       },
