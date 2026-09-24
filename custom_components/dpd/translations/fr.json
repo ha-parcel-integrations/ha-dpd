@@ -171,7 +171,7 @@
         "unit_of_measurement": "colis"
       },
       "awaiting_pickup": {
-        "name": "Prêt pour le retrait",
+        "name": "En attente de retrait",
         "unit_of_measurement": "colis"
       },
       "last_update": {

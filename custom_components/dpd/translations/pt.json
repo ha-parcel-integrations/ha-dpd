@@ -171,7 +171,7 @@
         "unit_of_measurement": "encomendas"
       },
       "awaiting_pickup": {
-        "name": "Pronto para levantamento",
+        "name": "Pronta para recolha",
         "unit_of_measurement": "encomendas"
       },
       "last_update": {
