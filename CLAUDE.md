@@ -8,7 +8,7 @@ Three places hold the knowledge, and they do not overlap:
 | What | Where |
 |---|---|
 | How this integration is built, and why it is built that way | [`ARCHITECTURE.md`](ARCHITECTURE.md) — read it before touching the coordinator's dispatch, a `countries/` package, or the business-unit tables |
-| Endpoint mechanics, auth flows, status vocabularies | `carrier-research/dpd/api/` (private repo) — the Keycloak flow (`auth.md`), parcels/detail endpoints + the 68-code GSMT event vocabulary (`parcels.md`), the FMP delivery-window fetch (`fmp.md`). **Never** duplicated into this repo |
+| Endpoint mechanics, auth flows, status vocabularies | `carrier-research/dpd/api/` (private repo). **Never** duplicated into this repo |
 | Suite-wide conventions | [`.github/CONVENTIONS.md`](https://github.com/ha-parcel-integrations/.github/blob/main/CONVENTIONS.md) |
 
 This file is the short list of things an agent must not get wrong.
