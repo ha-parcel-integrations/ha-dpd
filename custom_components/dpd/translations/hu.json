@@ -145,14 +145,14 @@
     },
     "sensor": {
       "incoming_parcels": {
-        "name": "Bejövő csomagok",
+        "name": "Érkező csomagok",
         "unit_of_measurement": "csomag"
       },
       "parcel": {
         "name": "Csomag {barcode}"
       },
       "outgoing_parcels": {
-        "name": "Kimenő csomagok",
+        "name": "Feladott csomagok",
         "unit_of_measurement": "csomag"
       },
       "delivered_parcels": {
@@ -160,7 +160,7 @@
         "unit_of_measurement": "csomag"
       },
       "outgoing_delivered_parcels": {
-        "name": "Kézbesített kimenő csomagok",
+        "name": "Feladott kézbesített csomagok",
         "unit_of_measurement": "csomag"
       },
       "next_delivery": {
