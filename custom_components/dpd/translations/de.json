@@ -95,7 +95,7 @@
     "delivered_filter_type": {
       "options": {
         "days": "Tage",
-        "parcels": "Anzahl der Pakete"
+        "parcels": "Anzahl Pakete"
       }
     },
     "bu": {

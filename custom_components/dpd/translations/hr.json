@@ -146,36 +146,36 @@
     "sensor": {
       "incoming_parcels": {
         "name": "Dolazni paketi",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "parcel": {
         "name": "Paket {barcode}"
       },
       "outgoing_parcels": {
         "name": "Odlazni paketi",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "delivered_parcels": {
         "name": "Dostavljeni paketi",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "outgoing_delivered_parcels": {
         "name": "Dostavljeni odlazni paketi",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "next_delivery": {
         "name": "Sljedeća dostava"
       },
       "en_route_to_pickup_point": {
         "name": "Na putu do ParcelShopa",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "awaiting_pickup": {
         "name": "Spremno za preuzimanje",
-        "unit_of_measurement": "paketa"
+        "unit_of_measurement": "paketi"
       },
       "last_update": {
-        "name": "Posljednje uspješno ažuriranje"
+        "name": "Zadnje uspješno ažuriranje"
       }
     }
   }

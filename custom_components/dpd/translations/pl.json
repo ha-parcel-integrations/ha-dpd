@@ -145,7 +145,7 @@
     },
     "sensor": {
       "incoming_parcels": {
-        "name": "Przychodzące przesyłki",
+        "name": "Nadchodzące przesyłki",
         "unit_of_measurement": "przesyłki"
       },
       "parcel": {
@@ -156,11 +156,11 @@
         "unit_of_measurement": "przesyłki"
       },
       "delivered_parcels": {
-        "name": "Dostarczone przesyłki",
+        "name": "Doręczone przesyłki",
         "unit_of_measurement": "przesyłki"
       },
       "outgoing_delivered_parcels": {
-        "name": "Dostarczone wysyłane przesyłki",
+        "name": "Doręczone wysyłane przesyłki",
         "unit_of_measurement": "przesyłki"
       },
       "next_delivery": {

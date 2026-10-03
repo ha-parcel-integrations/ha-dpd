@@ -146,33 +146,33 @@
     "sensor": {
       "incoming_parcels": {
         "name": "Prichádzajúce zásielky",
-        "unit_of_measurement": "zásielok"
+        "unit_of_measurement": "zásielky"
       },
       "parcel": {
         "name": "Zásielka {barcode}"
       },
       "outgoing_parcels": {
         "name": "Odchádzajúce zásielky",
-        "unit_of_measurement": "zásielok"
+        "unit_of_measurement": "zásielky"
       },
       "delivered_parcels": {
         "name": "Doručené zásielky",
-        "unit_of_measurement": "zásielok"
+        "unit_of_measurement": "zásielky"
       },
       "outgoing_delivered_parcels": {
-        "name": "Doručené odchádzajúce zásielky",
-        "unit_of_measurement": "zásielok"
+        "name": "Odchádzajúce doručené zásielky",
+        "unit_of_measurement": "zásielky"
       },
       "next_delivery": {
-        "name": "Ďalšie doručenie"
+        "name": "Očakávané doručenie"
       },
       "en_route_to_pickup_point": {
         "name": "Na ceste do ParcelShopu",
-        "unit_of_measurement": "zásielok"
+        "unit_of_measurement": "zásielky"
       },
       "awaiting_pickup": {
         "name": "Pripravené na vyzdvihnutie",
-        "unit_of_measurement": "zásielok"
+        "unit_of_measurement": "zásielky"
       },
       "last_update": {
         "name": "Posledná úspešná aktualizácia"
