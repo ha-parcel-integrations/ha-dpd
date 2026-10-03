@@ -71,6 +71,12 @@ CAPABILITIES_BY_VARIANT = {
     ),
 }
 
+# Fields not confirmed yet — the docs site shows them as "awaiting data".
+# Move a field into the declaration above once a real parcel shows it.
+PENDING_CAPABILITIES_BY_VARIANT = {
+    "Poland": frozenset({"pickup_point"}),
+}
+
 KEYCLOAK_TOKEN_URL = (
     "https://login.dpdgroup.com/auth/realms/login/protocol/openid-connect/token"
 )
