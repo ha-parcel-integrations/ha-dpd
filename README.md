@@ -192,7 +192,7 @@ users.
 | `status` | Meaning | DPD raw description that maps here |
 |---|---|---|
 | `registered` | DPD knows about the label but the parcel is not yet in transit | `ORDER_CREATED` |
-| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER`, `UNSUCCESSFUL_DELIVERY_ATTEMPTED` |
+| `in_transit` | Picked up; somewhere in DPD's network | `PARCEL_HANDED`, `IN_TRANSIT`, `AT_DELIVERY_CENTER`, `UNSUCCESSFUL_DELIVERY_ATTEMPT` |
 | `out_for_delivery` | On the delivery vehicle today | `PARCEL_OUT_FOR_DELIVERY` |
 | `at_pickup_point` | Arrived at the ParcelShop, ready to collect | `AVAILABLE_FOR_COLLECTION` |
 | `delivered` | Handed over (mailbox, recipient, neighbour, picked up) | `DELIVERED` |

@@ -933,7 +933,7 @@ def test_map_status_parcelshop_and_return_statuses():
     )
     assert map_parcel_status(shipment_sample("RETURN_TO_SENDER")) == ParcelStatus.RETURNING
     assert (
-        map_parcel_status(shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPTED"))
+        map_parcel_status(shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPT"))
         == ParcelStatus.IN_TRANSIT
     )
 
@@ -943,7 +943,7 @@ def test_new_parcelshop_statuses_are_known_and_not_logged(caplog):
     log_unknown_descriptions([
         shipment_sample("AVAILABLE_FOR_COLLECTION"),
         shipment_sample("RETURN_TO_SENDER"),
-        shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPTED"),
+        shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPT"),
     ])
     assert "issues/new" not in caplog.text
 

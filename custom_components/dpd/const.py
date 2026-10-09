@@ -227,7 +227,7 @@ STATUS_DELIVERED = "DELIVERED"                          # 5 — terminal
 # parcel was on the account), but they are first-class consumer statuses.
 STATUS_AVAILABLE_FOR_COLLECTION = "AVAILABLE_FOR_COLLECTION"  # ready to collect at a ParcelShop
 STATUS_RETURN_TO_SENDER = "RETURN_TO_SENDER"                  # going back to the sender
-STATUS_UNSUCCESSFUL_DELIVERY = "UNSUCCESSFUL_DELIVERY_ATTEMPTED"  # missed attempt; will be retried
+STATUS_UNSUCCESSFUL_DELIVERY = "UNSUCCESSFUL_DELIVERY_ATTEMPT"  # missed attempt; will be retried
 
 # Terminal status — every other status.description is treated as "active".
 DELIVERED_DESCRIPTION = STATUS_DELIVERED
