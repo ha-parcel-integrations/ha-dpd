@@ -32,7 +32,8 @@
         "data": {
           "email": "E-post",
           "password": "Parool"
-        }
+        },
+        "description": "Logi sisse oma DPD {country} kontoga."
       },
       "phone": {
         "title": "DPD Polska",

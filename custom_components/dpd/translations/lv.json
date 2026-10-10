@@ -32,7 +32,8 @@
         "data": {
           "email": "E-pasts",
           "password": "Parole"
-        }
+        },
+        "description": "Piesakieties ar savu DPD {country} kontu."
       },
       "phone": {
         "title": "DPD Polska",

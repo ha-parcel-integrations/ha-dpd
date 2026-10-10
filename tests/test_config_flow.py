@@ -740,3 +740,56 @@ async def test_reauth_at_rejects_a_different_account(hass):
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "unique_id_mismatch"
+
+
+# ---------------------------------------------------------------------------
+# The country is asked once, on its own step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_credential_step_does_not_ask_the_country_again(hass):
+    """It used to repeat the dropdown and then discard what was picked."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_BU: "dpd-at"}
+    )
+
+    assert result["step_id"] == "credentials"
+    fields = set(result["data_schema"].schema)
+    assert CONF_BU not in fields
+    assert {CONF_EMAIL, CONF_PASSWORD} <= fields
+
+
+@pytest.mark.asyncio
+async def test_the_credential_step_names_the_country_that_was_chosen(hass):
+    """Shown back as text, so the choice is visible without being re-asked."""
+    for value, expected in (
+        ("dpd-at", "Austria"),
+        ("dpd-de", "Germany"),
+        ("brt", "Italy"),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_BU: value}
+        )
+        assert result["description_placeholders"] == {"country": expected}
+
+
+@pytest.mark.asyncio
+async def test_the_country_step_still_routes_poland_past_the_credential_step(hass):
+    with patch(
+        "custom_components.dpd.config_flow.DpdPlSession.async_send_sms",
+        new=AsyncMock(return_value=None),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_BU: "dpd-pl"}
+        )
+    assert result["step_id"] == "phone"

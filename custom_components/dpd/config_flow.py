@@ -56,6 +56,11 @@ _DE_BU_VALUE = "DPD-DE"
 _PL_BU_VALUE = "DPD-PL"
 _AT_BU_VALUE = "DPD-AT"
 
+# BU value -> English display name, for naming the chosen country back to the
+# user on the credential step. The dropdown itself is translated by HA from
+# ``selector.bu.options``; this is the fallback those translations key off.
+_COUNTRY_LABELS = {option["value"]: option["label"] for option in COUNTRY_OPTIONS}
+
 def _unique_id(country: str, bu: str, email: str) -> str:
     """Build an entry's unique ID for the account it belongs to.
 
@@ -103,14 +108,13 @@ _FILTER_AMOUNT_SELECTOR = selector.NumberSelector(
 _COUNTRY_SCHEMA = vol.Schema(
     {vol.Required(CONF_BU): _BU_SELECTOR}, extra=vol.ALLOW_EXTRA
 )
+# The country is chosen on its own step and is not asked again here: the
+# credential step names it in its description instead. It used to repeat the
+# dropdown, whose value was then discarded in favour of the first answer.
 _USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_EMAIL): str,
         vol.Required(CONF_PASSWORD): str,
-        # No default: the list now includes Germany's wholly separate
-        # backend, so silently pre-selecting NL risked a DE account's
-        # credentials being validated against the wrong backend.
-        vol.Required(CONF_BU): _BU_SELECTOR,
     }
 )
 
@@ -151,6 +155,33 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         self._phone: str = ""
         self._pl_refresh_token: str = ""
 
+    def _apply_country_selection(self, selected: str) -> None:
+        """Route one BU dropdown value to the country it belongs to.
+
+        Shared by the country step and the credential step, so re-picking on
+        the second form genuinely takes effect instead of being discarded in
+        favour of the first answer.
+        """
+        if selected == _DE_BU_VALUE:
+            self._country = COUNTRY_DE.upper()
+        elif selected == _PL_BU_VALUE:
+            self._country = COUNTRY_PL.upper()
+        elif selected == _AT_BU_VALUE:
+            self._country = COUNTRY_AT.upper()
+        else:
+            self._country, self._bu = COUNTRY_GENERAL.upper(), selected
+
+    def _selected_country_label(self) -> str:
+        """Name the chosen country, so the credential step can show it back."""
+        for country, value in (
+            (COUNTRY_DE, _DE_BU_VALUE),
+            (COUNTRY_PL, _PL_BU_VALUE),
+            (COUNTRY_AT, _AT_BU_VALUE),
+        ):
+            if self._country == country.upper():
+                return _COUNTRY_LABELS.get(value, value)
+        return _COUNTRY_LABELS.get(self._bu, self._bu)
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> DpdOptionsFlowHandler:
@@ -189,16 +220,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         instead of asking "which backend" as a question of its own.
         """
         if user_input is not None:
-            selected = user_input[CONF_BU].upper()
-            if selected == _DE_BU_VALUE:
-                self._country = COUNTRY_DE.upper()
-            elif selected == _PL_BU_VALUE:
-                self._country = COUNTRY_PL.upper()
+            self._apply_country_selection(user_input[CONF_BU].upper())
+            if self._country == COUNTRY_PL.upper():
                 return await self.async_step_phone()
-            elif selected == _AT_BU_VALUE:
-                self._country = COUNTRY_AT.upper()
-            else:
-                self._country, self._bu = COUNTRY_GENERAL.upper(), selected
             # Kept solely for migration-compatible programmatic callers that
             # supplied the old combined form. The UI schema renders country
             # only, so users always see the country-first flow.
@@ -231,7 +255,12 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 self._email, self._password, self._de_hardware_id = email, password, hardware_id
                 return await self.async_step_delivered()
-        return self.async_show_form(step_id="credentials", data_schema=_USER_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="credentials",
+            data_schema=_USER_SCHEMA,
+            errors=errors,
+            description_placeholders={"country": self._selected_country_label()},
+        )
 
     async def async_step_phone(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Send one SMS to the supplied Polish mobile number."""

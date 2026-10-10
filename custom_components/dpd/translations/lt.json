@@ -32,7 +32,8 @@
         "data": {
           "email": "El. paštas",
           "password": "Slaptažodis"
-        }
+        },
+        "description": "Prisijunkite naudodami savo DPD {country} paskyrą."
       },
       "phone": {
         "title": "DPD Polska",

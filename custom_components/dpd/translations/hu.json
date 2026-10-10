@@ -32,7 +32,8 @@
         "data": {
           "email": "E-mail",
           "password": "Jelszó"
-        }
+        },
+        "description": "Jelentkezzen be a DPD {country} fiókjával."
       },
       "phone": {
         "title": "DPD Polska",

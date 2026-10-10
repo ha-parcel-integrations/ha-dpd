@@ -32,7 +32,8 @@
         "data": {
           "email": "E-pošta",
           "password": "Lozinka"
-        }
+        },
+        "description": "Prijavite se svojim DPD {country} računom."
       },
       "phone": {
         "title": "DPD Polska",

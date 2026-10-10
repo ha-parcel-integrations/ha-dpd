@@ -32,7 +32,8 @@
         "data": {
           "email": "E-Mail-Adresse",
           "password": "Passwort"
-        }
+        },
+        "description": "Melde dich mit deinem DPD {country} Konto an."
       },
       "phone": {
         "title": "DPD Polska",
