@@ -63,9 +63,17 @@ KNOWN_CAPABILITIES = frozenset(
 #             those are inferred-magnitude guesses, not a confirmed API
 #             contract) but NOT url: DE exposes no tracking-page link, so
 #             normalize_parcel_de's "url" is always None.
+#   Austria — countries/at/__init__.py's normalize_parcel_at. The mydpd.at
+#             inbox carries no weight or dimensions at all, and like DE has
+#             no per-parcel tracking page, so no url either. Opt-in history
+#             is confirmed on a real parcel; delivery_window (from
+#             lifecycle.predict) and pickup_point (from a "shop" history
+#             entry) are implemented but unseen, so they sit in
+#             PENDING_CAPABILITIES_BY_VARIANT below.
 CAPABILITIES_BY_VARIANT = {
     "Germany": frozenset({"weight", "dimensions", "delivery_window", "pickup_point", "history"}),
     "Poland": frozenset({"delivery_window", "history"}),
+    "Austria": frozenset({"history"}),
     "Other": frozenset(
         {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
     ),
@@ -75,6 +83,10 @@ CAPABILITIES_BY_VARIANT = {
 # Move a field into the declaration above once a real parcel shows it.
 PENDING_CAPABILITIES_BY_VARIANT = {
     "Poland": frozenset({"pickup_point"}),
+    # Implemented but unseen on a real Austrian parcel: the window is only
+    # populated at the out-for-delivery stage, and the pickup point comes
+    # from a ParcelShop scan. Move them above once a parcel shows either.
+    "Austria": frozenset({"delivery_window", "pickup_point"}),
 }
 
 KEYCLOAK_TOKEN_URL = (
@@ -153,6 +165,7 @@ DEFAULT_BU = "DPD-NL"
 COUNTRY_OPTIONS = BUSINESS_UNITS + [
     {"value": "DPD-DE", "label": "Germany"},
     {"value": "DPD-PL", "label": "Poland"},
+    {"value": "DPD-AT", "label": "Austria"},
 ]
 
 # Poland uses a separate public OAuth client and receiver-inbox API. It is
@@ -162,6 +175,20 @@ DPD_PL_SSO_URL = "https://dpdsso.dpd.com.pl"
 DPD_PL_API_URL = "https://mobapp.dpd.com.pl"
 DPD_PL_CLIENT_ID = "DPDClientMDU"
 DPD_PL_REDIRECT_URI = "https://dpdsso.dpd.com.pl/landing-page?messageType=activeAccount"
+# DPD Austria — a separate stack from both the shared myDPD backend and
+# Germany's. countries/at/session.py is the only module that sends these.
+DPD_AT_BASE_URL = "https://www.mydpd.at"
+DPD_AT_API_URL = f"{DPD_AT_BASE_URL}/jws.php"
+# Austria's own app is a WebView around this same site, so this is what the
+# portal is reached with.
+DPD_AT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+)
+DPD_AT_DIR_INCOMING = "inc"
+DPD_AT_DIR_SENT = "send"
+DPD_AT_DIR_RETURNS = "ret"
+
 CONF_PHONE = "phone"
 CONF_SMS_CODE = "sms_code"
 CONF_REFRESH_TOKEN = "refresh_token"
@@ -292,6 +319,7 @@ CONF_COUNTRY = "country"
 COUNTRY_GENERAL = "general"
 COUNTRY_DE = "de"
 COUNTRY_PL = "pl"
+COUNTRY_AT = "at"
 DEFAULT_COUNTRY = COUNTRY_GENERAL
 
 # Persisted in entry.data (not entry.options) so a DE hub keeps the same

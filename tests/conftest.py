@@ -20,7 +20,8 @@ def reset_one_shot_warnings():
     makes them leak across tests, so whether a warning fires would otherwise
     depend on test order.
     """
-    from custom_components.dpd.countries import de, general
+    from custom_components.dpd.countries import at, de, general
+    from custom_components.dpd.countries.at import session as at_session
     from custom_components.dpd.countries.de import session
 
     de._unmapped_status_ids_logged.clear()
@@ -37,6 +38,13 @@ def reset_one_shot_warnings():
     session._clock_skew_warned = False
     general._unknown_descriptions_logged.clear()
     general._unknown_event_types_logged.clear()
+    at._SEEN_STAGES.clear()
+    at._SEEN_STATE_NAMES.clear()
+    at_session._REFUSALS_LOGGED.clear()
+    at._SEEN_INFO_TYPES.clear()
+    at._SEEN_REASONS.clear()
+    at._BAD_TIMESTAMPS.clear()
+    at._UNEXPECTED_SHAPES.clear()
     yield
 
 

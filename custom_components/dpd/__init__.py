@@ -18,6 +18,7 @@ from .const import (
     CONF_COUNTRY,
     CONF_DE_HARDWARE_ID,
     CONF_REFRESH_TOKEN,
+    COUNTRY_AT,
     COUNTRY_DE,
     COUNTRY_GENERAL,
     COUNTRY_PL,
@@ -25,6 +26,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import DpdCoordinator
+from .countries.at.session import DpdAtSession
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
 
@@ -39,6 +41,7 @@ class DpdData:
     coordinator: DpdCoordinator
     de_session: DpdDeSession | None = None
     pl_session: DpdPlSession | None = None
+    at_session: DpdAtSession | None = None
 
 
 type DpdConfigEntry = ConfigEntry[DpdData]
@@ -52,6 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     client: DpdApiClient | None = None
     de_session: DpdDeSession | None = None
     pl_session: DpdPlSession | None = None
+    at_session: DpdAtSession | None = None
 
     try:
         if country == COUNTRY_DE.upper():
@@ -72,6 +76,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
                 session, entry.data.get(CONF_REFRESH_TOKEN), _store_refresh_token
             )
             await pl_session.async_login()
+        elif country == COUNTRY_AT.upper():
+            at_session = DpdAtSession(
+                session,
+                entry.data[CONF_EMAIL],
+                entry.data[CONF_PASSWORD],
+            )
+            await at_session.async_login()
         else:
             client = DpdApiClient(
                 entry.data[CONF_EMAIL],
@@ -101,7 +112,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     except aiohttp.ClientError as exc:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc
 
-    coordinator = DpdCoordinator(hass, client, entry, de_session=de_session, pl_session=pl_session)
+    coordinator = DpdCoordinator(
+        hass,
+        client,
+        entry,
+        de_session=de_session,
+        pl_session=pl_session,
+        at_session=at_session,
+    )
 
     # Fetch initial data here, before forwarding to platforms. Raising
     # ConfigEntryNotReady from a forwarded platform is too late for HA to catch
@@ -113,7 +131,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     # The PL provider can rotate refresh tokens during the first poll.
     if pl_session and pl_session.refresh_token != entry.data.get(CONF_REFRESH_TOKEN):
         hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_REFRESH_TOKEN: pl_session.refresh_token})
-    entry.runtime_data = DpdData(client=client, coordinator=coordinator, de_session=de_session, pl_session=pl_session)
+    entry.runtime_data = DpdData(
+        client=client,
+        coordinator=coordinator,
+        de_session=de_session,
+        pl_session=pl_session,
+        at_session=at_session,
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

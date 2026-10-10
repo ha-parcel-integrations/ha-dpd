@@ -1031,6 +1031,17 @@ def test_capabilities_are_known_values():
         assert fields <= KNOWN_CAPABILITIES, variant
 
 
+def test_pending_capabilities_are_known_values_for_known_variants():
+    """Same docs-site risk as the declaration above, same guard."""
+    from custom_components.dpd.const import PENDING_CAPABILITIES_BY_VARIANT
+
+    for variant, fields in PENDING_CAPABILITIES_BY_VARIANT.items():
+        assert variant in CAPABILITIES_BY_VARIANT, variant
+        assert fields <= KNOWN_CAPABILITIES, variant
+        # A field cannot be both populated and awaiting data.
+        assert not (fields & CAPABILITIES_BY_VARIANT[variant]), variant
+
+
 def test_capabilities_match_normalize_parcel():
     """CAPABILITIES_BY_VARIANT["Other"] must agree with
     test_normalize_returns_carrier_agnostic_keys and
@@ -2255,3 +2266,135 @@ async def test_device_id_none_when_no_device(hass):
 
     coordinator = DpdCoordinator(hass, MagicMock(), entry)
     assert coordinator._device_id() is None
+
+
+# ---------------------------------------------------------------------------
+# DpdCoordinator._async_fetch_at — DPD Austria's mydpd.at inbox
+# ---------------------------------------------------------------------------
+
+
+def _at_parcel(parcelno: str, stage: int = 2, direction: str = "inc") -> dict:
+    return {
+        "parcelno": parcelno,
+        "type": direction,
+        "verified": True,
+        "lifecycle": {
+            "state": stage,
+            "state_info": "Paket ist unterwegs",
+            "entries": [
+                {
+                    "datetime": "20261009140500",
+                    "state": {"name": "ON_THE_WAY", "text": "Paket unterwegs"},
+                }
+            ],
+        },
+    }
+
+
+def _at_inbox(inc=None, send=None, ret=None) -> dict:
+    return {
+        "inc": inc or [],
+        "send": send or [],
+        "ret": ret or [],
+    }
+
+
+async def test_coordinator_at_splits_active_and_delivered(hass):
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(
+        return_value=_at_inbox(inc=[_at_parcel("A"), _at_parcel("B", stage=5)])
+    )
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry("days", 30), at_session=at_session
+    )
+
+    result = await coordinator._async_update_data()
+
+    assert [p["barcode"] for p in result["incoming_active"]] == ["A"]
+    assert [p["barcode"] for p in result["incoming_delivered"]] == ["B"]
+
+
+async def test_coordinator_at_fills_outgoing_from_sent_and_returns(hass):
+    """Unlike Poland, Austria's one inbox call carries sent parcels too."""
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(
+        return_value=_at_inbox(
+            inc=[_at_parcel("A")],
+            send=[_at_parcel("S", direction="send")],
+            ret=[_at_parcel("R", stage=5, direction="ret")],
+        )
+    )
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry("days", 30), at_session=at_session
+    )
+
+    result = await coordinator._async_update_data()
+
+    assert [p["barcode"] for p in result["incoming_active"]] == ["A"]
+    assert [p["barcode"] for p in result["outgoing_active"]] == ["S"]
+    assert [p["barcode"] for p in result["outgoing_delivered"]] == ["R"]
+
+
+async def test_coordinator_at_needs_only_one_call(hass):
+    """The lifecycle is embedded per parcel, so there is no detail fan-out."""
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(return_value=_at_inbox(inc=[_at_parcel("A")]))
+    at_session.async_get_lifecycle = AsyncMock(return_value={})
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), at_session=at_session)
+
+    await coordinator._async_update_data()
+
+    at_session.async_get_parcels.assert_awaited_once()
+    at_session.async_get_lifecycle.assert_not_awaited()
+
+
+async def test_coordinator_at_includes_history_when_the_option_is_on(hass):
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(return_value=_at_inbox(inc=[_at_parcel("A")]))
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry(include_history=True), at_session=at_session
+    )
+
+    result = await coordinator._async_update_data()
+
+    assert result["incoming_active"][0]["history"] == [
+        {
+            "timestamp": "2026-10-09T14:05:00+02:00",
+            "status": ParcelStatus.IN_TRANSIT,
+            "raw_status": "ON_THE_WAY",
+        }
+    ]
+
+
+async def test_coordinator_at_auth_error_requests_reauth(hass):
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(side_effect=DpdAuthError("nope"))
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), at_session=at_session)
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_coordinator_at_api_error_is_a_transient_update_failure(hass):
+    """A 429 must retry, not push the user into reauth."""
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(side_effect=DpdApiError(429))
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), at_session=at_session)
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_coordinator_at_empty_inbox_is_not_an_error(hass):
+    at_session = MagicMock()
+    at_session.async_get_parcels = AsyncMock(return_value=_at_inbox())
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), at_session=at_session)
+
+    result = await coordinator._async_update_data()
+
+    assert result["incoming_active"] == []
+    assert result["outgoing_active"] == []

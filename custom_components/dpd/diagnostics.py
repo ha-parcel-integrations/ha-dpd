@@ -61,6 +61,40 @@ TO_REDACT = {
     "Name",
     "Company",
     "ReceiverName",
+    # DPD Austria (mydpd.at) field names. Its spellings match none of the
+    # entries above — ``parcelno`` is not ``parcelNumber``/``ParcelNo``, and
+    # the address block is ``*_addr_*``, not ``postalCode``/``ZipCode`` — so
+    # every one has to be listed. Taken from a confirmed payload, not from
+    # the reconstructed names: an earlier guess at ``plz``/``city`` matched
+    # nothing and left the whole address block in clear text.
+    "parcelno",
+    "parcel_name",
+    "gkz",
+    "cusr_id",
+    "cincoming_id",
+    "verifiedPlz",
+    "statusMessage",
+    # Either party's name, company and address. Both directions matter: the
+    # inbox carries sent parcels too.
+    "consignee_name1",
+    "consignee_company_name",
+    "consignee_addr_country",
+    "consignee_addr_postcode",
+    "consignee_addr_city",
+    "consignee_addr_street",
+    "sender_name1",
+    "sender_company_name",
+    "sender_addr_country",
+    "sender_addr_postcode",
+    "sender_addr_city",
+    "sender_addr_street",
+    "sender_cust_no",
+    # Delivery and last-scan coordinates, and the typed detail payload on a
+    # scan entry — which carries a neighbour's or the recipient's name for
+    # ``pers``/``pers2``/``aviso``, and a ParcelShop's address for ``shop``.
+    "dstCoords",
+    "lstCoords",
+    "infoData",
 }
 
 

@@ -143,3 +143,84 @@ async def test_diagnostics_polling_handles_suspended_interval():
 def test_to_redact_includes_pii_keys():
     for key in ("email", "password", "parcelNumber", "senderName", "postalCode"):
         assert key in TO_REDACT
+
+
+def test_to_redact_covers_every_austrian_pii_key():
+    """Austria's spellings match no existing entry, so each needs listing.
+
+    Regression: an earlier guess at ``plz``/``city`` from the reconstructed
+    field names matched nothing in the real payload, leaving the whole
+    address block, the coordinates and the postcode in clear text.
+    """
+    for key in (
+        "consignee_name1",
+        "consignee_addr_postcode",
+        "consignee_addr_city",
+        "consignee_addr_street",
+        "sender_name1",
+        "sender_addr_postcode",
+        "sender_addr_city",
+        "sender_addr_street",
+        "verifiedPlz",
+        "parcelno",
+        "dstCoords",
+        "lstCoords",
+        "infoData",
+    ):
+        assert key in TO_REDACT, key
+
+
+def test_no_austrian_pii_survives_redaction():
+    """Walk a realistic record and assert nothing identifying comes through."""
+    from homeassistant.helpers.redact import async_redact_data
+
+    raw = {
+        "parcelno": "06215258772803",
+        "cusr_id": "1116037",
+        "sender_name1": "Hans Muster",
+        "sender_addr_postcode": "1010",
+        "sender_addr_city": "Wien",
+        "sender_addr_street": "Teststrasse 1",
+        "consignee_name1": "Recipient Name",
+        "consignee_addr_postcode": "8010",
+        "consignee_addr_city": "Graz",
+        "consignee_addr_street": "Hauptplatz 2",
+        "verifiedPlz": "8010",
+        "dstCoords": [48.2, 16.3],
+        "state": {"statusMessage": "irrelevant"},
+        "lifecycle": {
+            "entries": [
+                {"state": {"infoType": "pers", "infoData": "NEIGHBOUR NAME"}}
+            ]
+        },
+    }
+    secrets = (
+        "Muster",
+        "Recipient",
+        "Neighbour",
+        "NEIGHBOUR",
+        "Wien",
+        "Graz",
+        "Hauptplatz",
+        "Teststrasse",
+        "8010",
+        "1010",
+        "06215258772803",
+    )
+
+    leaked: list[str] = []
+
+    def walk(value, path=""):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                walk(item, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                walk(item, f"{path}[{index}]")
+        elif isinstance(value, str) and any(s in value for s in secrets):
+            leaked.append(path)
+        elif isinstance(value, float):
+            leaked.append(path)
+
+    walk(async_redact_data(raw, TO_REDACT))
+    assert leaked == []

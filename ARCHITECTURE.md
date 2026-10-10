@@ -6,9 +6,9 @@ trail behind it. API mechanics — endpoints, parameters, status vocabularies �
 live in the private `carrier-research/dpd/` and are never copied here.
 
 DPD is the largest integration in the suite because it is not one backend but
-three: a shared myDPD/Keycloak stack serving the Netherlands and 15 more
-business units, a wholly separate SOAP stack for Germany, and a separate OAuth
-stack for Poland.
+four: a shared myDPD/Keycloak stack serving the Netherlands and 15 more
+business units, a wholly separate SOAP stack for Germany, a separate OAuth
+stack for Poland, and the `mydpd.at` portal API for Austria.
 
 ## Project layout
 
@@ -29,13 +29,13 @@ custom_components/dpd/
 └── countries/
     ├── general/         status map + normalize_parcel for the myDPD path
     ├── de/              Germany: SOAP session + status derivation + normalize
-    └── pl/              Poland: OAuth session + status derivation + normalize
+    ├── pl/              Poland: OAuth session + status derivation + normalize
+    └── at/              Austria: portal JWT session + stage derivation + normalize
 ```
 
-`countries/general/`, `countries/de/` and `countries/pl/` each own a
-`normalize_parcel*` and a status mapper. `parcels.py` keeps only what all three
-share, and stays free of I/O and HA objects so it is unit-testable without Home
-Assistant.
+Each `countries/` package owns a `normalize_parcel*` and a status mapper.
+`parcels.py` keeps only what they all share, and stays free of I/O and HA
+objects so it is unit-testable without Home Assistant.
 
 ## Transports and dispatch
 
@@ -47,7 +47,7 @@ elif self._pl_session is not None:   ->  _async_fetch_pl()
 else:                                ->  the general/BU path via DpdApiClient
 ```
 
-`__init__.py` decides which of the three to construct from `CONF_COUNTRY`
+`__init__.py` decides which of the four to construct from `CONF_COUNTRY`
 (`COUNTRY_DE`, `COUNTRY_PL`, else the general path) and
 passes exactly one. Everything past that dispatch — sorting, delivered
 filtering, event firing, the dynamic-polling recompute, entity population — is
@@ -59,6 +59,7 @@ fetch path, and adding one does not change the shared code.
 | General (NL + BUs, UK) | `DpdApiClient` (`api.py`) | Keycloak + JSON REST | `_DESCRIPTION_MAP` | `normalize_parcel` |
 | Germany | `DpdDeSession` (`countries/de/session.py`) | ASP.NET SOAP | `map_parcel_status_de` | `normalize_parcel_de` |
 | Poland | `DpdPlSession` (`countries/pl/session.py`) | public-client OAuth + JSON | `map_parcel_status_pl` | `normalize_parcel_pl` |
+| Austria | `DpdAtSession` (`countries/at/session.py`) | portal JSON-RPC + Bearer JWT | `map_parcel_status_at` | `normalize_parcel_at` |
 
 ## Key design decisions
 
@@ -247,21 +248,84 @@ implementation, not this suite's own consented list/detail poll. Treat them as
 provisional, and **ship PL as a pre-release (`bN`), not a normal minor bump,
 until that capture happens.**
 
+### Austria: a separate portal transport, and the only derived status scale
+
+`countries/at/session.py` owns a session against Austria's consumer portal,
+authenticated by a bearer token from the user's own email/password login. It is
+unlike the other transports in several ways:
+
+- **No credential of any kind ships with the integration.** Austria's Android
+  app is a WebView wrapper around the same website and contains no API, so
+  there is no partner secret and no request signing — the whole class of
+  concern that gates Germany simply does not arise.
+- **There is no token-refresh route.** An expired JWT is recovered by logging
+  in again, exactly once per call; a second rejection is a real credential
+  problem and goes to reauth. The entry persists the credentials, never the
+  JWT.
+- **A rejection can arrive with a success status code**, so the body decides
+  the outcome. Only a real credential rejection may reach reauth: the host's
+  bot protection answers with its own status code, and treating that as an
+  auth failure would send a user with working credentials into reauth.
+- **The success flag does not sit at a fixed depth**, so `_unwrap` descends
+  when it has to. Reading it at one depth makes login succeed while every poll
+  fails — the live bug of 2026-10-10.
+- **The session token rotates per response**, so `_unwrap` owns it rather than
+  the login path. Holding the login token would expire the session. It stays in
+  memory; the entry persists credentials.
+
+Exact request and response shapes, the status vocabulary and the scan-stamp
+format live in `carrier-research/dpd/`, never here.
+
+**One call fills all four buckets.** The inbox call returns parcels keyed by
+direction, with a lifecycle already embedded per parcel: incoming fills the
+incoming buckets, sent and returns the outgoing ones. So unlike Poland there
+is no empty outgoing list, and no per-parcel enrichment fan-out.
+
+**Status comes from two vocabularies, and the stable one wins.** Each history
+entry carries a language-independent status identifier beside the numeric
+stage, so `map_parcel_status_at` prefers it and history entries carry real
+mapped statuses rather than `unknown`. Where it does not map, the stage
+speaks:
+The stage is monotonic over a small closed range: the portal renders it as a
+five-dot progress bar at `assets/icons/status_<state>.svg`, and that asset
+exists for 0-5 only. A lookup table keyed on six integers would discard the
+two facts a stage cannot express, so `map_parcel_status_at` resolves in a
+deliberate order — terminal first, so a first-attempt failure left in history
+can never drag a delivered parcel back to `problem`; then the failure reason
+and the carrier's own return flags, which are trusted over the inbox tab a
+parcel sits in; then a pickup point, which outranks the stage because a parcel
+waiting at a ParcelShop is `at_pickup_point` whatever its stage reads; and only
+then the stage itself. One stage value has never been seen on a real parcel; it
+falls to `in_transit` and logs once, as does an unmapped status name. That pair
+is what extends the mapping.
+
+The portal's status *text* arrives already translated for the account's
+language. It is `raw_status` only and never a mapping key — the same rule
+Germany's `StatusText` follows.
+
+**As of 2026-10-10 the transport and the payload are both wire-confirmed**, by
+an empty-inbox poll and then one real delivered parcel. That parcel corrected
+two silent failures — a misread scan-stamp format, and a per-entry status
+identifier the research had concluded did not exist. What is still unseen is a
+set of *cases* rather than a shape (stage 1, an active parcel, a pickup point,
+a failure, a return), so Austria ships as a pre-release.
+
 ### Capabilities are per variant, not flat
 
-`const.py` carries `CAPABILITIES_BY_VARIANT` with three keys — `Germany`,
-`Poland`, `Other` — rather than a single flat `CAPABILITIES`, because the three
-transports genuinely populate different fields:
+`const.py` carries `CAPABILITIES_BY_VARIANT` with four keys — `Germany`,
+`Poland`, `Austria`, `Other` — rather than a single flat `CAPABILITIES`,
+because the transports genuinely populate different fields:
 
 | Variant | Never populated | Notes |
 |---|---|---|
 | `Other` | — | the full set |
 | `Germany` | `url` | DE exposes no tracking-page link; does populate weight, dimensions, delivery_window, pickup_point |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
+| `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so
-**keep it in lockstep with any change to any of the three normalize
+**keep it in lockstep with any change to any of the normalize
 functions** — a wrong entry here is a wrong claim on the website.
 
 ### Status and pickup point
@@ -311,7 +375,7 @@ never read for one.
 The coordinator's initial interval is merely a starting point — the hot
 cadence, so the first poll after setup happens promptly — and
 `_async_update_data` recomputes it every refresh via `_next_update_interval`,
-at the one shared point past the transport dispatch, so all three transports
+at the one shared point past the transport dispatch, so all four transports
 get the same cadence logic:
 
 - **Quiet window** (`QUIET_WINDOW_START_HOUR` 0 → `QUIET_WINDOW_END_HOUR` 6):

@@ -20,6 +20,9 @@ from .const import (
     CONF_INCLUDE_HISTORY,
     DEFAULT_INCLUDE_HISTORY,
     DOMAIN,
+    DPD_AT_DIR_INCOMING,
+    DPD_AT_DIR_RETURNS,
+    DPD_AT_DIR_SENT,
     HOT_INTERVAL_MINUTES,
     HOT_LOOKAHEAD_HOURS,
     MID_INTERVAL_MINUTES,
@@ -28,6 +31,8 @@ from .const import (
     STAGGER_MINUTES,
     ParcelStatus,
 )
+from .countries.at import normalize_parcel_at
+from .countries.at.session import DpdAtSession
 from .countries.de import async_get_all_parcels_de
 from .countries.de.session import DpdDeSession
 from .countries.pl import normalize_parcel_pl
@@ -119,7 +124,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     """Coordinator that polls the DPD parcels API on a dynamic schedule.
 
     Dispatches the fetch to the general/NL+BU backend, DPD Germany's SOAP
-    backend or DPD Poland's OAuth backend, based on which session was passed
+    backend, DPD Poland's OAuth backend or DPD Austria's mydpd.at portal,
+    based on which session was passed
     — everything past that one dispatch point (sorting, filtering,
     event-firing, the polling recompute) is shared.
     """
@@ -132,6 +138,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         *,
         de_session: DpdDeSession | None = None,
         pl_session: DpdPlSession | None = None,
+        at_session: DpdAtSession | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -152,6 +159,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._client = client
         self._de_session = de_session
         self._pl_session = pl_session
+        self._at_session = at_session
         # barcode -> last seen ParcelStatus. ``None`` on the first refresh so
         # we can suppress events for parcels that already existed when the
         # integration started (we do not know their previous state).
@@ -223,6 +231,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             incoming_all, outgoing_all = await self._async_fetch_de()
         elif self._pl_session is not None:
             incoming_all, outgoing_all = await self._async_fetch_pl()
+        elif self._at_session is not None:
+            incoming_all, outgoing_all = await self._async_fetch_at()
         else:
             incoming_all, outgoing_all = await self._async_fetch_general()
 
@@ -463,6 +473,61 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         incoming_active = sort_parcels_by_ts([p for p in normalized if not p["delivered"]], "planned_from")
         incoming_delivered = sort_parcels_by_ts(_apply_delivered_filter_canonical([p for p in normalized if p["delivered"]], self.config_entry), "delivered_at", descending=True)
         return incoming_active + incoming_delivered, []
+
+    async def _async_fetch_at(self) -> tuple[list[dict], list[dict]]:
+        """Fetch + normalize DPD Austria's mydpd.at inbox.
+
+        One ``parcel/loadList`` call carries all three directions with a
+        lifecycle already embedded per parcel, so there is no enrichment
+        fan-out here. ``inc`` becomes the incoming buckets; ``send`` and
+        ``ret`` together become the outgoing ones, matching how the general
+        backend treats sent parcels and returns.
+        """
+        assert self._at_session is not None
+        try:
+            inbox = await self._at_session.async_get_parcels()
+        except DpdAuthError as err:
+            _LOGGER.error("DPD Austria authentication failed: %s", err)
+            raise ConfigEntryAuthFailed("DPD Austria authentication failed") from err
+        except DpdApiError as err:
+            _LOGGER.warning("DPD Austria endpoint unreachable: %s", err)
+            raise UpdateFailed(f"DPD Austria error: {err}") from err
+
+        include_history = self._include_history
+        incoming = [
+            normalize_parcel_at(parcel, include_history=include_history)
+            for parcel in inbox.get(DPD_AT_DIR_INCOMING, [])
+        ]
+        outgoing = [
+            normalize_parcel_at(parcel, include_history=include_history)
+            for direction in (DPD_AT_DIR_SENT, DPD_AT_DIR_RETURNS)
+            for parcel in inbox.get(direction, [])
+        ]
+
+        incoming_active = sort_parcels_by_ts(
+            [p for p in incoming if not p["delivered"]], "planned_from"
+        )
+        incoming_delivered = sort_parcels_by_ts(
+            _apply_delivered_filter_canonical(
+                [p for p in incoming if p["delivered"]], self.config_entry
+            ),
+            "delivered_at",
+            descending=True,
+        )
+        outgoing_active = sort_parcels_by_ts(
+            [p for p in outgoing if not p["delivered"]], "planned_from"
+        )
+        outgoing_delivered = sort_parcels_by_ts(
+            _apply_delivered_filter_canonical(
+                [p for p in outgoing if p["delivered"]], self.config_entry
+            ),
+            "delivered_at",
+            descending=True,
+        )
+        return (
+            incoming_active + incoming_delivered,
+            outgoing_active + outgoing_delivered,
+        )
 
     def _fire_change_events(self, parcels: list[dict]) -> None:
         """Fire events for newly-registered parcels and parcel transitions.

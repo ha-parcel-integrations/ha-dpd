@@ -32,6 +32,7 @@ from .const import (
     CONF_PHONE,
     CONF_REFRESH_TOKEN,
     CONF_SMS_CODE,
+    COUNTRY_AT,
     COUNTRY_DE,
     COUNTRY_GENERAL,
     COUNTRY_OPTIONS,
@@ -43,6 +44,7 @@ from .const import (
     DOMAIN,
     NEW_COUNTRY_ISSUE_URL,
 )
+from .countries.at.session import DpdAtSession
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
 
@@ -52,6 +54,21 @@ _LOGGER = logging.getLogger(__name__)
 # backend — never added to BUSINESS_UNITS itself (see COUNTRY_OPTIONS).
 _DE_BU_VALUE = "DPD-DE"
 _PL_BU_VALUE = "DPD-PL"
+_AT_BU_VALUE = "DPD-AT"
+
+def _unique_id(country: str, bu: str, email: str) -> str:
+    """Build an entry's unique ID for the account it belongs to.
+
+    The separate-stack countries are prefixed by country because the same
+    address can hold an account on more than one DPD backend; the shared
+    backend stays keyed by business unit, as it always was.
+    """
+    if country == COUNTRY_DE.upper():
+        return f"DE:{email}"
+    if country == COUNTRY_AT.upper():
+        return f"AT:{email}"
+    return f"{bu}:{email}"
+
 
 _BU_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
@@ -156,6 +173,11 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         de_session = DpdDeSession(session, email, password, hardware_id)
         await de_session.async_login()
 
+    async def _validate_at_credentials(self, email: str, password: str) -> None:
+        """Validate credentials against the live mydpd.at portal login."""
+        session = async_get_clientsession(self.hass)
+        await DpdAtSession(session, email, password).async_login()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -173,6 +195,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             elif selected == _PL_BU_VALUE:
                 self._country = COUNTRY_PL.upper()
                 return await self.async_step_phone()
+            elif selected == _AT_BU_VALUE:
+                self._country = COUNTRY_AT.upper()
             else:
                 self._country, self._bu = COUNTRY_GENERAL.upper(), selected
             # Kept solely for migration-compatible programmatic callers that
@@ -186,7 +210,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user", data_schema=_COUNTRY_SCHEMA, description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL})
 
     async def async_step_credentials(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Validate the email/password route used by general and German DPD."""
+        """Validate the email/password route used by general, German and Austrian DPD."""
         errors: dict[str, str] = {}
         if user_input is not None:
             email, password = user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
@@ -194,6 +218,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 if self._country == COUNTRY_DE.upper():
                     await self._validate_de_credentials(email, password, hardware_id)
+                elif self._country == COUNTRY_AT.upper():
+                    await self._validate_at_credentials(email, password)
                 else:
                     await self._validate_general_credentials(email, password, self._bu)
             except DpdAuthError:
@@ -201,7 +227,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(f"DE:{email}" if self._country == COUNTRY_DE.upper() else f"{self._bu}:{email}")
+                await self.async_set_unique_id(_unique_id(self._country, self._bu, email))
                 self._abort_if_unique_id_configured()
                 self._email, self._password, self._de_hardware_id = email, password, hardware_id
                 return await self.async_step_delivered()
@@ -277,6 +303,10 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 data[CONF_BU] = self._bu
             elif self._country == COUNTRY_DE.upper():
                 data[CONF_DE_HARDWARE_ID] = self._de_hardware_id
+            elif self._country == COUNTRY_AT.upper():
+                # Austria needs nothing beyond the credentials already in
+                # ``data``: no BU, no device identity, no persisted token.
+                pass
             else:
                 data[CONF_PHONE] = self._phone
                 data[CONF_REFRESH_TOKEN] = self._pl_refresh_token
@@ -325,6 +355,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                         uuid4()
                     )
                     await self._validate_de_credentials(email, password, hardware_id)
+                elif country == COUNTRY_AT.upper():
+                    await self._validate_at_credentials(email, password)
                 else:
                     await self._validate_general_credentials(email, password, bu)
             except DpdAuthError:
@@ -335,9 +367,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 # Guard against re-authenticating with a *different* DPD
                 # account — the entry (and all its entities) belong to the
                 # original account's unique_id.
-                unique_id = (
-                    f"DE:{email}" if country == COUNTRY_DE.upper() else f"{bu}:{email}"
-                )
+                unique_id = _unique_id(country, bu, email)
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_mismatch()
                 return self.async_update_reload_and_abort(

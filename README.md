@@ -40,7 +40,7 @@ this integration answers to both names there.
 - Configurable delivered-parcels sensor (last N days, or N most recent)
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
-- Country (business unit) selection during setup — Netherlands plus 14 other countries on DPD's shared myDPD backend (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia), the UK (riding on the same NL backend), and Germany (its own separate backend), more to come
+- Country (business unit) selection during setup — Netherlands plus 14 other countries on DPD's shared myDPD backend (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia), the UK (riding on the same NL backend), and Germany, Poland and Austria (each its own separate backend), more to come
 - UI translated into the language of every supported country (plus English), including the country dropdown itself
 
 ## Requirements
@@ -69,7 +69,7 @@ Or click the button below to open it directly in HACS:
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **DPD**
-3. Pick your **country**, then enter its account credentials. Poland uses a mobile number and one SMS code; other countries use email and password.
+3. Pick your **country**, then enter its account credentials. Poland uses a mobile number and one SMS code; every other country, Austria included, uses email and password.
 4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
 5. Click **Submit**
 
@@ -77,12 +77,25 @@ Or click the button below to open it directly in HACS:
 
 | Field | Description |
 |---|---|
-| Country | Choose the country before entering credentials. Netherlands and the other shared-backend countries use a DPD account email and password. Germany uses its own backend. **Poland** uses a Polish nine-digit mobile number and a one-time SMS code; Home Assistant stores the refresh token only, never the SMS code. |
+| Country | Choose the country before entering credentials. Netherlands and the other shared-backend countries use a DPD account email and password. Germany and **Austria** each use their own backend, both with email and password. **Poland** uses a Polish nine-digit mobile number and a one-time SMS code; Home Assistant stores the refresh token only, never the SMS code. |
 
 For Poland, the phone field accepts the local nine-digit form as well as
 `+48`/`0048` prefixes (with spaces or dashes). It normalizes every accepted
 form to the nine digits expected by DPD Polska. The receiver inbox is read-only:
 outgoing parcels are not requested.
+
+For Austria, use the email address and password of your
+[mydpd.at](https://www.mydpd.at) account. **If you created that account with
+Google, Facebook or Apple sign-in, it has no password and cannot be used
+here** — set a password on the portal first, or use a different account. One
+poll reads incoming, sent and returned parcels together.
+
+> **Austria is a pre-release.** One real delivered parcel has been confirmed
+> end to end, but several cases have not been seen yet: an active parcel (so
+> the delivery window is unverified), a parcel waiting at a ParcelShop, a
+> failed delivery and a return. The integration logs a warning with a link
+> when it meets a status it cannot map — please report those; they are what
+> makes the mapping precise.
 
 ## Options
 

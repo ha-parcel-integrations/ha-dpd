@@ -15,6 +15,7 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
+    COUNTRY_AT,
     COUNTRY_DE,
     DEFAULT_BU,
     DOMAIN,
@@ -313,3 +314,103 @@ async def test_options_flow_schedules_reload(hass):
         await hass.async_block_till_done()
 
     assert mock_get.await_count > baseline
+
+
+# ---------------------------------------------------------------------------
+# DPD Austria — separate mydpd.at session, dispatched by CONF_COUNTRY
+# ---------------------------------------------------------------------------
+
+_AT_EMAIL = "user@example.at"
+_AT_ENTRY_DATA = {
+    CONF_EMAIL: _AT_EMAIL,
+    CONF_PASSWORD: "secret",
+    CONF_COUNTRY: COUNTRY_AT.upper(),
+}
+
+
+def _add_at_entry(hass):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"AT:{_AT_EMAIL}",
+        data=_AT_ENTRY_DATA,
+        options={
+            CONF_DELIVERED_FILTER_TYPE: "days",
+            CONF_DELIVERED_FILTER_AMOUNT: 7,
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_at_succeeds_and_stores_at_session(hass):
+    entry = _add_at_entry(hass)
+    with (
+        patch(
+            "custom_components.dpd.DpdAtSession.async_login",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "custom_components.dpd.countries.at.session.DpdAtSession.async_get_parcels",
+            new=AsyncMock(return_value={"inc": [], "send": [], "ret": []}),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert isinstance(entry.runtime_data, DpdData)
+    assert entry.runtime_data.client is None
+    assert entry.runtime_data.de_session is None
+    assert entry.runtime_data.pl_session is None
+    assert entry.runtime_data.at_session is not None
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_at_auth_failure_triggers_reauth(hass):
+    entry = _add_at_entry(hass)
+    with patch(
+        "custom_components.dpd.DpdAtSession.async_login",
+        new=AsyncMock(side_effect=DpdAuthError("nope")),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_at_retries_when_the_portal_is_rate_limiting(hass):
+    """A 429 during setup must retry with backoff, not force reauth."""
+    entry = _add_at_entry(hass)
+    with patch(
+        "custom_components.dpd.DpdAtSession.async_login",
+        new=AsyncMock(side_effect=DpdApiError(429)),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+@pytest.mark.asyncio
+async def test_unload_entry_at_succeeds(hass):
+    entry = _add_at_entry(hass)
+    with (
+        patch(
+            "custom_components.dpd.DpdAtSession.async_login",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "custom_components.dpd.countries.at.session.DpdAtSession.async_get_parcels",
+            new=AsyncMock(return_value={"inc": [], "send": [], "ret": []}),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.NOT_LOADED
