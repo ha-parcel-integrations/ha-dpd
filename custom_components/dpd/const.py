@@ -181,6 +181,7 @@ DPD_AT_BASE_URL = "https://www.mydpd.at"
 DPD_AT_API_URL = f"{DPD_AT_BASE_URL}/jws.php"
 # Austria's own app is a WebView around this same site, so this is what the
 # portal is reached with.
+# suite: allow browser user-agent (the Austrian portal is a WebView around the website)
 DPD_AT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"

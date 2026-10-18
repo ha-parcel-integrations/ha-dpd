@@ -756,6 +756,7 @@ def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime |
     tz: timezone | ZoneInfo = timezone.utc
     if tz_id:
         try:
+            # suite: allow zoneinfo (loaded off the event loop by the coordinator before parsing)
             tz = ZoneInfo(tz_id)
         except Exception:  # noqa: BLE001 - bad tz string from API
             tz = timezone.utc
@@ -845,6 +846,7 @@ def shipment_delivery_dt(shipment: dict) -> datetime | None:
                 tz: timezone | ZoneInfo = timezone.utc
                 if tz_id:
                     try:
+                        # suite: allow zoneinfo (loaded off the event loop by the coordinator before parsing)
                         tz = ZoneInfo(tz_id)
                     except Exception:  # noqa: BLE001 - bad tz string from API
                         tz = timezone.utc
