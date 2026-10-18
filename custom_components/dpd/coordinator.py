@@ -295,6 +295,14 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
 
         log_unknown_descriptions(incoming + outgoing)
 
+        # Load each event zone off the event loop; the parsers then find it
+        # already cached.
+        for zone_name in {
+            (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
+            for shipment in incoming + outgoing
+        } - {None}:
+            await dt_util.async_get_time_zone(zone_name)
+
         incoming_active = filter_active_shipments(incoming)
         incoming_delivered = self._apply_delivered_filter(
             filter_delivered_shipments(incoming)
