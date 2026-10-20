@@ -47,7 +47,7 @@ this integration answers to both names there.
 
 ## Requirements
 
-- A DPD account (the same credentials you use in the myDPD mobile app)
+- A DPD account (the same credentials you use in the myDPD mobile app). For Germany, a myDPD account with an e-mail address and password; accounts that only sign in with Apple, Google, Facebook or netID are not supported.
 
 ## Installation
 
@@ -79,12 +79,25 @@ Or click the button below to open it directly in HACS:
 
 | Field | Description |
 |---|---|
-| Country | Choose the country before entering credentials. Netherlands and the other shared-backend countries use a DPD account email and password. Germany and **Austria** each use their own backend, both with email and password. **Poland** uses a Polish nine-digit mobile number and a one-time SMS code; Home Assistant stores the refresh token only, never the SMS code. |
+| Country | Choose the country before entering credentials. Netherlands and the other shared-backend countries use a DPD account email and password. **Germany** uses the email and password of your myDPD account at dpd.com, and **Austria** has its own backend, also with email and password. **Poland** uses a Polish nine-digit mobile number and a one-time SMS code; Home Assistant stores the refresh token only, never the SMS code. |
 
 For Poland, the phone field accepts the local nine-digit form as well as
 `+48`/`0048` prefixes (with spaces or dashes). It normalizes every accepted
 form to the nine digits expected by DPD Polska. The receiver inbox is read-only:
 outgoing parcels are not requested.
+
+For Germany, the integration signs in to your myDPD account and reads its
+parcel list: the Empfang, Versand and Retoure tabs. It shows the status, the
+five daily steps DPD lists (data handed over, on the road, at the depot, in
+delivery, delivered), the weight and a link to the tracking page, with the
+delivery day for a parcel that is out for delivery (once DPD has shown one). It does not show times of
+day, locations, the sender or dimensions, and no sender or recipient names.
+Germany setups made before this change keep working without signing in again.
+If DPD asks for a captcha at login, Home Assistant cannot answer it: the
+integration logs a warning, keeps showing the last data and waits six hours
+between sign-in attempts. A reload does not retry sooner; signing in again
+through the integration's re-authenticate option (or re-adding it) does.
+Signing in once at dpd.com in your browser may clear it.
 
 For Austria, use the email address and password of your
 [mydpd.at](https://www.mydpd.at) account. **If you created that account with
@@ -215,6 +228,12 @@ users.
 | `problem` | Carrier reports an exception, intervention, or other issue | (not yet observed) |
 | `unknown` | Raw description we have not mapped yet | anything else — logged once at warning level with a ready-to-paste issue link so it can be added to the map |
 
+For Germany the status follows the furthest of the five daily steps DPD lists
+for the parcel (data handed over is `registered`, on the road and at the depot
+are `in_transit`, in delivery is `out_for_delivery`, delivered is `delivered`).
+A parcel on its way back to the sender is `returning` even once it is delivered
+back to them, so it never fires the delivered event.
+
 ## Events
 
 The coordinator fires events on the HA event bus when something
@@ -280,6 +299,7 @@ The raw payload is only logged when there is at least one incoming or outgoing s
 | Symptom | Likely cause |
 |---------|--------------|
 | `invalid_auth` error during setup | Wrong email or password |
+| `captcha` error during setup, or a captcha warning in the log | DPD Germany is asking for a captcha at login. Sign in once at dpd.com in your browser, then try again |
 | `cannot_connect` error during setup | DPD API is unreachable; check your network |
 | Re-authentication prompt appears | DPD session expired and could not be refreshed silently; log in again |
 | Sensors not updating | Check **Settings → System → Logs** for `dpd` entries |

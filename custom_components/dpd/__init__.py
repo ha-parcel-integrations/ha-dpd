@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from uuid import uuid4
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 
 from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
@@ -24,9 +26,11 @@ from .const import (
     COUNTRY_PL,
     DEFAULT_BU,
     PLATFORMS,
+    DpdCaptchaError,
 )
 from .coordinator import DpdCoordinator
 from .countries.at.session import DpdAtSession
+from .countries.de.page import DpdPageError
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
 
@@ -47,6 +51,16 @@ class DpdData:
 type DpdConfigEntry = ConfigEntry[DpdData]
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
+    """Drop the device id older German entries stored; it is no longer used."""
+    if entry.version == 1 and entry.minor_version < 2:
+        data = dict(entry.data)
+        if data.get(CONF_COUNTRY) == COUNTRY_DE.upper():
+            data.pop(CONF_DE_HARDWARE_ID, None)
+        hass.config_entries.async_update_entry(entry, data=data, minor_version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     """Set up DPD from a config entry."""
     session = async_get_clientsession(hass)
@@ -59,14 +73,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
 
     try:
         if country == COUNTRY_DE.upper():
-            hardware_id = entry.data.get(CONF_DE_HARDWARE_ID) or str(uuid4())
+            # The account spans three hosts and lives on cookies, so it gets
+            # a jar of its own instead of the shared one.
             de_session = DpdDeSession(
-                session,
+                async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
                 entry.data[CONF_EMAIL],
                 entry.data[CONF_PASSWORD],
-                hardware_id,
             )
-            await de_session.async_login()
+            await de_session.async_login(respect_backoff=True)
         elif country == COUNTRY_PL.upper():
             def _store_refresh_token(token: str) -> None:
                 hass.config_entries.async_update_entry(
@@ -102,12 +116,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
             exc,
         )
         raise ConfigEntryAuthFailed("DPD authentication failed") from exc
+    except DpdCaptchaError as exc:
+        # The password is fine, so this must not start reauth.
+        raise ConfigEntryNotReady(
+            "DPD Germany is asking for a captcha at login"
+        ) from exc
+    except DpdPageError as exc:
+        raise ConfigEntryNotReady(
+            "DPD Germany returned a page in an unexpected layout"
+        ) from exc
     except DpdApiError as exc:
         # Non-success HTTP status during the auth flow — almost always a 5xx
         # from DPD's auth tier. Surface it as a transient setup failure so HA
         # retries with backoff instead of pushing the user into reauth.
         raise ConfigEntryNotReady(
             f"DPD authentication service returned HTTP {exc.status_code}"
+            if exc.status_code != 200
+            else "DPD authentication service sent an unexpected response"
         ) from exc
     except aiohttp.ClientError as exc:
         raise ConfigEntryNotReady("Unable to connect to DPD") from exc

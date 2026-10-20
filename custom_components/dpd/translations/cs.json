@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "Nelze se připojit k DPD. Zkontrolujte své síťové připojení.",
+      "captcha": "DPD právě požaduje captcha. Přihlaste se jednou na dpd.com v prohlížeči a zkuste to znovu.",
       "invalid_auth": "Neplatný e-mail nebo heslo.",
       "invalid_phone": "Zadejte platné polské mobilní číslo (devět číslic, volitelně s +48 nebo 0048).",
       "invalid_sms_code": "Neplatný nebo prošlý kód SMS."

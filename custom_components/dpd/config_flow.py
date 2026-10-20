@@ -5,7 +5,6 @@ import logging
 import re
 from collections.abc import Mapping
 from typing import Any
-from uuid import uuid4
 
 import aiohttp
 import voluptuous as vol
@@ -19,13 +18,15 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 
 from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
     CONF_BU,
     CONF_COUNTRY,
-    CONF_DE_HARDWARE_ID,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_INCLUDE_HISTORY,
     DOMAIN,
     NEW_COUNTRY_ISSUE_URL,
+    DpdCaptchaError,
 )
 from .countries.at.session import DpdAtSession
 from .countries.de.session import DpdDeSession
@@ -144,6 +146,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the UI-driven configuration flow for the DPD integration."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -151,7 +154,6 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         self._email: str = ""
         self._password: str = ""
         self._bu: str = DEFAULT_BU
-        self._de_hardware_id: str = ""
         self._phone: str = ""
         self._pl_refresh_token: str = ""
 
@@ -196,13 +198,19 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         client = DpdApiClient(email, password, session, bu=bu)
         await client.async_login()
 
-    async def _validate_de_credentials(
-        self, email: str, password: str, hardware_id: str
-    ) -> None:
-        """Validate credentials against the live DE login."""
-        session = async_get_clientsession(self.hass)
-        de_session = DpdDeSession(session, email, password, hardware_id)
-        await de_session.async_login()
+    async def _validate_de_credentials(self, email: str, password: str) -> None:
+        """Validate credentials against the live DE login.
+
+        The account lives on cookies, so the check gets a jar of its own,
+        released as soon as the check is done.
+        """
+        session = async_create_clientsession(
+            self.hass, auto_cleanup=False, cookie_jar=aiohttp.CookieJar()
+        )
+        try:
+            await DpdDeSession(session, email, password).async_login()
+        finally:
+            session.detach()
 
     async def _validate_at_credentials(self, email: str, password: str) -> None:
         """Validate credentials against the live mydpd.at portal login."""
@@ -214,7 +222,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Select the country before asking for country-specific credentials.
 
-        One dropdown for both: DPD Germany's separate SOAP backend sits
+        One dropdown for both: DPD Germany's separate account stack sits
         alongside NL and the other business units (``COUNTRY_OPTIONS``) —
         picking it branches this same submit into the DE validation path
         instead of asking "which backend" as a question of its own.
@@ -238,22 +246,23 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             email, password = user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
-            hardware_id = str(uuid4())
             try:
                 if self._country == COUNTRY_DE.upper():
-                    await self._validate_de_credentials(email, password, hardware_id)
+                    await self._validate_de_credentials(email, password)
                 elif self._country == COUNTRY_AT.upper():
                     await self._validate_at_credentials(email, password)
                 else:
                     await self._validate_general_credentials(email, password, self._bu)
             except DpdAuthError:
                 errors["base"] = "invalid_auth"
+            except DpdCaptchaError:
+                errors["base"] = "captcha"
             except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:
                 await self.async_set_unique_id(_unique_id(self._country, self._bu, email))
                 self._abort_if_unique_id_configured()
-                self._email, self._password, self._de_hardware_id = email, password, hardware_id
+                self._email, self._password = email, password
                 return await self.async_step_delivered()
         return self.async_show_form(
             step_id="credentials",
@@ -330,11 +339,10 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             }
             if self._country == COUNTRY_GENERAL.upper():
                 data[CONF_BU] = self._bu
-            elif self._country == COUNTRY_DE.upper():
-                data[CONF_DE_HARDWARE_ID] = self._de_hardware_id
-            elif self._country == COUNTRY_AT.upper():
-                # Austria needs nothing beyond the credentials already in
-                # ``data``: no BU, no device identity, no persisted token.
+            elif self._country in (COUNTRY_DE.upper(), COUNTRY_AT.upper()):
+                # Germany and Austria need nothing beyond the credentials
+                # already in ``data``: no BU, no device identity, no persisted
+                # token.
                 pass
             else:
                 data[CONF_PHONE] = self._phone
@@ -380,16 +388,15 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
 
             try:
                 if country == COUNTRY_DE.upper():
-                    hardware_id = reauth_entry.data.get(CONF_DE_HARDWARE_ID) or str(
-                        uuid4()
-                    )
-                    await self._validate_de_credentials(email, password, hardware_id)
+                    await self._validate_de_credentials(email, password)
                 elif country == COUNTRY_AT.upper():
                     await self._validate_at_credentials(email, password)
                 else:
                     await self._validate_general_credentials(email, password, bu)
             except DpdAuthError:
                 errors["base"] = "invalid_auth"
+            except DpdCaptchaError:
+                errors["base"] = "captcha"
             except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:

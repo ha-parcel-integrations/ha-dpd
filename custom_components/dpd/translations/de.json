@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "DPD ist nicht erreichbar. Überprüfe deine Netzwerkverbindung.",
+      "captcha": "DPD verlangt gerade ein Captcha. Melde dich einmal im Browser auf dpd.com an und versuche es dann erneut.",
       "invalid_auth": "Ungültige E-Mail-Adresse oder ungültiges Passwort.",
       "invalid_phone": "Gib eine gültige polnische Mobilnummer ein (neun Ziffern, optional mit +48 oder 0048).",
       "invalid_sms_code": "Ungültiger oder abgelaufener SMS-Code."

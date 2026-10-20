@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "Nie można połączyć się z DPD. Sprawdź swoje połączenie sieciowe.",
+      "captcha": "DPD wymaga teraz captcha. Zaloguj się raz na dpd.com w przeglądarce, a następnie spróbuj ponownie.",
       "invalid_auth": "Nieprawidłowy e-mail lub hasło.",
       "invalid_phone": "Podaj prawidłowy polski numer telefonu komórkowego (dziewięć cyfr, opcjonalnie z prefiksem +48 lub 0048).",
       "invalid_sms_code": "Kod SMS jest nieprawidłowy lub wygasł."

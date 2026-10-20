@@ -109,7 +109,7 @@ class DpdAtSession:
         ``state: "failure"`` is an application-level refusal. Only the login
         call may turn the latter into an auth error — on a data call it is a
         shape or state problem, and pushing the user into reauth for it would
-        be wrong, the same rule Germany's SOAP faults follow.
+        be wrong.
         """
         headers = {
             "Content-Type": "application/json; charset=utf-8",

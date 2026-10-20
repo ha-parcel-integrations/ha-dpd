@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "Kan DPD niet bereiken. Controleer je netwerkverbinding.",
+      "captcha": "DPD vraagt op dit moment om een captcha. Log eenmalig in op dpd.com in je browser en probeer het daarna opnieuw.",
       "invalid_auth": "Ongeldig e-mailadres of wachtwoord.",
       "invalid_phone": "Voer een geldig Pools mobiel nummer in (negen cijfers, eventueel voorafgegaan door +48 of 0048).",
       "invalid_sms_code": "Ongeldige of verlopen sms-code."

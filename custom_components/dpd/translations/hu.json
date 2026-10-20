@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "A DPD nem érhető el. Ellenőrizd a hálózati kapcsolatot.",
+      "captcha": "A DPD jelenleg captchát kér. Jelentkezzen be egyszer a böngészőben a dpd.com oldalon, majd próbálja újra.",
       "invalid_auth": "Érvénytelen e-mail cím vagy jelszó.",
       "invalid_phone": "Adjon meg érvényes lengyel mobilszámot (kilenc számjegy, opcionálisan +48 vagy 0048 előtaggal).",
       "invalid_sms_code": "Érvénytelen vagy lejárt SMS-kód."

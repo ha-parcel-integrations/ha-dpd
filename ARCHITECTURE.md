@@ -7,7 +7,7 @@ live in the private `carrier-research/dpd/` and are never copied here.
 
 DPD is the largest integration in the suite because it is not one backend but
 four: a shared myDPD/Keycloak stack serving the Netherlands and 15 more
-business units, a wholly separate SOAP stack for Germany, a separate OAuth
+business units, the myDPD web account for Germany, a separate OAuth
 stack for Poland, and the `mydpd.at` portal API for Austria.
 
 ## Project layout
@@ -28,7 +28,7 @@ custom_components/dpd/
 ├── diagnostics.py       redacted diagnostics incl. the "polling" block
 └── countries/
     ├── general/         status map + normalize_parcel for the myDPD path
-    ├── de/              Germany: SOAP session + status derivation + normalize
+    ├── de/              Germany: web-account session + page reader + status derivation + normalize
     ├── pl/              Poland: OAuth session + status derivation + normalize
     └── at/              Austria: portal JWT session + stage derivation + normalize
 ```
@@ -57,7 +57,7 @@ fetch path, and adding one does not change the shared code.
 | Transport | Session/client | Protocol | Status mapper | Normalizer |
 |---|---|---|---|---|
 | General (NL + BUs, UK) | `DpdApiClient` (`api.py`) | Keycloak + JSON REST | `_DESCRIPTION_MAP` | `normalize_parcel` |
-| Germany | `DpdDeSession` (`countries/de/session.py`) | ASP.NET SOAP | `map_parcel_status_de` | `normalize_parcel_de` |
+| Germany | `DpdDeSession` (`countries/de/session.py`) | myDPD web account, cookie session | `map_parcel_status_de` | `normalize_parcel_de` |
 | Poland | `DpdPlSession` (`countries/pl/session.py`) | public-client OAuth + JSON | `map_parcel_status_pl` | `normalize_parcel_pl` |
 | Austria | `DpdAtSession` (`countries/at/session.py`) | portal JSON-RPC + Bearer JWT | `map_parcel_status_at` | `normalize_parcel_at` |
 
@@ -87,9 +87,9 @@ asset URL under `dpdgroup.com/ch/mydpd/`). Same live-capture caveat as the 14.
 
 **`DPD-DE` is not in `BUSINESS_UNITS` — it runs its own build.** DE briefly
 shipped in 2.8.0 as a blind pre-release, then was confirmed (2026-08-11, live
-probe) to run on a wholly separate stack — `api.paketnavigator.de`, an ASP.NET
-SOAP web service, no shared Keycloak realm — so it cannot work through `api.py`
-at any BU value. The BU dropdown still carries a `DPD-DE` *option value*
+probe) to run on a wholly separate stack with no shared Keycloak realm — so it
+cannot work through `api.py` at any BU value. Today it is the user's own
+myDPD web account (`dpd.com` login, `portal.dpd.de`, `my.dpd.de`). The BU dropdown still carries a `DPD-DE` *option value*
 (`_DE_BU_VALUE` in `config_flow.py`) purely to route the same form into the
 separate path; it is never added to `BUSINESS_UNITS` or sent to `api.py`.
 
@@ -164,63 +164,71 @@ not an English/Dutch/German UI with translated labels tacked onto foreign BUs.
 The user step's `description` links a pre-filled "Add country" issue for
 anything beyond the supported list.
 
-### Germany: a separate SOAP transport
+### Germany: the myDPD web account
 
-`countries/de/session.py` owns the SOAP session (envelope, signing, login
-lifecycle); `countries/de/__init__.py` owns status derivation and
-`normalize_parcel_de`.
+`countries/de/session.py` owns the session, `countries/de/page.py` reads the
+pages, `countries/de/__init__.py` owns status derivation and
+`normalize_parcel_de`. Request chain, page ids and vocabulary live in
+`carrier-research/dpd/`.
 
-**Two-stage login, documented nowhere DPD publishes** — discovered by capturing
-a working client against a real account, not from the decompiled app the first
-notes were based on. An anonymous `getSessionFullState` (empty `SessionToken`)
-bootstraps a throwaway `SessionToken`; `getUserLogin` exchanges that plus
-credentials for the real account `SessionToken` + `cloudUserID`. `async_login()`
-always runs both steps — there is no one-stage path.
+The account spans three hosts and lives on cookies, so each entry gets a
+`ClientSession` with its own `CookieJar` (`async_create_clientsession`, closed
+with the entry); the shared HA session is never used. The jar is in memory, so
+a restart costs one login.
 
-**The SOAP envelope double-wraps every call**: a bare `<methodName>` element
-around an inner `<methodNameRequest>` element holding the fields
-(`_build_envelope`); responses unwrap the same way
-(`<methodNameResponse><methodNameResult>…`, case-sensitive, lowercase-first).
-Getting either wrapper wrong does not 400 — the server NullReferenceExceptions
-into a generic HTTP 500 SOAP fault, which `_async_raw_call` detects via
-`"faultstring" in body` and raises `DpdApiError`, **not** `DpdAuthError`: a
-fault is a shape bug, not a rejected login, and must not push a user into
-reauth. `KeyPhase` is signed the same way (`compute_key_phase`; minute-derived
-MD5, see its docstring) but was never the actual bug.
+**A silent failure to know about:** reaching the parcel host without the hop
+from the portal dashboard renders an empty inbox, not a login page. Signed in
+is therefore decided by one marker control (a constant in `page.py`), never by
+the row count. On the portal, signed in means the portal host *and* the hop
+control; a signed-out portal lands on the public login page, which is a clean
+signed-out answer, not an error.
 
-**Failure detection reads `Ack` plus a top-level singular `ErrorCode`**, not
-the decompiled `ErrorDataList[]` shape alone — real rejections use both, and
-`_error_codes()` unions them. `async_get_parcels()` / `async_call()` reauth
-**once** on `ERROR_SESSION_NOT_VALID` / `ERROR_KEYPHASE`, never loop; two
-consecutive `ERROR_KEYPHASE` responses warn once
-(`_warn_keyphase_rotation_once`), since that likely means DPD rotated the
-partner secret rather than routine expiry.
+**Log in as rarely as possible.** Each poll reuses the cookies, then repeats
+the hop alone, and logs in (at most once, under a lock) only after a *clean*
+signed-out answer. An HTTP error, an error page or a changed layout in those
+rungs fails the poll with no login, since a login cannot fix them and repeated
+logins may be what switches the captcha on. A login after which the list still
+does not open fails the poll and blocks further logins for an hour.
 
-**Status is derivation-first, not enum-first** — `StatusID` has no closed
-vocabulary, so `map_parcel_status_de` falls through `ParcelFlowTypeID` →
-`DeliveryParcelShop.ParcelStatus` → `LastStatusInfo.StatusID` →
-`StatusInfoContainer` slots (deepest-reached-first) → `isDelayed`/`showWarning`
-→ `UNKNOWN`, with a one-shot warning at the first unmapped point. **As of
-2026-08-17 only login and an empty inbox are wire-confirmed on a real
-account** — the status vocabulary itself is unexercised; treat every mapped
-`StatusID`/slot as provisional until a real parcel confirms it.
+**The captcha is server-toggled.** It raises `DpdCaptchaError` (a
+`DpdApiError`): not-ready at setup, a failed update on a poll, the `captcha`
+error in the config flow, never reauth. Polls back off full logins six hours
+while the cheap rungs keep running; the back-offs are module-level, keyed by
+e-mail, because a reload builds a new session object. Setup honours them too,
+so Home Assistant's automatic retries never log in; only the config flow (add
+or reauthenticate) makes a real attempt, and a successful login clears them.
 
-`CONF_DE_HARDWARE_ID` is persisted in `entry.data`, generated once at
-config-flow time (`uuid4()`) and reused on every restart (`__init__.py` falls
-back to a fresh one only if it is somehow missing) — a new id every setup would
-look like a different device to DPD on every reload.
+**Only a confirmed credential rejection reaches reauth**; the wrong-password
+response is not yet captured, so this errs toward "cannot connect".
 
-**No BU, no FMP, no per-parcel detail endpoint, no UK-style tracking lookup.**
-`async_get_all_parcels_de` does all enrichment (including opt-in history via
-`getTrackingScanList`) before `_async_fetch_de` ever sees the parcels, so DE's
-coordinator path filters an already-normalized list
-(`_apply_delivered_filter_canonical` in `parcels.py`, reading `delivered_at`
-off the normalized shape, not `_apply_delivered_filter`'s raw-payload shape).
+**Postbacks chain on the previous response's form state** and never run
+concurrently. A poll reads the Empfang tab, then Versand and Retoure only when
+their counters are non-zero; per row it fetches the milestone panel unless the
+row is unchanged since the last poll (cached per tab and barcode). A failed or
+mismatched panel gives a row-only parcel, never a failed poll.
 
-Debug logging in `_async_fetch_de` (`_LOGGER.debug`, gated behind
-`isEnabledFor(DEBUG)`) mirrors the general path's shipment-count and
-raw-payload summary — added after the initial build shipped with none, which
-left no way to confirm a successful DE poll had fetched anything.
+**The recipient-postcode check is never submitted and no address data is
+read**; sender and recipient stay `None`.
+
+**Status** (`map_parcel_status_de`), first match wins: return wording →
+`returning` (a return delivered back to the sender must not read as a
+delivery); pickup wording while not delivered; the furthest dated milestone;
+problem wording; an observed-values icon table; the newest mappable history
+entry; `unknown` plus a one-shot WARNING. Milestone days carry no year: they
+are past events, placed in the current Europe/Berlin year or the previous one
+if that would be more than a week ahead, and never earlier than the milestone
+before. There is no time of day on this surface, so the out-for-delivery window
+is the whole day.
+
+**History** is the dated milestones, oldest first, gated by the history option;
+on a return every entry reads `returning`.
+
+**No BU, no FMP, no UK-style tracking lookup.** `async_get_all_parcels_de` does
+all enrichment before `_async_fetch_de` sees the parcels, so DE's coordinator
+path filters an already-normalized list (`_apply_delivered_filter_canonical`).
+Older entries stored a device id; `async_migrate_entry` drops it (minor
+version 2) and the e-mail, password and `unique_id` are untouched, so no one is
+asked to sign in again.
 
 ### Poland: a separate OAuth transport
 
@@ -256,8 +264,7 @@ unlike the other transports in several ways:
 
 - **No credential of any kind ships with the integration.** Austria's Android
   app is a WebView wrapper around the same website and contains no API, so
-  there is no partner secret and no request signing — the whole class of
-  concern that gates Germany simply does not arise.
+  there is no shared secret and no request signing.
 - **There is no token-refresh route.** An expired JWT is recovered by logging
   in again, exactly once per call; a second rejection is a real credential
   problem and goes to reauth. The entry persists the credentials, never the
@@ -319,7 +326,7 @@ because the transports genuinely populate different fields:
 | Variant | Never populated | Notes |
 |---|---|---|
 | `Other` | — | the full set |
-| `Germany` | `url` | DE exposes no tracking-page link; does populate weight, dimensions, delivery_window, pickup_point |
+| `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
 

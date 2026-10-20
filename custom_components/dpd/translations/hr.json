@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "DPD nije dostupan. Provjerite mrežnu vezu.",
+      "captcha": "DPD trenutačno traži captchu. Jednom se prijavite na dpd.com u pregledniku, a zatim pokušajte ponovno.",
       "invalid_auth": "Neispravna e-pošta ili lozinka.",
       "invalid_phone": "Unesite valjan poljski broj mobilnog telefona (devet znamenki, po želji s +48 ili 0048).",
       "invalid_sms_code": "Neispravan ili istekao SMS kod."

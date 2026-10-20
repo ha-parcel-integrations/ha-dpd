@@ -22,20 +22,15 @@ def reset_one_shot_warnings():
     """
     from custom_components.dpd.countries import at, de, general
     from custom_components.dpd.countries.at import session as at_session
-    from custom_components.dpd.countries.de import session
+    from custom_components.dpd.countries.de import page as de_page
+    from custom_components.dpd.countries.de import session as de_session
 
-    de._unmapped_status_ids_logged.clear()
-    de._status_unknown_logged.clear()
-    de._unexpected_keys_logged.clear()
-    de._delivered_at_format_warned = False
-    de._status_date_format_warned = False
-    de._scan_timestamp_format_warned = False
-    de._weight_units_warned = False
-    de._dimension_units_warned = False
-    de._service_codes_logged.clear()
-    de._data_view_status_logged.clear()
-    session._keyphase_rotation_warned = False
-    session._clock_skew_warned = False
+    de._WARNED.clear()
+    de_page._MISSING_LOGGED.clear()
+    de_page._PAGER_LOGGED.clear()
+    de_session._WARNED.clear()
+    de_session._CAPTCHA_UNTIL.clear()
+    de_session._UNOPENED_UNTIL.clear()
     general._unknown_descriptions_logged.clear()
     general._unknown_event_types_logged.clear()
     at._SEEN_STAGES.clear()

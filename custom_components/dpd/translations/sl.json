@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "DPD ni dosegljiv. Preverite omrežno povezavo.",
+      "captcha": "DPD trenutno zahteva captcho. Enkrat se prijavite na dpd.com v brskalniku in poskusite znova.",
       "invalid_auth": "Neveljaven e-poštni naslov ali geslo.",
       "invalid_phone": "Vnesite veljavno poljsko mobilno številko (devet številk, po želji s predpono +48 ali 0048).",
       "invalid_sms_code": "Neveljavna ali potekla SMS-koda."

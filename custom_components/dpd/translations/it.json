@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "Impossibile raggiungere DPD. Controlla la connessione di rete.",
+      "captcha": "DPD sta richiedendo un captcha in questo momento. Accedi una volta a dpd.com dal browser, quindi riprova.",
       "invalid_auth": "E-mail o password non validi.",
       "invalid_phone": "Inserisci un numero di cellulare polacco valido (nove cifre, facoltativamente precedute da +48 o 0048).",
       "invalid_sms_code": "Codice SMS non valido o scaduto."

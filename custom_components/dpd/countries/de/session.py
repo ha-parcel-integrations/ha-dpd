@@ -1,480 +1,362 @@
-"""DPD Germany Paketnavigator SOAP session: KeyPhase signing + lifecycle.
+"""DPD Germany myDPD web-account session and parcel-list client.
 
-Every call to api.paketnavigator.de carries a PartnerCredentials block with a
-time-based MD5 KeyPhase signature. This module owns that signing and the
-session-token lifecycle; other DE modules call into it rather than touching
-the wire directly.
+The account spans three hosts and is cookie-based, so the session owns a
+dedicated cookie jar. Credentials are the user's own; nothing but the jar,
+in memory, outlives a login.
 
-No refresh operation exists — polling keeps the session alive, since every
-getSessionFullState response re-issues SessionToken. Reauth is error-driven
-(ERROR_SESSION_NOT_VALID / ERROR_KEYPHASE) and retried once, never looped.
-Two consecutive ERROR_KEYPHASE responses likely mean the app secret rotated,
-not routine session expiry — see :func:`_warn_keyphase_rotation_once`.
+Each poll walks a ladder and stops at the first rung that yields a signed-in
+parcel list, so a login happens only when the existing session is gone:
+
+1. open the parcel list with the current cookies;
+2. repeat the portal-to-parcel-list hop alone;
+3. sign in (at most once per poll).
+
+The hop from the portal dashboard is mandatory: without it the parcel list
+renders an empty inbox instead of asking for a login.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
+import asyncio
 import logging
 import re
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+import time
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import aiohttp
 
 from ...const import (
-    DPD_DE_CLOCK_SKEW_TOLERANCE_MINUTES,
-    DPD_DE_LANGUAGE,
-    DPD_DE_PARTNER_NAME,
-    DPD_DE_PARTNER_SECRET,
-    DPD_DE_PARTNER_TOKEN,
-    DPD_DE_SOAP_NAMESPACE,
-    DPD_DE_SOAP_URL,
+    DPD_DE_INBOX_URL,
+    DPD_DE_LOGIN_URL,
+    DPD_DE_PORTAL_HOME_URL,
     DPD_DE_USER_AGENT,
     DpdApiError,
     DpdAuthError,
+    DpdCaptchaError,
+)
+from .page import (
+    DpdPageError,
+    Page,
+    detail,
+    form_fields,
+    has_captcha,
+    is_logged_in,
+    is_portal_logged_in,
+    list_rows,
+    login_rejected,
+    warn_pager,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-_NEW_ISSUE_URL = (
-    "https://github.com/ha-parcel-integrations/ha-dpd/issues/new"
-    "?template=unrecognised_status.yml"
-)
+_MAX_REDIRECTS = 8
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_CAPTCHA_BACKOFF_SECONDS = 6 * 60 * 60
+_UNOPENED_BACKOFF_SECONDS = 60 * 60
+_HOP_TARGET = "ctl00$cphBody$ctl00$btnHomeMyParcel"
+_ROW_TARGET = "ctl00$ContentPlaceHolder1$repParcelList$ctl{index:02d}$btnSelectParcel"
+_TAB_TARGETS = {
+    "incoming": "ctl00$ContentPlaceHolder1$btnGetIncomingParcel",
+    "sending": "ctl00$ContentPlaceHolder1$btnGetSendingParcel",
+    "returning": "ctl00$ContentPlaceHolder1$btnGetReturningParcel",
+}
+_ERROR_PAGE = re.compile(r"/error\.aspx|showerror", re.IGNORECASE)
+_ERROR_TITLE = re.compile(r"<title>[^<]*runtime error", re.IGNORECASE)
 
-# cloudUserID for the one call that happens before any account is known.
-_ANONYMOUS_CLOUD_USER_ID = "0"
-
-# A bad signature and a dead token report the same codes.
-_SESSION_ERROR_CODES = frozenset({"ERROR_SESSION_NOT_VALID", "ERROR_KEYPHASE"})
-
-_keyphase_rotation_warned = False
-_clock_skew_warned = False
-
-
-def compute_key_phase(now_utc: datetime, cloud_user_id: str, method_name: str) -> str:
-    """Return the KeyPhase signature for one SOAP call.
-
-        p = ((utc_hours * 60 + utc_minutes + 1000) * 3)
-        KeyPhase = str(p) + base64(md5(
-            str(p) + partner_name + cloud_user_id + method_name + partner_secret
-        ))[:16]
-
-    ``method_name`` is the bare operation name and varies per call, so this
-    cannot be cached — it also rotates every minute, so ``now_utc`` must be
-    the real call time, always UTC.
-    """
-    p = (now_utc.hour * 60 + now_utc.minute + 1000) * 3
-    digest_input = (
-        f"{p}{DPD_DE_PARTNER_NAME}{cloud_user_id}{method_name}{DPD_DE_PARTNER_SECRET}"
-    )
-    digest = hashlib.md5(digest_input.encode("utf-8")).digest()  # noqa: S324 - carrier's own scheme, not ours to choose
-    b64 = base64.b64encode(digest).decode("ascii")
-    return f"{p}{b64[:16]}"
+# Both back-offs are properties of the account's recent login history, so they
+# outlive the session object (a reload builds a new one). A login that opened
+# nothing is held off for less time than a captcha: it may only mean a changed
+# page, and must not turn into a login on every poll.
+_CAPTCHA_UNTIL: dict[str, float] = {}
+_UNOPENED_UNTIL: dict[str, float] = {}
+_WARNED: set[str] = set()
 
 
-def _strip_ns(tag: str) -> str:
-    """Return an XML tag name with its ``{namespace}`` prefix removed."""
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-
-def _leaf_text_value(text: str | None) -> Any:
-    """Coerce a leaf element's text: XSD ``true``/``false`` literals to ``bool``, else ``str``."""
-    if not text or not text.strip():
-        return None
-    value = text.strip()
-    if value in ("true", "false"):
-        return value == "true"
-    return value
-
-
-def _element_to_value(element: ET.Element) -> Any:
-    """Convert one XML element into a dict/list/bool/str/``None``.
-
-    Repeated sibling tags fold into a list.
-    """
-    children = list(element)
-    if not children:
-        return _leaf_text_value(element.text)
-
-    grouped: dict[str, list[Any]] = {}
-    order: list[str] = []
-    for child in children:
-        tag = _strip_ns(child.tag)
-        if tag not in grouped:
-            grouped[tag] = []
-            order.append(tag)
-        grouped[tag].append(_element_to_value(child))
-
-    result: dict[str, Any] = {}
-    for tag in order:
-        values = grouped[tag]
-        result[tag] = values[0] if len(values) == 1 else values
-    return result
-
-
-def as_list(value: Any) -> list[dict]:
-    """Normalize a parsed SOAP array field into a list.
-
-    ``_element_to_value`` keeps an array field's own wrapper element (e.g.
-    ``ReceiveTrackingDataList`` -> ``{"TrackingDataType": [...]}``) rather
-    than flattening it, so this unwraps that single inner key before
-    normalizing arity.
-    """
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [v for v in value if isinstance(v, dict)]
-    if isinstance(value, dict):
-        if len(value) == 1:
-            inner = next(iter(value.values()))
-            if isinstance(inner, list):
-                return [v for v in inner if isinstance(v, dict)]
-            if isinstance(inner, dict):
-                return [inner]
-            return []
-        return [value]
-    return []
-
-
-def _dict_to_xml(parent: ET.Element, data: dict[str, Any]) -> None:
-    """Append ``data`` as child elements of ``parent``."""
-    for key, value in data.items():
-        if isinstance(value, dict):
-            child = ET.SubElement(parent, key)
-            _dict_to_xml(child, value)
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                child = ET.SubElement(parent, key)
-                if isinstance(item, dict):
-                    _dict_to_xml(child, item)
-                else:
-                    child.text = _xml_text(item)
-        elif value is not None:
-            child = ET.SubElement(parent, key)
-            child.text = _xml_text(value)
-        else:
-            ET.SubElement(parent, key)
-
-
-def _xml_text(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
-
-
-def _build_envelope(method_name: str, fields: dict[str, Any]) -> bytes:
-    """Build the SOAP 1.1 envelope for one Navigator3Service operation."""
-    envelope = ET.Element(
-        "soap:Envelope",
-        {
-            "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-            "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
-            "xmlns:soap": "http://schemas.xmlsoap.org/soap/envelope/",
-        },
-    )
-    body = ET.SubElement(envelope, "soap:Body")
-    # The wire wraps each call twice: a bare operation element around an
-    # inner ``<...Request>`` element that actually holds the fields.
-    outer = ET.SubElement(body, method_name, {"xmlns": DPD_DE_SOAP_NAMESPACE})
-    inner = ET.SubElement(
-        outer, f"{method_name}Request", {"xmlns": DPD_DE_SOAP_NAMESPACE}
-    )
-    _dict_to_xml(inner, fields)
-    return b'<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
-        envelope, encoding="utf-8"
-    )
-
-
-def _parse_response(method_name: str, body_bytes: bytes) -> dict[str, Any]:
-    """Parse a SOAP response body into the operation's response fields."""
-    root = ET.fromstring(body_bytes)  # noqa: S314 - carrier's own SOAP response, no external entities expected
-    body_elements = [
-        child for child in root if _strip_ns(child.tag) == "Body"
-    ]
-    if not body_elements:
-        return {}
-    response_root = body_elements[0]
-    children = list(response_root)
-    if not children:
-        return {}
-    response_el = children[0]
-    parsed = _element_to_value(response_el)
-    if not isinstance(parsed, dict):
-        return {}
-    # The response is wrapped the same way the request is: a
-    # ``<...Response>`` element (already unwrapped above) around a
-    # ``<...Result>`` element that holds the actual fields.
-    result_key = f"{method_name}Result"
-    if list(parsed.keys()) == [result_key] and isinstance(parsed[result_key], dict):
-        return parsed[result_key]
-    return parsed
-
-
-def _warn_keyphase_rotation_once() -> None:
-    """One-shot: two ``ERROR_KEYPHASE`` responses in a row."""
-    global _keyphase_rotation_warned
-    if _keyphase_rotation_warned:
+def _warn_once(key: str, message: str, *args: Any) -> None:
+    if key in _WARNED:
         return
-    _keyphase_rotation_warned = True
-    _LOGGER.warning(
-        "DPD may have rotated the app secret; this integration's German "
-        "support may need to be rebuilt. Two ERROR_KEYPHASE responses in a "
-        "row from api.paketnavigator.de mean the request signature no "
-        "longer validates, not a routine session expiry. Open an issue: %s",
-        _NEW_ISSUE_URL,
-    )
+    _WARNED.add(key)
+    _LOGGER.warning(message, *args)
 
 
-def _warn_clock_skew_once(skew_minutes: float) -> None:
-    """One-shot: a response ``TimeStamp`` more than the tolerance away from local time."""
-    global _clock_skew_warned
-    if _clock_skew_warned:
-        return
-    _clock_skew_warned = True
-    _LOGGER.warning(
-        "DPD Germany rejected a request due to clock skew (~%.1f minutes) "
-        "between this Home Assistant host and DPD's server — the KeyPhase "
-        "signature is minute-derived, so an out-of-sync clock breaks every "
-        "call. Check this host's clock/NTP sync. Open an issue if it looks "
-        "correct: %s",
-        skew_minutes,
-        _NEW_ISSUE_URL,
-    )
-
-
-_OVERLONG_FRACTION = re.compile(r"(\.\d{6})\d+")
-
-
-def _check_clock_skew(timestamp: str | None) -> None:
-    if not timestamp:
-        return
-    # .NET's "o" format emits up to 7 fractional-second digits (100ns
-    # ticks); fromisoformat only accepts up to 6.
-    timestamp = _OVERLONG_FRACTION.sub(r"\1", timestamp)
-    try:
-        remote = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except ValueError:
-        return
-    if remote.tzinfo is None:
-        remote = remote.replace(tzinfo=timezone.utc)
-    skew = abs((datetime.now(timezone.utc) - remote).total_seconds()) / 60
-    if skew > DPD_DE_CLOCK_SKEW_TOLERANCE_MINUTES:
-        _warn_clock_skew_once(skew)
-
-
-def _error_codes(body: dict[str, Any]) -> set[str]:
-    errors = as_list(body.get("ErrorDataList"))
-    codes: set[str] = set()
-    for error in errors:
-        code = error.get("ErrorCode")
-        if code:
-            codes.add(code)
-    # getUserLogin's own rejection shape is a singular Ack/ErrorCode pair,
-    # not an ErrorDataList entry.
-    top_level_code = body.get("ErrorCode")
-    if top_level_code:
-        codes.add(top_level_code)
-    return codes
+def _allowed_host(url: str) -> bool:
+    host = urlparse(url).hostname or ""
+    return host == "dpd.com" or host.endswith((".dpd.com", ".dpd.de"))
 
 
 class DpdDeSession:
-    """One config entry's DPD Germany Paketnavigator session.
-
-    Owns the credentials, the device identity, the current ``SessionToken``
-    and the ``cloudUserID`` used to sign authenticated calls. Constructed
-    once per config entry, held by the coordinator's runtime data.
-    """
+    """Own one entry's web-account session and read its parcel list."""
 
     def __init__(
-        self,
-        session: aiohttp.ClientSession,
-        username: str,
-        password: str,
-        hardware_id: str,
+        self, session: aiohttp.ClientSession, email: str, password: str
     ) -> None:
-        """Initialize with the credentials and device identity for this entry."""
+        """Initialize the session; ``session`` must have its own cookie jar."""
         self._session = session
-        self._username = username
+        self._email = email
         self._password = password
-        self._hardware_id = hardware_id
-        self._session_token: str | None = None
-        self._cloud_user_id = _ANONYMOUS_CLOUD_USER_ID
-        self._keyphase_streak = 0
+        self._lock = asyncio.Lock()
+        # barcode -> (fingerprint of the list row, parsed detail panel)
+        self._details: dict[tuple[str, str], tuple[tuple[str, int | None], dict]] = {}
 
-    @property
-    def session_token(self) -> str | None:
-        """Return the current ``SessionToken``, or ``None`` before the first login."""
-        return self._session_token
+    # -- transport ---------------------------------------------------------
 
-    def _device_data(self) -> dict[str, Any]:
-        """Build the ``DeviceData`` block sent with every call; no push token, we don't register for push."""
-        return {
-            "Version": "1",
-            "HardwareID": self._hardware_id,
-            "BootSystemID": "Android_Phone",
-            "Name": "Home Assistant",
-            "AppVersion": "4.1.2",
-            "PushToken": "",
-            "AllowPushNotifications": False,
-        }
+    async def _fetch(self, *args: Any, **kwargs: Any) -> str:
+        """Request a page and return its HTML."""
+        return (await self._fetch_page(*args, **kwargs))[1]
 
-    async def async_login(self) -> dict[str, Any]:
-        """Two-stage login.
-
-        An anonymous ``getSessionFullState`` issues a bootstrap
-        ``SessionToken``; ``getUserLogin`` exchanges it plus credentials for
-        the account session and ``cloudUserID``.
-        """
-        anon_body = await self._async_raw_call(
-            "getSessionFullState",
-            {"SessionToken": "", "DeviceData": self._device_data()},
-            cloud_user_id=_ANONYMOUS_CLOUD_USER_ID,
-        )
-        anon_token = anon_body.get("SessionToken") or (
-            anon_body.get("SessionFullState") or {}
-        ).get("SessionToken")
-        if not anon_token:
-            raise DpdAuthError("DPD Germany did not return an anonymous SessionToken")
-
-        body = await self._async_raw_call(
-            "getUserLogin",
-            {
-                "SessionToken": anon_token,
-                "UserName": self._username,
-                "UserPassword": self._password,
-            },
-            cloud_user_id=_ANONYMOUS_CLOUD_USER_ID,
-        )
-        if _error_codes(body) or body.get("Ack") is False:
-            # Nothing to retry — credentials or signature were rejected outright.
-            self._note_keyphase_error(body)
-            raise DpdAuthError(
-                "DPD Germany login failed: "
-                f"{', '.join(sorted(_error_codes(body))) or body.get('ErrorMsg') or 'rejected'}"
-            )
-        self._keyphase_streak = 0
-        session_state = body.get("SessionFullState") or body
-        token = session_state.get("SessionToken") or body.get("SessionToken")
-        if not token:
-            raise DpdAuthError("DPD Germany login did not return a SessionToken")
-        self._session_token = token
-        account_data = session_state.get("AccountData") or {}
-        cloud_user_id = (
-            body.get("cloudUserID")
-            or body.get("CloudUserID")
-            or account_data.get("CloudUserID")
-            or account_data.get("cloudUserID")
-        )
-        if cloud_user_id:
-            self._cloud_user_id = str(cloud_user_id)
-        _check_clock_skew(body.get("TimeStamp"))
-        return session_state
-
-    async def async_get_parcels(self) -> dict[str, Any]:
-        """``getSessionFullState``: the account inbox, reauth-once on session expiry."""
-        if self._session_token is None:
-            return await self.async_login()
-
-        body = await self._async_raw_call(
-            "getSessionFullState",
-            {"SessionToken": self._session_token, "DeviceData": self._device_data()},
-            cloud_user_id=self._cloud_user_id,
-        )
-        error_codes = _error_codes(body)
-        if error_codes & _SESSION_ERROR_CODES:
-            self._note_keyphase_error(body)
-            self._session_token = None
-            return await self.async_login()
-
-        self._keyphase_streak = 0
-        _check_clock_skew(body.get("TimeStamp"))
-        session_state = body.get("SessionFullState") or {}
-        token = session_state.get("SessionToken")
-        if token:
-            self._session_token = token
-        return session_state
-
-    async def async_call(self, method_name: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """One authenticated call beyond login/inbox; reauth-once, retried once, never looped."""
-        if self._session_token is None:
-            await self.async_login()
-        assert self._session_token is not None
-
-        call_fields = {"SessionToken": self._session_token, **fields}
-        body = await self._async_raw_call(
-            method_name, call_fields, cloud_user_id=self._cloud_user_id
-        )
-        error_codes = _error_codes(body)
-        if error_codes & _SESSION_ERROR_CODES:
-            self._note_keyphase_error(body)
-            self._session_token = None
-            await self.async_login()
-            assert self._session_token is not None
-            call_fields = {"SessionToken": self._session_token, **fields}
-            body = await self._async_raw_call(
-                method_name, call_fields, cloud_user_id=self._cloud_user_id
-            )
-        else:
-            self._keyphase_streak = 0
-        _check_clock_skew(body.get("TimeStamp"))
-        return body
-
-    def _note_keyphase_error(self, body: dict[str, Any]) -> None:
-        """Track consecutive ``ERROR_KEYPHASE`` responses."""
-        if "ERROR_KEYPHASE" in _error_codes(body):
-            self._keyphase_streak += 1
-            if self._keyphase_streak >= 2:
-                _warn_keyphase_rotation_once()
-        else:
-            self._keyphase_streak = 0
-
-    async def _async_raw_call(
-        self, method_name: str, fields: dict[str, Any], *, cloud_user_id: str
-    ) -> dict[str, Any]:
-        """POST one signed SOAP call and return its parsed response body."""
-        now = datetime.now(timezone.utc)
-        key_phase = compute_key_phase(now, cloud_user_id, method_name)
-        request_fields = {
-            "Version": 100,
-            "Language": DPD_DE_LANGUAGE,
-            "PartnerCredentials": {
-                "Name": DPD_DE_PARTNER_NAME,
-                "Token": DPD_DE_PARTNER_TOKEN,
-                "KeyPhase": key_phase,
-            },
-            **fields,
-        }
-        envelope = _build_envelope(method_name, request_fields)
+    async def _fetch_page(
+        self,
+        method: str,
+        url: str,
+        *,
+        data: dict[str, str] | None = None,
+        referer: str | None = None,
+    ) -> tuple[str, str]:
+        """Request a page, following redirects by hand: ``(final_url, html)``."""
         headers = {
-            "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": f"{DPD_DE_SOAP_NAMESPACE}{method_name}",
-            "Accept": "text/xml",
             "User-Agent": DPD_DE_USER_AGENT,
+            "Accept-Language": "de-DE,de;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
         }
-        async with self._session.post(
-            DPD_DE_SOAP_URL, data=envelope, headers=headers
-        ) as response:
-            if response.status not in (200, 500):
-                # 500 can carry a parseable SOAP fault; anything else is transport-level.
-                raise DpdApiError(response.status)
-            payload = await response.read()
+        if referer:
+            parsed = urlparse(referer)
+            headers["Referer"] = referer
+            headers["Origin"] = f"{parsed.scheme}://{parsed.netloc}"
+        for _ in range(_MAX_REDIRECTS):
+            if not _allowed_host(url):
+                raise DpdApiError(502)
+            if _ERROR_PAGE.search(url):
+                raise DpdApiError(500)
+            async with self._session.request(
+                method, url, data=data, headers=headers, allow_redirects=False
+            ) as response:
+                status = response.status
+                if status in _REDIRECT_STATUSES:
+                    location = response.headers.get("Location")
+                    if not location:
+                        raise DpdApiError(status)
+                    url = urljoin(url, location)
+                    method, data = "GET", None
+                    headers = {
+                        key: value
+                        for key, value in headers.items()
+                        if key not in ("Referer", "Origin")
+                    }
+                    continue
+                if status != 200:
+                    raise DpdApiError(status)
+                if "html" not in (response.content_type or ""):
+                    raise DpdApiError(status)
+                body = await response.text(errors="replace")
+            if _ERROR_TITLE.search(body):
+                raise DpdApiError(500)
+            return url, body
+        raise DpdApiError(310)
 
+    async def _postback(
+        self, url: str, html: str, target: str, *, referer: str | None = None
+    ) -> str:
+        """Post one WebForms event with the form state of ``html``."""
         try:
-            body = _parse_response(method_name, payload)
-        except ET.ParseError as err:
-            raise DpdApiError(response.status) from err
-        if "faultstring" in body:
-            # A SOAP fault, not a domain ErrorDataList entry — a server-side
-            # exception, not a credentials/session rejection. Surfacing it as
-            # DpdAuthError would misreport it as "invalid password".
-            raise DpdApiError(response.status)
-        return body
+            fields = form_fields(html)
+        except DpdPageError as err:
+            _warn_once(
+                f"state:{err.missing}",
+                "A DPD Germany page did not carry its form state (%s) — "
+                "report it at "
+                "https://github.com/ha-parcel-integrations/ha-dpd/issues/new"
+                "?template=unrecognised_status.yml",
+                err.missing,
+            )
+            raise
+        fields["__EVENTTARGET"] = target
+        fields["__EVENTARGUMENT"] = ""
+        return await self._fetch("POST", url, data=fields, referer=referer or url)
 
+    # -- login ladder ------------------------------------------------------
 
-__all__ = [
-    "DpdDeSession",
-    "as_list",
-    "compute_key_phase",
-]
+    def _check_backoff(self) -> None:
+        key, now = self._email.lower(), time.monotonic()
+        if _CAPTCHA_UNTIL.get(key, 0.0) > now:
+            raise DpdCaptchaError
+        if _UNOPENED_UNTIL.get(key, 0.0) > now:
+            raise DpdApiError(200)
+
+    async def _async_full_login(self, *, respect_backoff: bool) -> str:
+        """Sign in and return the portal dashboard page."""
+        if respect_backoff:
+            self._check_backoff()
+        async with self._session.request(
+            "POST",
+            DPD_DE_LOGIN_URL,
+            data={"dpg_username": self._email, "dpg_password": self._password},
+            headers={
+                "User-Agent": DPD_DE_USER_AGENT,
+                "Accept-Language": "de-DE,de;q=0.9",
+                "Origin": "https://www.dpd.com",
+                "Referer": DPD_DE_LOGIN_URL,
+            },
+            allow_redirects=False,
+        ) as response:
+            status = response.status
+            location = response.headers.get("Location", "")
+            body = await response.text(errors="replace") if status == 200 else ""
+
+        if status in _REDIRECT_STATUSES:
+            target = urljoin(DPD_DE_LOGIN_URL, location)
+            if urlparse(target).hostname == "portal.dpd.de" and "dpd_token=" in target:
+                return await self._fetch("GET", target)
+            raise DpdApiError(status)
+        if status != 200:
+            raise DpdApiError(status)
+        if has_captcha(body):
+            _CAPTCHA_UNTIL[self._email.lower()] = (
+                time.monotonic() + _CAPTCHA_BACKOFF_SECONDS
+            )
+            _warn_once(
+                "captcha",
+                "DPD Germany is asking for a captcha at login, which Home "
+                "Assistant cannot answer. The integration keeps polling but "
+                "waits six hours between sign-in attempts; re-authenticating "
+                "the integration tries at once, and signing in once at "
+                "dpd.com in a browser may clear the captcha.",
+            )
+            raise DpdCaptchaError
+        if login_rejected(body):
+            raise DpdAuthError("DPD Germany rejected the login")
+        raise DpdApiError(200)
+
+    async def _async_hop(self, portal_html: str) -> str:
+        """Open the parcel list from the portal dashboard."""
+        return await self._postback(
+            DPD_DE_PORTAL_HOME_URL, portal_html, _HOP_TARGET
+        )
+
+    async def _async_login_and_open(self, *, respect_backoff: bool) -> str:
+        portal = await self._async_full_login(respect_backoff=respect_backoff)
+        html = await self._async_hop(portal)
+        key = self._email.lower()
+        if not is_logged_in(html):
+            _UNOPENED_UNTIL[key] = time.monotonic() + _UNOPENED_BACKOFF_SECONDS
+            _warn_once(
+                "hop",
+                "Signed in to DPD Germany, but the parcel list did not open. "
+                "Report it at "
+                "https://github.com/ha-parcel-integrations/ha-dpd/issues/new"
+                "?template=unrecognised_status.yml",
+            )
+            raise DpdApiError(200)
+        _CAPTCHA_UNTIL.pop(key, None)
+        _UNOPENED_UNTIL.pop(key, None)
+        return html
+
+    async def _async_reuse_session(self) -> str | None:
+        """Rungs 1 and 2: the parcel list, if the cookies still open it.
+
+        Only a clean signed-out answer returns ``None`` and so leads to a
+        login. Any error (5xx, an error page, a changed layout) fails the
+        poll instead: a login cannot fix those, and repeating one every poll
+        is what could switch the captcha on.
+        """
+        html = await self._fetch("GET", DPD_DE_INBOX_URL)
+        if is_logged_in(html):
+            return html
+        portal_url, portal = await self._fetch_page("GET", DPD_DE_PORTAL_HOME_URL)
+        if not is_portal_logged_in(portal_url, portal):
+            return None
+        html = await self._async_hop(portal)
+        return html if is_logged_in(html) else None
+
+    async def _async_open_inbox(self) -> str:
+        html = await self._async_reuse_session()
+        if html is not None:
+            return html
+        return await self._async_login_and_open(respect_backoff=True)
+
+    async def async_login(self, *, respect_backoff: bool = False) -> None:
+        """Sign in once, so the first poll starts on a live session.
+
+        A user entering credentials in the config flow always gets a real
+        attempt. Setup and polls pass ``respect_backoff``, so Home Assistant's
+        automatic retries do not keep submitting logins.
+        """
+        async with self._lock:
+            await self._async_login_and_open(respect_backoff=respect_backoff)
+
+    # -- reading -----------------------------------------------------------
+
+    async def async_get_inbox(self) -> dict[str, list[dict[str, Any]]]:
+        """Return the account's parcels, keyed by tab.
+
+        Postbacks are chained on the previous response's form state and are
+        never run concurrently.
+        """
+        async with self._lock:
+            html = await self._async_open_inbox()
+            first = Page(html)
+            counters = {tab: first.counter(tab) for tab in _TAB_TARGETS}
+            inbox: dict[str, list[dict[str, Any]]] = {}
+            seen: set[tuple[str, str]] = set()
+            for tab, target in _TAB_TARGETS.items():
+                if tab != "incoming":
+                    if not counters[tab]:
+                        inbox[tab] = []
+                        continue
+                    html = await self._postback(DPD_DE_INBOX_URL, html, target)
+                    self._require_signed_in(html)
+                page = Page(html)
+                warn_pager(page)
+                parcels = []
+                for row in list_rows(page):
+                    html, parcel = await self._async_read_row(html, tab, row)
+                    seen.add((tab, row["barcode"]))
+                    parcels.append(parcel)
+                inbox[tab] = parcels
+            self._details = {
+                key: entry
+                for key, entry in self._details.items()
+                if key in seen
+            }
+            return inbox
+
+    @staticmethod
+    def _require_signed_in(html: str) -> None:
+        if not is_logged_in(html):
+            raise DpdApiError(200)
+
+    async def _async_read_row(
+        self, html: str, tab: str, row: dict[str, Any]
+    ) -> tuple[str, dict[str, Any]]:
+        """Attach a row's detail panel; return the page to chain from next."""
+        barcode = row["barcode"]
+        fingerprint = (row["status_sentence"], row["status_icon"])
+        cached = self._details.get((tab, barcode))
+        parcel = {
+            "barcode": barcode,
+            "label": row["label"],
+            "status_sentence": row["status_sentence"],
+            "status_icon": row["status_icon"],
+            "tab": tab,
+            "detail": None,
+            "stale_detail": cached[1] if cached else None,
+        }
+        if cached and cached[0] == fingerprint:
+            parcel["detail"] = cached[1]
+            return html, parcel
+        try:
+            fresh = await self._postback(
+                DPD_DE_INBOX_URL,
+                html,
+                _ROW_TARGET.format(index=row["index"]),
+            )
+            self._require_signed_in(fresh)
+        except DpdApiError as err:
+            _LOGGER.debug("DPD Germany parcel detail unavailable (%s)", err)
+            return html, parcel
+        panel = detail(Page(fresh))
+        if panel is None or panel["identity"] != barcode:
+            _LOGGER.debug("DPD Germany parcel detail did not match its row")
+            return fresh, parcel
+        self._details[(tab, barcode)] = (fingerprint, panel)
+        parcel["detail"] = panel
+        return fresh, parcel

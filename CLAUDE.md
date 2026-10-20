@@ -81,12 +81,43 @@ that to one case, DPD's API expects upper — and a new BU needs an entry in
 `const.py` **and** in *every* `translations/<lang>.json`'s
 `selector.bu.options`, not just `en.json`.
 
-**Germany (`countries/de/`)** — separate SOAP transport. A SOAP fault raises
-`DpdApiError`, **never** `DpdAuthError`: a fault is a shape bug, not a rejected
-login, and must not push a user into reauth. Reauth on
-`ERROR_SESSION_NOT_VALID`/`ERROR_KEYPHASE` happens **once**, never in a loop.
-As of 2026-08-17 only login and an empty inbox are wire-confirmed on a real
-account — **treat every mapped status/slot as provisional.**
+**Germany (`countries/de/`)** — the user's own myDPD web account, read from its
+signed-in parcel list. Page ids, the request chain and the status vocabulary
+are in `carrier-research/dpd/`, not here. The tripwires:
+
+- **The hop from the portal dashboard to the parcel host is mandatory.** Skipped,
+  the list renders an *empty inbox* instead of asking for a login — a silent
+  failure.
+- **Signed in is decided by one marker control, never by the row count.** An
+  anonymous page and an empty account look the same. The marker is a constant
+  in `countries/de/page.py`. The portal side needs its host *and* its hop control: the sign-out wording also sits on the public login page.
+- **Postbacks chain on the previous response's form state and never run
+  concurrently.** A stale state is an error page, which is a `DpdApiError`.
+- **Own cookie jar per entry**, never the shared HA session. **Log in as rarely
+  as possible**: reuse the cookies, then the hop alone, and log in only after a
+  *clean* signed-out answer. Any error in those first rungs fails the poll
+  without a login, and a login that opens nothing backs off an hour.
+- **The captcha is server-toggled.** It is a `DpdApiError` (setup: not ready,
+  poll: failed update), never reauth. Setup and polls back off full logins six
+  hours (a login that opens nothing: one hour), so HA's automatic retries never
+  log in; only the config flow (add, reauth) makes a real attempt, and a
+  successful login clears the back-offs. Never try to solve or get around it.
+- **Only a confirmed credential rejection reaches reauth.** Everything
+  uncertain is `DpdApiError`; a user with a working password must never be
+  pushed into reauth.
+- **Dated milestones decide the status, the icon number is a DPD code and never
+  overrides them, and `retour` beats delivered.**
+- **The recipient-postcode check is never submitted and no address data is
+  read.** `sender` and `receiver` stay `None`.
+- Existing German entries keep working without a new login:
+  `async_migrate_entry` only drops the old `de_hardware_id`; the constant stays
+  for that and for diagnostics redaction.
+
+Only a login and one delivered return are confirmed on a real account.
+Everything else mapped is provisional (an active parcel, a pickup point, the
+other tabs, other icons, the wrong-password response), so `delivery_window` and
+`pickup_point` are pending capabilities. **Ship Germany changes as a
+pre-release (`bN`).**
 
 **Poland (`countries/pl/`)** — separate OAuth transport, receiver inbox only
 (always returns an empty outgoing list). As of 2026-08-31
@@ -107,8 +138,8 @@ request/response shapes, the status vocabulary, the scan-stamp format) are in
 - **Only a real credential rejection may reach reauth.** The host runs bot
   protection whose refusal looks like an authorization failure, and a rejection
   can arrive with a success status code. Mapping either to `DpdAuthError` sends
-  a user with working credentials into reauth — the same mistake the DE
-  SOAP-fault rule exists to prevent. A missing token on an accepted login is a
+  a user with working credentials into reauth — the same mistake Germany's
+  reauth rule exists to prevent. A missing token on an accepted login is a
   shape problem, not an auth one.
 - **The portal needs one page GET before the API is usable**, best-effort by
   design — don't make it fatal.

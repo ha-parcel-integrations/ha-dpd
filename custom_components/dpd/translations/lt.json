@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "Nepavyksta pasiekti DPD. Patikrinkite tinklo ryšį.",
+      "captcha": "DPD šiuo metu prašo captcha. Vieną kartą prisijunkite naršyklėje adresu dpd.com ir bandykite dar kartą.",
       "invalid_auth": "Neteisingas el. paštas arba slaptažodis.",
       "invalid_phone": "Įveskite galiojantį Lenkijos mobiliojo telefono numerį (devyni skaitmenys, pasirinktinai su +48 arba 0048).",
       "invalid_sms_code": "Neteisingas arba pasibaigęs SMS kodas."

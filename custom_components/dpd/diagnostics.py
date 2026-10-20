@@ -45,8 +45,8 @@ TO_REDACT = {
     "pick_up_pin",
     "zabka_barcode",
     # DPD Germany field names (different casing/shape from the general
-    # backend above) — the session token and every address/contact field
-    # an AddressType can carry.
+    # backend above). The first group belongs to entries and diagnostics
+    # captured before the web account replaced the app transport.
     "SessionToken",
     "HardwareID",
     "ParcelNo",
@@ -61,6 +61,8 @@ TO_REDACT = {
     "Name",
     "Company",
     "ReceiverName",
+    # DPD Germany's parcel label is a name the user typed.
+    "label",
     # DPD Austria (mydpd.at) field names. Its spellings match none of the
     # entries above — ``parcelno`` is not ``parcelNumber``/``ParcelNo``, and
     # the address block is ``*_addr_*``, not ``postalCode``/``ZipCode`` — so

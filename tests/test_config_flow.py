@@ -7,7 +7,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.dpd.api import DpdAuthError
+from custom_components.dpd.api import DpdApiError, DpdAuthError
 from custom_components.dpd.const import (
     CONF_BU,
     CONF_COUNTRY,
@@ -22,6 +22,7 @@ from custom_components.dpd.const import (
     COUNTRY_PL,
     DEFAULT_BU,
     DOMAIN,
+    DpdCaptchaError,
 )
 
 _USER_INPUT = {
@@ -396,7 +397,7 @@ async def test_user_flow_pl_creates_entry_titled_by_phone_number(hass):
 
 
 # ---------------------------------------------------------------------------
-# DPD Germany — separate SOAP backend, branched off the same BU dropdown
+# DPD Germany — separate web-account stack, branched off the same BU dropdown
 # ---------------------------------------------------------------------------
 
 _DE_EMAIL = "user@example.de"
@@ -408,7 +409,7 @@ _DE_FORM_INPUT = {
 
 
 @pytest.mark.asyncio
-async def test_user_flow_de_creates_entry_with_hardware_id(hass):
+async def test_user_flow_de_creates_entry_without_a_device_id(hass):
     with patch(
         "custom_components.dpd.config_flow.DpdDeSession.async_login",
         new=AsyncMock(return_value=None),
@@ -429,8 +430,39 @@ async def test_user_flow_de_creates_entry_with_hardware_id(hass):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_EMAIL] == _DE_EMAIL
     assert result["data"][CONF_COUNTRY] == COUNTRY_DE.upper()
-    assert result["data"][CONF_DE_HARDWARE_ID]
+    assert CONF_DE_HARDWARE_ID not in result["data"]
     assert CONF_BU not in result["data"]
+    assert result["result"].minor_version == 2
+
+
+@pytest.mark.asyncio
+async def test_user_flow_de_validates_on_its_own_cookie_jar(hass):
+    """The validation login must not touch the shared client session."""
+    seen = []
+
+    async def _login(self, **kwargs):
+        seen.append(self._session)
+
+    with (
+        patch(
+            "custom_components.dpd.config_flow.DpdDeSession.async_login",
+            new=_login,
+        ),
+        patch(
+            "custom_components.dpd.config_flow.async_get_clientsession"
+        ) as shared,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=_DE_FORM_INPUT
+        )
+
+    shared.assert_not_called()
+    # Released once the check is done, not kept until Home Assistant stops.
+    assert seen and seen[0].closed
+    assert isinstance(seen[0].cookie_jar, aiohttp.CookieJar)
 
 
 @pytest.mark.asyncio
@@ -463,6 +495,66 @@ async def test_user_flow_de_cannot_connect(hass):
         )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "key"),
+    [
+        (DpdCaptchaError(), "captcha"),
+        (DpdApiError(200), "cannot_connect"),
+        (DpdAuthError("nope"), "invalid_auth"),
+    ],
+)
+async def test_user_flow_de_maps_each_error(hass, error, key):
+    with patch(
+        "custom_components.dpd.config_flow.DpdDeSession.async_login",
+        new=AsyncMock(side_effect=error),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=_DE_FORM_INPUT
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": key}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "key"),
+    [
+        (DpdCaptchaError(), "captcha"),
+        (DpdApiError(200), "cannot_connect"),
+    ],
+)
+async def test_reauth_flow_de_maps_each_error(hass, error, key):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"DE:{_DE_EMAIL}",
+        data={
+            CONF_EMAIL: _DE_EMAIL,
+            CONF_PASSWORD: "secret",
+            CONF_COUNTRY: COUNTRY_DE.upper(),
+        },
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.dpd.config_flow.DpdDeSession.async_login",
+        new=AsyncMock(side_effect=error),
+    ):
+        result = await entry.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_EMAIL: _DE_EMAIL, CONF_PASSWORD: "secret"},
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": key}
 
 
 @pytest.mark.asyncio
@@ -530,8 +622,6 @@ async def test_reauth_flow_de_updates_credentials_and_reloads(hass):
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_PASSWORD] == "new-secret"
-    # The device identity (hardware id) survives a reauth unchanged.
-    assert entry.data[CONF_DE_HARDWARE_ID] == "existing-hw-id"
 
 
 @pytest.mark.asyncio
@@ -793,3 +883,34 @@ async def test_the_country_step_still_routes_poland_past_the_credential_step(has
             result["flow_id"], user_input={CONF_BU: "dpd-pl"}
         )
     assert result["step_id"] == "phone"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_de_logs_in_during_the_backoff_and_clears_it(hass):
+    from custom_components.dpd.countries.de import session as de_session
+
+    de_session._CAPTCHA_UNTIL[_DE_EMAIL.lower()] = float("inf")
+    de_session._UNOPENED_UNTIL[_DE_EMAIL.lower()] = float("inf")
+    attempts = []
+
+    async def _full_login(self, *, respect_backoff):
+        attempts.append(respect_backoff)
+        return "<portal>"
+
+    async def _hop(self, portal):
+        return 'id="modBurgerNavi_btnLogout"'
+
+    with (
+        patch.object(de_session.DpdDeSession, "_async_full_login", _full_login),
+        patch.object(de_session.DpdDeSession, "_async_hop", _hop),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=_DE_FORM_INPUT
+        )
+
+    assert result["step_id"] == "delivered"
+    assert attempts == [False]
+    assert not de_session._CAPTCHA_UNTIL and not de_session._UNOPENED_UNTIL

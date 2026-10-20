@@ -451,6 +451,26 @@ async def test_coordinator_de_raises_update_failed_on_api_error(hass):
         await coordinator._async_update_data()
 
 
+@pytest.mark.asyncio
+async def test_coordinator_de_captcha_is_a_failed_poll_not_a_reauth(hass):
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    from custom_components.dpd.const import DpdCaptchaError
+
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry(), de_session=MagicMock()
+    )
+
+    with (
+        patch(
+            "custom_components.dpd.coordinator.async_get_all_parcels_de",
+            new=AsyncMock(side_effect=DpdCaptchaError()),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()
+
+
 # ---------------------------------------------------------------------------
 # DpdCoordinator._async_fetch_pl — DPD Poland's receiver inbox
 # ---------------------------------------------------------------------------

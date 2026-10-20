@@ -123,8 +123,8 @@ def _next_update_interval(now: datetime, tier_minutes: int, entry_id: str) -> ti
 class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     """Coordinator that polls the DPD parcels API on a dynamic schedule.
 
-    Dispatches the fetch to the general/NL+BU backend, DPD Germany's SOAP
-    backend, DPD Poland's OAuth backend or DPD Austria's mydpd.at portal,
+    Dispatches the fetch to the general/NL+BU backend, DPD Germany's web
+    account, DPD Poland's OAuth backend or DPD Austria's mydpd.at portal,
     based on which session was passed
     — everything past that one dispatch point (sorting, filtering,
     event-firing, the polling recompute) is shared.
@@ -143,7 +143,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         """Initialize the coordinator.
 
         ``client`` is the general/NL+BU transport; ``de_session`` is DPD
-        Germany's SOAP session. Exactly one of the two is used per hub —
+        Germany's web-account session. Exactly one of the two is used per hub —
         ``__init__.py`` constructs the right one for the hub's country.
         """
         super().__init__(
@@ -388,12 +388,13 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         return incoming_all, outgoing_all
 
     async def _async_fetch_de(self) -> tuple[list[dict], list[dict]]:
-        """Fetch + normalize DPD Germany's SOAP backend, split active/delivered.
+        """Fetch + normalize DPD Germany's web account, split active/delivered.
 
-        DE has no BU, no FMP, no per-parcel detail endpoint and no UK-style
-        tracking lookup — the whole enrichment happens inside
-        ``async_get_all_parcels_de`` before this returns, so the buckets it
-        hands back are already fully normalized.
+        DE has no BU, no FMP and no UK-style tracking lookup — the whole
+        enrichment happens inside ``async_get_all_parcels_de`` before this
+        returns, so the buckets it hands back are already fully normalized.
+        A captcha at login is a ``DpdApiError``, never an auth failure: the
+        password is fine, so it must not start reauth.
         """
         assert self._de_session is not None
         try:

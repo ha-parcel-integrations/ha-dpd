@@ -224,3 +224,47 @@ def test_no_austrian_pii_survives_redaction():
 
     walk(async_redact_data(raw, TO_REDACT))
     assert leaked == []
+
+
+def test_no_german_account_data_survives_the_reader_or_the_redaction():
+    """From a page carrying a postcode to the redacted diagnostics."""
+    from homeassistant.helpers.redact import async_redact_data
+
+    from custom_components.dpd.countries.de import normalize_parcel_de
+    from custom_components.dpd.countries.de.page import Page, detail, list_rows
+
+    from .payloads import DE_BARCODE, DE_POSTCODE, de_inbox_page, de_slots
+
+    row = {"barcode": DE_BARCODE, "label": "Geschenk fuer Erika", "sentence": "Unterwegs", "icon": 2}
+    page = Page(
+        de_inbox_page(
+            [row],
+            detail={
+                "barcode": DE_BARCODE,
+                "slots": de_slots(("Paketinfo an DPD \u00fcbergeben", "01.10.")),
+                "weight": "1,5",
+            },
+        )
+    )
+    assert DE_POSTCODE in page.html  # the page does carry it
+    (listed,) = list_rows(page)
+    parcel = normalize_parcel_de(
+        {
+            "barcode": listed["barcode"],
+            "label": listed["label"],
+            "status_sentence": listed["status_sentence"],
+            "status_icon": listed["status_icon"],
+            "tab": "incoming",
+            "detail": detail(page),
+            "stale_detail": None,
+        },
+        include_history=True,
+    )
+    assert DE_POSTCODE not in repr(parcel)
+
+    entry = {"email": "user@example.de", "password": "secret", "de_hardware_id": "old-device-id"}
+    redacted = repr(async_redact_data(entry, TO_REDACT)) + repr(
+        async_redact_data(parcel, TO_REDACT)
+    )
+    for secret in ("user@example.de", "secret", "old-device-id", "Erika"):
+        assert secret not in redacted

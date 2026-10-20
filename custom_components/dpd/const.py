@@ -23,6 +23,18 @@ class DpdApiError(Exception):
         self.status_code = status_code
 
 
+class DpdCaptchaError(DpdApiError):
+    """Raised when DPD Germany asks for a captcha at login.
+
+    Not a credential problem: it must never reach reauth.
+    """
+
+    def __init__(self) -> None:
+        """Report it as an HTTP 200, the status the captcha page arrives with."""
+        super().__init__(200)
+        self.args = ("DPD asked for a captcha at login",)
+
+
 class ParcelStatus(StrEnum):
     """Carrier-agnostic parcel status.
 
@@ -57,12 +69,12 @@ KNOWN_CAPABILITIES = frozenset(
 #             normalize_parcel). Its per-parcel detail call fills weight,
 #             dimensions, the FMP delivery window, opt-in history and a
 #             ParcelShop pickup point name, plus a real tracking-page url.
-#   Germany — countries/de/__init__.py's normalize_parcel_de. Fills the same
-#             weight/dimensions/delivery_window/pickup_point/history (all
-#             best-effort — DE declares no unit for weight/dimensions, so
-#             those are inferred-magnitude guesses, not a confirmed API
-#             contract) but NOT url: DE exposes no tracking-page link, so
-#             normalize_parcel_de's "url" is always None.
+#   Germany — countries/de/__init__.py's normalize_parcel_de. The account's
+#             parcel list carries weight, a tracking-page url and the five
+#             daily milestones (history). No dimensions. delivery_window (the
+#             day of the out-for-delivery milestone) and pickup_point are
+#             implemented but unseen, so both sit in
+#             PENDING_CAPABILITIES_BY_VARIANT below.
 #   Austria — countries/at/__init__.py's normalize_parcel_at. The mydpd.at
 #             inbox carries no weight or dimensions at all, and like DE has
 #             no per-parcel tracking page, so no url either. Opt-in history
@@ -71,7 +83,7 @@ KNOWN_CAPABILITIES = frozenset(
 #             entry) are implemented but unseen, so they sit in
 #             PENDING_CAPABILITIES_BY_VARIANT below.
 CAPABILITIES_BY_VARIANT = {
-    "Germany": frozenset({"weight", "dimensions", "delivery_window", "pickup_point", "history"}),
+    "Germany": frozenset({"weight", "url", "history"}),
     "Poland": frozenset({"delivery_window", "history"}),
     "Austria": frozenset({"history"}),
     "Other": frozenset(
@@ -82,6 +94,7 @@ CAPABILITIES_BY_VARIANT = {
 # Fields not confirmed yet — the docs site shows them as "awaiting data".
 # Move a field into the declaration above once a real parcel shows it.
 PENDING_CAPABILITIES_BY_VARIANT = {
+    "Germany": frozenset({"delivery_window", "pickup_point"}),
     "Poland": frozenset({"pickup_point"}),
     # Implemented but unseen on a real Austrian parcel: the window is only
     # populated at the out-for-delivery stage, and the pickup point comes
@@ -157,7 +170,7 @@ BUSINESS_UNITS = [
 DEFAULT_BU = "DPD-NL"
 
 # The config-flow's single country/BU dropdown — BUSINESS_UNITS plus DPD
-# Germany's separate SOAP backend, so the user picks a destination country
+# Germany's separate account stack, so the user picks a destination country
 # once and never has to answer "which backend" as its own question. Kept
 # apart from BUSINESS_UNITS itself: that constant is also used to build
 # general-backend requests (bu query values sent to myDPD/Keycloak), and
@@ -282,7 +295,7 @@ DEFAULT_DELIVERED_FILTER_AMOUNT = 7
 
 # Dynamic, status-driven polling — unconditional, no user-facing interval
 # option. Account-based model: applies to all three transports (general/BU,
-# DPD Germany's SOAP backend and DPD Poland's OAuth backend), which share the
+# DPD Germany's web account and DPD Poland's OAuth backend), which share the
 # single recompute point past the coordinator's dispatch branch.
 #
 # Quiet window: no polling between these local hours except the two anchors
@@ -323,20 +336,20 @@ COUNTRY_PL = "pl"
 COUNTRY_AT = "at"
 DEFAULT_COUNTRY = COUNTRY_GENERAL
 
-# Persisted in entry.data (not entry.options) so a DE hub keeps the same
-# device identity across HA restarts.
+# Older German entries stored a device id here. It is no longer read; the
+# entry migration drops it, and diagnostics still redact it until then.
 CONF_DE_HARDWARE_ID = "de_hardware_id"
 
-# DPD Germany — Paketnavigator app SOAP backend. countries/de/session.py is
-# the only module that sends these on the wire.
-DPD_DE_SOAP_URL = "https://api.paketnavigator.de/services/v1/Navigator3Service.asmx"
-DPD_DE_SOAP_NAMESPACE = "https://cloud.dpd.com/"
-DPD_DE_PARTNER_NAME = "Android Paketnavigator3"
-DPD_DE_PARTNER_TOKEN = "A33363237662F5945576"
-DPD_DE_PARTNER_SECRET = "272 WetFd2mpXrgD"
-DPD_DE_USER_AGENT = "ksoap2-android/2.6.0+"
-DPD_DE_LANGUAGE = "de_DE"
-# SoapApiEndpoint.isTimeCorrupted() rejects a response TimeStamp more than
-# this far from local time — the practical clock-skew tolerance for the
-# minute-derived KeyPhase.
-DPD_DE_CLOCK_SKEW_TOLERANCE_MINUTES = 8
+# DPD Germany — the myDPD web account. countries/de/session.py is the only
+# module that sends these on the wire.
+DPD_DE_LOGIN_URL = (
+    "https://www.dpd.com/de/de/mydpd-anmelden-und-registrieren/?lng=DEU"
+)
+DPD_DE_PORTAL_HOME_URL = "https://portal.dpd.de/home_pn.aspx"
+DPD_DE_INBOX_URL = "https://my.dpd.de/myParcel.aspx"
+DPD_DE_TRACKING_URL = "https://my.dpd.de/redirect.aspx?action=12&parcelno={barcode}"
+# suite: allow browser user-agent (my.dpd.de resets connections from a non-browser user-agent)
+DPD_DE_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+)

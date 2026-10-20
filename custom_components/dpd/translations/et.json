@@ -53,6 +53,7 @@
     },
     "error": {
       "cannot_connect": "DPD-ga ei saa ühendust. Kontrolli võrguühendust.",
+      "captcha": "DPD nõuab praegu captchat. Logi korra brauseris aadressil dpd.com sisse ja proovi siis uuesti.",
       "invalid_auth": "Vale e-post või parool.",
       "invalid_phone": "Sisesta kehtiv Poola mobiilinumber (üheksa numbrit, soovi korral eesliitega +48 või 0048).",
       "invalid_sms_code": "Vigane või aegunud SMS-kood."
