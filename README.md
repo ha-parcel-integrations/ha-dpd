@@ -56,7 +56,7 @@ this integration answers to both names there.
 This integration is available in the default HACS store.
 
 1. Open HACS, search for **DPD** and install it
-2. Restart Home Assistant
+2. Restart Home Assistant if HACS asks you to
 
 Or click the button below to open it directly in HACS:
 
@@ -68,6 +68,10 @@ Or click the button below to open it directly in HACS:
 2. Restart Home Assistant
 
 ## Configuration
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=dpd)
+
+Or set it up by hand:
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **DPD**
