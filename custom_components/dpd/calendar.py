@@ -1,4 +1,5 @@
 """Calendar platform for the DPD integration."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -19,8 +20,6 @@ PARALLEL_UPDATES = 0
 
 # Fallback window length for a parcel that has a start moment but no end.
 _DEFAULT_EVENT_DURATION = timedelta(hours=1)
-
-
 
 
 def _parse(value: str | None) -> datetime | None:

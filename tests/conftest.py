@@ -1,14 +1,18 @@
 """pytest configuration for the DPD test suite."""
+
 import sys
 
 import pytest
 from pytest_homeassistant_custom_component.plugins import hass  # noqa: F401
 
+from custom_components.dpd.countries import at, de, general
+from custom_components.dpd.countries.at import session as at_session
+from custom_components.dpd.countries.de import page as de_page, session as de_session
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Make ``custom_components.dpd`` loadable in HA tests."""
-    yield
 
 
 @pytest.fixture(autouse=True)
@@ -20,10 +24,6 @@ def reset_one_shot_warnings():
     makes them leak across tests, so whether a warning fires would otherwise
     depend on test order.
     """
-    from custom_components.dpd.countries import at, de, general
-    from custom_components.dpd.countries.at import session as at_session
-    from custom_components.dpd.countries.de import page as de_page
-    from custom_components.dpd.countries.de import session as de_session
 
     de._WARNED.clear()
     de_page._MISSING_LOGGED.clear()
@@ -40,7 +40,6 @@ def reset_one_shot_warnings():
     at._SEEN_REASONS.clear()
     at._BAD_TIMESTAMPS.clear()
     at._UNEXPECTED_SHAPES.clear()
-    yield
 
 
 if sys.platform == "win32":
@@ -60,7 +59,7 @@ if sys.platform == "win32":
     # HA's aiohttp helper hardcodes aiohttp's AsyncResolver, whose aiodns
     # backend refuses the Proactor loop the suite runs on under Windows.
     # Swap in the threaded resolver for the tests — no test resolves DNS.
-    import homeassistant.helpers.aiohttp_client as _ha_aiohttp_client
     from aiohttp.resolver import ThreadedResolver
+    import homeassistant.helpers.aiohttp_client as _ha_aiohttp_client
 
     _ha_aiohttp_client.AsyncResolver = ThreadedResolver

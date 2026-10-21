@@ -1,13 +1,15 @@
 """Tests for the DPD integration setup/unload entry points."""
+
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
-import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.dpd import DpdData
+from custom_components.dpd import DpdData, async_migrate_entry
 from custom_components.dpd.api import DpdApiError, DpdAuthError
 from custom_components.dpd.const import (
     CONF_BU,
@@ -22,6 +24,8 @@ from custom_components.dpd.const import (
     DOMAIN,
     DpdCaptchaError,
 )
+from custom_components.dpd.countries.de import session as de_session
+from custom_components.dpd.countries.de.page import DpdPageError
 
 from .payloads import envelope
 
@@ -33,7 +37,6 @@ _ENTRY_DATA = {
 
 
 def _add_entry(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -170,7 +173,6 @@ _DE_ENTRY_DATA = {
 
 
 def _add_de_entry(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -232,7 +234,6 @@ async def test_setup_entry_de_uses_a_cookie_jar_of_its_own(hass):
 
 @pytest.mark.asyncio
 async def test_migration_drops_the_device_id_and_keeps_the_rest(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -284,13 +285,8 @@ async def test_migration_leaves_other_countries_untouched(hass):
 
 @pytest.mark.asyncio
 async def test_migration_skips_an_entry_already_at_the_current_version(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.dpd import async_migrate_entry
-
-    entry = MockConfigEntry(
-        domain=DOMAIN, data=_DE_ENTRY_DATA, minor_version=2
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data=_DE_ENTRY_DATA, minor_version=2)
     entry.add_to_hass(hass)
     assert await async_migrate_entry(hass, entry)
     assert entry.data[CONF_DE_HARDWARE_ID] == "existing-hw-id"
@@ -412,7 +408,6 @@ _AT_ENTRY_DATA = {
 
 
 def _add_at_entry(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -524,7 +519,6 @@ async def test_unload_entry_de_closes_its_own_session(hass):
 
 @pytest.mark.asyncio
 async def test_setup_entry_de_unexpected_page_retries(hass):
-    from custom_components.dpd.countries.de.page import DpdPageError
 
     entry = _add_de_entry(hass)
     with patch(
@@ -550,7 +544,6 @@ async def test_setup_entry_de_plain_200_error_retries(hass):
 
 @pytest.mark.asyncio
 async def test_setup_entry_de_during_the_backoff_retries_without_a_login(hass):
-    from custom_components.dpd.countries.de import session as de_session
 
     entry = _add_de_entry(hass)
     de_session._CAPTCHA_UNTIL[_DE_EMAIL.lower()] = float("inf")

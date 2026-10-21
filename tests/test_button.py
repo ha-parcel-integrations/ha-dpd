@@ -1,9 +1,11 @@
 """Tests for the DPD refresh button."""
+
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers import entity_registry as er
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dpd.const import (
     CONF_BU,
@@ -23,7 +25,6 @@ _ENTRY_DATA = {
 
 
 def _add_entry(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -49,9 +50,7 @@ async def test_refresh_button_forces_a_poll(hass):
         ),
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
-            new=AsyncMock(
-                return_value=envelope()
-            ),
+            new=AsyncMock(return_value=envelope()),
         ) as mock_get_parcels,
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)

@@ -1,11 +1,13 @@
 """Tests for the DPD device triggers."""
+
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from homeassistant.components import automation
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dpd.const import (
     CONF_BU,
@@ -26,7 +28,6 @@ _ENTRY_DATA = {
 
 
 def _add_entry(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -51,17 +52,13 @@ async def _setup_and_get_device_id(hass):
         ),
         patch(
             "custom_components.dpd.DpdApiClient.async_get_parcels",
-            new=AsyncMock(
-                return_value=envelope()
-            ),
+            new=AsyncMock(return_value=envelope()),
         ),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, entry.entry_id)}
-    )
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
     assert device is not None
     return device.id
 

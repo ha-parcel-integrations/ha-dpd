@@ -1,14 +1,20 @@
 """Tests for the DPD diagnostics handler."""
+
 from datetime import timedelta
 from unittest.mock import MagicMock
 
+from homeassistant.helpers.redact import async_redact_data
 import pytest
 
 from custom_components.dpd import DpdData
+from custom_components.dpd.countries.de import normalize_parcel_de
+from custom_components.dpd.countries.de.page import Page, detail, list_rows
 from custom_components.dpd.diagnostics import (
     TO_REDACT,
     async_get_config_entry_diagnostics,
 )
+
+from .payloads import DE_BARCODE, DE_POSTCODE, de_inbox_page, de_slots
 
 REDACTED = "**REDACTED**"
 
@@ -62,12 +68,14 @@ async def test_diagnostics_passes_through_options_and_bu():
 @pytest.mark.asyncio
 async def test_diagnostics_redacts_parcel_pii():
     entry = _entry_with_runtime_data(
-        incoming_active=[{
-            "parcelNumber": "01668235086385",
-            "senderName": "Online Retailer",
-            "status": {"description": "IN_TRANSIT"},
-            "recipientName": "Peter",
-        }],
+        incoming_active=[
+            {
+                "parcelNumber": "01668235086385",
+                "senderName": "Online Retailer",
+                "status": {"description": "IN_TRANSIT"},
+                "recipientName": "Peter",
+            }
+        ],
     )
     result = await async_get_config_entry_diagnostics(MagicMock(), entry)
     parcel = result["incoming_active"][0]
@@ -81,14 +89,16 @@ async def test_diagnostics_redacts_parcel_pii():
 @pytest.mark.asyncio
 async def test_diagnostics_redacts_sensitive_dpd_poland_raw_data():
     entry = _entry_with_runtime_data(
-        incoming_active=[{
-            "raw": {
-                "waybill": "12345678901234",
-                "sender": {"name": "Shop", "address": {"city": "Warsaw"}},
-                "user_actions": [{"validation_token": "secret"}],
-                "mps": {"parcels": [{"waybill": "other"}]},
+        incoming_active=[
+            {
+                "raw": {
+                    "waybill": "12345678901234",
+                    "sender": {"name": "Shop", "address": {"city": "Warsaw"}},
+                    "user_actions": [{"validation_token": "secret"}],
+                    "mps": {"parcels": [{"waybill": "other"}]},
+                }
             }
-        }],
+        ],
     )
     result = await async_get_config_entry_diagnostics(MagicMock(), entry)
     raw = result["incoming_active"][0]["raw"]
@@ -172,7 +182,6 @@ def test_to_redact_covers_every_austrian_pii_key():
 
 def test_no_austrian_pii_survives_redaction():
     """Walk a realistic record and assert nothing identifying comes through."""
-    from homeassistant.helpers.redact import async_redact_data
 
     raw = {
         "parcelno": "06215258772803",
@@ -189,9 +198,7 @@ def test_no_austrian_pii_survives_redaction():
         "dstCoords": [48.2, 16.3],
         "state": {"statusMessage": "irrelevant"},
         "lifecycle": {
-            "entries": [
-                {"state": {"infoType": "pers", "infoData": "NEIGHBOUR NAME"}}
-            ]
+            "entries": [{"state": {"infoType": "pers", "infoData": "NEIGHBOUR NAME"}}]
         },
     }
     secrets = (
@@ -217,9 +224,9 @@ def test_no_austrian_pii_survives_redaction():
         elif isinstance(value, list):
             for index, item in enumerate(value):
                 walk(item, f"{path}[{index}]")
-        elif isinstance(value, str) and any(s in value for s in secrets):
-            leaked.append(path)
-        elif isinstance(value, float):
+        elif (
+            isinstance(value, str) and any(s in value for s in secrets)
+        ) or isinstance(value, float):
             leaked.append(path)
 
     walk(async_redact_data(raw, TO_REDACT))
@@ -228,14 +235,13 @@ def test_no_austrian_pii_survives_redaction():
 
 def test_no_german_account_data_survives_the_reader_or_the_redaction():
     """From a page carrying a postcode to the redacted diagnostics."""
-    from homeassistant.helpers.redact import async_redact_data
 
-    from custom_components.dpd.countries.de import normalize_parcel_de
-    from custom_components.dpd.countries.de.page import Page, detail, list_rows
-
-    from .payloads import DE_BARCODE, DE_POSTCODE, de_inbox_page, de_slots
-
-    row = {"barcode": DE_BARCODE, "label": "Geschenk fuer Erika", "sentence": "Unterwegs", "icon": 2}
+    row = {
+        "barcode": DE_BARCODE,
+        "label": "Geschenk fuer Erika",
+        "sentence": "Unterwegs",
+        "icon": 2,
+    }
     page = Page(
         de_inbox_page(
             [row],
@@ -262,7 +268,11 @@ def test_no_german_account_data_survives_the_reader_or_the_redaction():
     )
     assert DE_POSTCODE not in repr(parcel)
 
-    entry = {"email": "user@example.de", "password": "secret", "de_hardware_id": "old-device-id"}
+    entry = {
+        "email": "user@example.de",
+        "password": "secret",
+        "de_hardware_id": "old-device-id",
+    }
     redacted = repr(async_redact_data(entry, TO_REDACT)) + repr(
         async_redact_data(parcel, TO_REDACT)
     )

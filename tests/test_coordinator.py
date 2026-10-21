@@ -1,8 +1,13 @@
 """Tests for the DPD coordinator filter functions, data shape and error handling."""
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dpd.api import DpdApiError, DpdAuthError
 from custom_components.dpd.const import (
@@ -10,10 +15,13 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_INCLUDE_HISTORY,
+    DOMAIN,
     HOT_INTERVAL_MINUTES,
     KNOWN_CAPABILITIES,
     MID_INTERVAL_MINUTES,
+    PENDING_CAPABILITIES_BY_VARIANT,
     STAGGER_MINUTES,
+    DpdCaptchaError,
     ParcelStatus,
 )
 from custom_components.dpd.coordinator import (
@@ -112,7 +120,7 @@ def test_delivery_dt_falls_back_to_delivery_date():
     dt = shipment_delivery_dt(
         shipment_sample(event_dt=None, tz_id=None, delivery_date="2026-06-05")
     )
-    assert dt == datetime(2026, 6, 5, tzinfo=timezone.utc)
+    assert dt == datetime(2026, 6, 5, tzinfo=UTC)
 
 
 def test_delivery_dt_returns_none_when_unknown():
@@ -134,7 +142,9 @@ def test_delivery_dt_invalid_tz_falls_back_to_utc():
 
 def test_planned_dt_parses_delivery_date_at_local_midnight():
     dt = shipment_planned_dt(
-        shipment_sample(event_dt=None, tz_id="Europe/Amsterdam", delivery_date="2026-06-17")
+        shipment_sample(
+            event_dt=None, tz_id="Europe/Amsterdam", delivery_date="2026-06-17"
+        )
     )
     assert dt is not None
     assert (dt.year, dt.month, dt.day) == (2026, 6, 17)
@@ -166,8 +176,8 @@ def test_planned_dt_falls_back_to_utc_for_bad_tz():
 
 
 async def test_delivered_filter_days_excludes_old_parcels(hass):
-    recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).date().isoformat()
-    old_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    recent_date = (datetime.now(UTC) - timedelta(days=2)).date().isoformat()
+    old_date = (datetime.now(UTC) - timedelta(days=30)).date().isoformat()
     shipments = [
         shipment_sample(event_dt=None, tz_id=None, delivery_date=recent_date),
         shipment_sample(event_dt=None, tz_id=None, delivery_date=old_date),
@@ -199,8 +209,8 @@ async def test_delivered_filter_parcels_limits_count(hass):
 
 
 def test_delivered_filter_canonical_days_excludes_old_parcels():
-    recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-    old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    old = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     parcels = [
         {"barcode": "new", "delivered_at": recent},
         {"barcode": "old", "delivered_at": old},
@@ -235,13 +245,15 @@ def test_delivered_filter_canonical_parcels_limits_count():
 async def test_coordinator_splits_active_and_delivered(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [
-            shipment_sample("ORDER_CREATED", parcel_number="A"),
-            shipment_sample("DELIVERED", parcel_number="B"),
-        ],
-        "sendingShipments": [shipment_sample("DELIVERED", parcel_number="C")],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [
+                shipment_sample("ORDER_CREATED", parcel_number="A"),
+                shipment_sample("DELIVERED", parcel_number="B"),
+            ],
+            "sendingShipments": [shipment_sample("DELIVERED", parcel_number="C")],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
     result = await coordinator._async_update_data()
@@ -254,17 +266,31 @@ async def test_coordinator_splits_active_and_delivered(hass):
 
 
 async def test_coordinator_applies_delivered_filter_to_outgoing(hass):
-    recent = (datetime.now(timezone.utc) - timedelta(days=2)).date().isoformat()
-    old = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=2)).date().isoformat()
+    old = (datetime.now(UTC) - timedelta(days=30)).date().isoformat()
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [],
-        "sendingShipments": [
-            shipment_sample("DELIVERED", parcel_number="new", event_dt=None, tz_id=None, delivery_date=recent),
-            shipment_sample("DELIVERED", parcel_number="old", event_dt=None, tz_id=None, delivery_date=old),
-        ],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [],
+            "sendingShipments": [
+                shipment_sample(
+                    "DELIVERED",
+                    parcel_number="new",
+                    event_dt=None,
+                    tz_id=None,
+                    delivery_date=recent,
+                ),
+                shipment_sample(
+                    "DELIVERED",
+                    parcel_number="old",
+                    event_dt=None,
+                    tz_id=None,
+                    delivery_date=old,
+                ),
+            ],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
     result = await coordinator._async_update_data()
@@ -275,10 +301,12 @@ async def test_coordinator_applies_delivered_filter_to_outgoing(hass):
 async def test_coordinator_handles_empty_response(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [],
-        "sendingShipments": [],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [],
+            "sendingShipments": [],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     assert await coordinator._async_update_data() == {
@@ -290,7 +318,6 @@ async def test_coordinator_handles_empty_response(hass):
 
 
 async def test_coordinator_raises_config_entry_auth_failed_on_auth_error(hass):
-    from homeassistant.exceptions import ConfigEntryAuthFailed
 
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
@@ -303,7 +330,6 @@ async def test_coordinator_raises_config_entry_auth_failed_on_auth_error(hass):
 
 
 async def test_coordinator_raises_update_failed_on_api_error(hass):
-    from homeassistant.helpers.update_coordinator import UpdateFailed
 
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
@@ -331,7 +357,9 @@ def _de_parcel(
     return {
         "carrier": "DPD",
         "barcode": barcode,
-        "status": ParcelStatus.DELIVERED if delivered else ParcelStatus.OUT_FOR_DELIVERY,
+        "status": ParcelStatus.DELIVERED
+        if delivered
+        else ParcelStatus.OUT_FOR_DELIVERY,
         "delivered": delivered,
         "delivered_at": delivered_at,
         "planned_from": planned_from,
@@ -342,7 +370,9 @@ def _de_parcel(
 
 async def test_coordinator_de_splits_active_and_delivered(hass):
     de_session = MagicMock()
-    coordinator = DpdCoordinator(hass, None, _mock_entry("days", 30), de_session=de_session)
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry("days", 30), de_session=de_session
+    )
 
     with patch(
         "custom_components.dpd.coordinator.async_get_all_parcels_de",
@@ -362,10 +392,12 @@ async def test_coordinator_de_splits_active_and_delivered(hass):
 
 
 async def test_coordinator_de_applies_canonical_delivered_filter(hass):
-    recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-    old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    old = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     de_session = MagicMock()
-    coordinator = DpdCoordinator(hass, None, _mock_entry("days", 7), de_session=de_session)
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry("days", 7), de_session=de_session
+    )
 
     with patch(
         "custom_components.dpd.coordinator.async_get_all_parcels_de",
@@ -385,7 +417,6 @@ async def test_coordinator_de_applies_canonical_delivered_filter(hass):
 
 
 async def test_coordinator_de_raises_config_entry_auth_failed_on_auth_error(hass):
-    from homeassistant.exceptions import ConfigEntryAuthFailed
 
     de_session = MagicMock()
     coordinator = DpdCoordinator(hass, None, _mock_entry(), de_session=de_session)
@@ -436,7 +467,6 @@ async def test_coordinator_de_skips_raw_payload_log_when_empty(hass, caplog):
 
 
 async def test_coordinator_de_raises_update_failed_on_api_error(hass):
-    from homeassistant.helpers.update_coordinator import UpdateFailed
 
     de_session = MagicMock()
     coordinator = DpdCoordinator(hass, None, _mock_entry(), de_session=de_session)
@@ -453,13 +483,8 @@ async def test_coordinator_de_raises_update_failed_on_api_error(hass):
 
 @pytest.mark.asyncio
 async def test_coordinator_de_captcha_is_a_failed_poll_not_a_reauth(hass):
-    from homeassistant.helpers.update_coordinator import UpdateFailed
 
-    from custom_components.dpd.const import DpdCaptchaError
-
-    coordinator = DpdCoordinator(
-        hass, None, _mock_entry(), de_session=MagicMock()
-    )
+    coordinator = DpdCoordinator(hass, None, _mock_entry(), de_session=MagicMock())
 
     with (
         patch(
@@ -495,7 +520,9 @@ async def test_coordinator_pl_splits_active_and_delivered(hass):
         ]
     )
     pl_session.async_get_parcel_detail = AsyncMock(return_value={})
-    coordinator = DpdCoordinator(hass, None, _mock_entry("days", 30), pl_session=pl_session)
+    coordinator = DpdCoordinator(
+        hass, None, _mock_entry("days", 30), pl_session=pl_session
+    )
 
     result = await coordinator._async_update_data()
 
@@ -510,7 +537,12 @@ async def test_coordinator_pl_merges_detail_payload_into_active_parcel(hass):
     pl_session = MagicMock()
     pl_session.async_get_parcels = AsyncMock(return_value=[_pl_parcel("A")])
     pl_session.async_get_parcel_detail = AsyncMock(
-        return_value={"delivery": {"planned_delivery_date": "2026-09-10", "delivered_datetime": None}}
+        return_value={
+            "delivery": {
+                "planned_delivery_date": "2026-09-10",
+                "delivered_datetime": None,
+            }
+        }
     )
     coordinator = DpdCoordinator(hass, None, _mock_entry(), pl_session=pl_session)
 
@@ -544,7 +576,6 @@ async def test_coordinator_pl_does_not_fetch_detail_for_delivered_parcels(hass):
 
 
 async def test_coordinator_pl_raises_config_entry_auth_failed_on_auth_error(hass):
-    from homeassistant.exceptions import ConfigEntryAuthFailed
 
     pl_session = MagicMock()
     pl_session.async_get_parcels = AsyncMock(side_effect=DpdAuthError("bad creds"))
@@ -555,7 +586,6 @@ async def test_coordinator_pl_raises_config_entry_auth_failed_on_auth_error(hass
 
 
 async def test_coordinator_pl_raises_update_failed_on_api_error(hass):
-    from homeassistant.helpers.update_coordinator import UpdateFailed
 
     pl_session = MagicMock()
     pl_session.async_get_parcels = AsyncMock(side_effect=DpdApiError(500))
@@ -573,11 +603,13 @@ async def test_coordinator_pl_raises_update_failed_on_api_error(hass):
 def test_known_descriptions_are_not_logged(caplog):
     _unknown_descriptions_logged.clear()
     caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
-    log_unknown_descriptions([
-        shipment_sample("ORDER_CREATED"),
-        shipment_sample("PARCEL_OUT_FOR_DELIVERY"),
-        shipment_sample("DELIVERED"),
-    ])
+    log_unknown_descriptions(
+        [
+            shipment_sample("ORDER_CREATED"),
+            shipment_sample("PARCEL_OUT_FOR_DELIVERY"),
+            shipment_sample("DELIVERED"),
+        ]
+    )
     assert "not yet catalogued" not in caplog.text
 
 
@@ -593,11 +625,13 @@ def test_unknown_description_is_logged_once(caplog):
 def test_unknown_descriptions_each_logged_once(caplog):
     _unknown_descriptions_logged.clear()
     caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
-    log_unknown_descriptions([
-        shipment_sample("MYSTERY_ONE"),
-        shipment_sample("MYSTERY_TWO"),
-        shipment_sample("MYSTERY_ONE"),  # repeat — should not log again
-    ])
+    log_unknown_descriptions(
+        [
+            shipment_sample("MYSTERY_ONE"),
+            shipment_sample("MYSTERY_TWO"),
+            shipment_sample("MYSTERY_ONE"),  # repeat — should not log again
+        ]
+    )
     assert caplog.text.count("MYSTERY_ONE") == 1
     assert caplog.text.count("MYSTERY_TWO") == 1
 
@@ -605,7 +639,9 @@ def test_unknown_descriptions_each_logged_once(caplog):
 def test_missing_description_is_ignored(caplog):
     _unknown_descriptions_logged.clear()
     caplog.set_level("INFO", logger="custom_components.dpd.coordinator")
-    log_unknown_descriptions([{"parcelNumber": "X"}, {"parcelNumber": "Y", "status": {}}])
+    log_unknown_descriptions(
+        [{"parcelNumber": "X"}, {"parcelNumber": "Y", "status": {}}]
+    )
     assert "not yet catalogued" not in caplog.text
 
 
@@ -648,11 +684,13 @@ def test_planned_dt_prefers_fmp_window_over_date_midnight():
         "deliveryDate": "2026-06-17",
         "timeRange": {"from": "10:34:00", "to": "11:34:00"},
     }
-    dt = shipment_planned_dt(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    ))
+    dt = shipment_planned_dt(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+            fmp_window=fmp,
+        )
+    )
     assert dt is not None
     assert (dt.hour, dt.minute, dt.second) == (10, 34, 0)
     assert dt.tzinfo is not None
@@ -660,22 +698,26 @@ def test_planned_dt_prefers_fmp_window_over_date_midnight():
 
 def test_planned_dt_falls_back_to_midnight_when_fmp_window_lacks_from():
     fmp = {"deliveryDate": "2026-06-17", "timeRange": {}}
-    dt = shipment_planned_dt(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    ))
+    dt = shipment_planned_dt(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+            fmp_window=fmp,
+        )
+    )
     assert dt is not None
     assert (dt.hour, dt.minute) == (0, 0)
 
 
 def test_planned_dt_falls_back_to_midnight_when_fmp_from_is_garbage():
     fmp = {"deliveryDate": "2026-06-17", "timeRange": {"from": "not-a-time"}}
-    dt = shipment_planned_dt(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    ))
+    dt = shipment_planned_dt(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+            fmp_window=fmp,
+        )
+    )
     assert dt is not None
     assert (dt.hour, dt.minute) == (0, 0)
 
@@ -750,7 +792,9 @@ async def test_enrich_detail_cache_populates_receiver_weight_dimensions(hass):
             "receiver_name": "Jane Doe",
             "weight": 4.40,
             "dimensions": {
-                "length": 31, "width": 23, "height": 17,
+                "length": 31,
+                "width": 23,
+                "height": 17,
                 "text": "31 x 23 x 17 cm",
             },
             # History off by default → None; status remembered for refresh.
@@ -763,7 +807,11 @@ async def test_enrich_detail_cache_populates_receiver_weight_dimensions(hass):
 async def test_enrich_detail_cache_uses_outgoing_parcel_type(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(
-        return_value={"receiver": {"name": "Out Receiver"}, "weight": None, "dimensions": None}
+        return_value={
+            "receiver": {"name": "Out Receiver"},
+            "weight": None,
+            "dimensions": None,
+        }
     )
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
@@ -805,7 +853,11 @@ async def test_enrich_detail_cache_retries_failure_on_status_change(hass):
     assert client.async_get_parcel_detail.await_count == 1
 
     client.async_get_parcel_detail = AsyncMock(
-        return_value={"receiver": {"name": "Jane Doe"}, "weight": 1.2, "dimensions": None}
+        return_value={
+            "receiver": {"name": "Jane Doe"},
+            "weight": 1.2,
+            "dimensions": None,
+        }
     )
     await coordinator._enrich_detail_cache(
         [shipment_sample("IN_TRANSIT", parcel_number="01ABC")], []
@@ -839,18 +891,16 @@ async def test_enrich_detail_cache_skips_already_cached_barcodes(hass):
 
 async def test_enrich_uk_tracking_cache_populates_resolved_code(hass):
     client = MagicMock()
-    client.async_get_uk_tracking_code = AsyncMock(
-        return_value="01234567890123*99999"
-    )
+    client.async_get_uk_tracking_code = AsyncMock(return_value="01234567890123*99999")
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
-    shipment = shipment_sample("PARCEL_OUT_FOR_DELIVERY", parcel_number="01234567890123")
+    shipment = shipment_sample(
+        "PARCEL_OUT_FOR_DELIVERY", parcel_number="01234567890123"
+    )
     await coordinator._enrich_uk_tracking_cache([shipment])
 
     client.async_get_uk_tracking_code.assert_awaited_once_with("01234567890123")
-    assert coordinator._uk_tracking_cache == {
-        "01234567890123": "01234567890123*99999"
-    }
+    assert coordinator._uk_tracking_cache == {"01234567890123": "01234567890123*99999"}
 
 
 async def test_enrich_uk_tracking_cache_caches_failure_without_retry(hass):
@@ -885,10 +935,12 @@ async def test_async_update_data_only_enriches_uk_tracking_for_uk_bu(hass):
     client.bu = "DPD-NL"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_uk_tracking_code = AsyncMock()
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [shipment_sample("ORDER_CREATED", parcel_number="A")],
-        "sendingShipments": [],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [shipment_sample("ORDER_CREATED", parcel_number="A")],
+            "sendingShipments": [],
+        }
+    )
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     await coordinator._async_update_data()
@@ -900,15 +952,15 @@ async def test_async_update_data_resolves_uk_tracking_url_for_uk_bu(hass):
     client = MagicMock()
     client.bu = "DPD-UK"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_uk_tracking_code = AsyncMock(
-        return_value="01234567890123*99999"
+    client.async_get_uk_tracking_code = AsyncMock(return_value="01234567890123*99999")
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [
+                shipment_sample("ORDER_CREATED", parcel_number="01234567890123")
+            ],
+            "sendingShipments": [],
+        }
     )
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [
-            shipment_sample("ORDER_CREATED", parcel_number="01234567890123")
-        ],
-        "sendingShipments": [],
-    })
     coordinator = DpdCoordinator(hass, client, _mock_entry())
 
     result = await coordinator._async_update_data()
@@ -925,13 +977,20 @@ async def test_async_update_data_resolves_uk_tracking_url_for_uk_bu(hass):
 
 
 def test_map_status_order_created_is_registered():
-    assert map_parcel_status(shipment_sample("ORDER_CREATED")) == ParcelStatus.REGISTERED
+    assert (
+        map_parcel_status(shipment_sample("ORDER_CREATED")) == ParcelStatus.REGISTERED
+    )
 
 
 def test_map_status_handed_in_transit_at_center_all_map_to_in_transit():
-    assert map_parcel_status(shipment_sample("PARCEL_HANDED")) == ParcelStatus.IN_TRANSIT
+    assert (
+        map_parcel_status(shipment_sample("PARCEL_HANDED")) == ParcelStatus.IN_TRANSIT
+    )
     assert map_parcel_status(shipment_sample("IN_TRANSIT")) == ParcelStatus.IN_TRANSIT
-    assert map_parcel_status(shipment_sample("AT_DELIVERY_CENTER")) == ParcelStatus.IN_TRANSIT
+    assert (
+        map_parcel_status(shipment_sample("AT_DELIVERY_CENTER"))
+        == ParcelStatus.IN_TRANSIT
+    )
 
 
 def test_map_status_parcel_out_for_delivery_is_out_for_delivery():
@@ -951,7 +1010,9 @@ def test_map_status_parcelshop_and_return_statuses():
         map_parcel_status(shipment_sample("AVAILABLE_FOR_COLLECTION"))
         == ParcelStatus.AT_PICKUP_POINT
     )
-    assert map_parcel_status(shipment_sample("RETURN_TO_SENDER")) == ParcelStatus.RETURNING
+    assert (
+        map_parcel_status(shipment_sample("RETURN_TO_SENDER")) == ParcelStatus.RETURNING
+    )
     assert (
         map_parcel_status(shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPT"))
         == ParcelStatus.IN_TRANSIT
@@ -960,11 +1021,13 @@ def test_map_status_parcelshop_and_return_statuses():
 
 def test_new_parcelshop_statuses_are_known_and_not_logged(caplog):
     """The new descriptions are in KNOWN_DESCRIPTIONS → no 'unrecognised' warning."""
-    log_unknown_descriptions([
-        shipment_sample("AVAILABLE_FOR_COLLECTION"),
-        shipment_sample("RETURN_TO_SENDER"),
-        shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPT"),
-    ])
+    log_unknown_descriptions(
+        [
+            shipment_sample("AVAILABLE_FOR_COLLECTION"),
+            shipment_sample("RETURN_TO_SENDER"),
+            shipment_sample("UNSUCCESSFUL_DELIVERY_ATTEMPT"),
+        ]
+    )
     assert "issues/new" not in caplog.text
 
 
@@ -1053,7 +1116,6 @@ def test_capabilities_are_known_values():
 
 def test_pending_capabilities_are_known_values_for_known_variants():
     """Same docs-site risk as the declaration above, same guard."""
-    from custom_components.dpd.const import PENDING_CAPABILITIES_BY_VARIANT
 
     for variant, fields in PENDING_CAPABILITIES_BY_VARIANT.items():
         assert variant in CAPABILITIES_BY_VARIANT, variant
@@ -1089,9 +1151,7 @@ def test_normalize_url_uses_uk_tracking_code_when_resolved():
     normalized = normalize_parcel(
         raw, bu="DPD-UK", uk_tracking_code="01234567890123*99999"
     )
-    assert normalized["url"] == (
-        "https://track.dpd.co.uk/parcels/01234567890123*99999"
-    )
+    assert normalized["url"] == ("https://track.dpd.co.uk/parcels/01234567890123*99999")
 
 
 def test_normalize_url_falls_back_to_nl_when_uk_code_unresolved():
@@ -1197,11 +1257,13 @@ def test_planned_window_returns_fmp_range_when_available():
         "deliveryDate": "2026-06-17",
         "timeRange": {"from": "10:34:00", "to": "11:34:00"},
     }
-    start, end = shipment_planned_window(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    ))
+    start, end = shipment_planned_window(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+            fmp_window=fmp,
+        )
+    )
     assert start is not None and end is not None
     assert (start.hour, start.minute) == (10, 34)
     assert (end.hour, end.minute) == (11, 34)
@@ -1210,10 +1272,12 @@ def test_planned_window_returns_fmp_range_when_available():
 
 
 def test_planned_window_full_day_when_only_date_known():
-    start, end = shipment_planned_window(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-    ))
+    start, end = shipment_planned_window(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+        )
+    )
     assert start is not None and end is not None
     assert (start.hour, start.minute, start.second) == (0, 0, 0)
     assert (end.hour, end.minute, end.second) == (23, 59, 59)
@@ -1226,22 +1290,26 @@ def test_planned_window_returns_none_when_no_date():
 
 def test_planned_window_full_day_when_fmp_lacks_from_or_to():
     fmp = {"deliveryDate": "2026-06-17", "timeRange": {"from": "10:34:00"}}
-    start, end = shipment_planned_window(shipment_sample(
-        delivery_date="2026-06-17",
-        tz_id="Europe/Amsterdam",
-        fmp_window=fmp,
-    ))
+    start, end = shipment_planned_window(
+        shipment_sample(
+            delivery_date="2026-06-17",
+            tz_id="Europe/Amsterdam",
+            fmp_window=fmp,
+        )
+    )
     # No `to` in FMP → fall back to the top-level / full-day window
     assert (start.hour, end.hour) == (0, 23)
 
 
 def test_planned_window_uses_top_level_delivery_time_when_fmp_absent():
-    start, end = shipment_planned_window(shipment_sample(
-        delivery_date="2026-06-22",
-        tz_id="Europe/Amsterdam",
-        delivery_time_from="21:03:00",
-        delivery_time_to="22:03:00",
-    ))
+    start, end = shipment_planned_window(
+        shipment_sample(
+            delivery_date="2026-06-22",
+            tz_id="Europe/Amsterdam",
+            delivery_time_from="21:03:00",
+            delivery_time_to="22:03:00",
+        )
+    )
     assert start is not None and end is not None
     assert (start.hour, start.minute) == (21, 3)
     assert (end.hour, end.minute) == (22, 3)
@@ -1251,11 +1319,13 @@ def test_planned_window_uses_top_level_delivery_time_when_fmp_absent():
 
 def test_planned_window_top_level_takes_precedence_over_full_day_fallback():
     # Only one bound present → fall back to full-day, not a half-window.
-    start, end = shipment_planned_window(shipment_sample(
-        delivery_date="2026-06-22",
-        tz_id="Europe/Amsterdam",
-        delivery_time_from="21:03:00",
-    ))
+    start, end = shipment_planned_window(
+        shipment_sample(
+            delivery_date="2026-06-22",
+            tz_id="Europe/Amsterdam",
+            delivery_time_from="21:03:00",
+        )
+    )
     assert (start.hour, end.hour) == (0, 23)
 
 
@@ -1267,15 +1337,23 @@ def test_planned_window_top_level_takes_precedence_over_full_day_fallback():
 async def test_coordinator_publishes_planned_window_without_touching_raw(hass):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [
-            shipment_sample("ORDER_CREATED", parcel_number="A", delivery_date="2026-06-17"),
-            shipment_sample("DELIVERED", parcel_number="B", delivery_date="2026-06-10"),
-        ],
-        "sendingShipments": [
-            shipment_sample("PARCEL_HANDED", parcel_number="C", delivery_date="2026-06-18"),
-        ],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [
+                shipment_sample(
+                    "ORDER_CREATED", parcel_number="A", delivery_date="2026-06-17"
+                ),
+                shipment_sample(
+                    "DELIVERED", parcel_number="B", delivery_date="2026-06-10"
+                ),
+            ],
+            "sendingShipments": [
+                shipment_sample(
+                    "PARCEL_HANDED", parcel_number="C", delivery_date="2026-06-18"
+                ),
+            ],
+        }
+    )
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 30))
@@ -1291,7 +1369,12 @@ async def test_coordinator_publishes_planned_window_without_touching_raw(hass):
         assert parcel["planned_to"] is None
 
     # `raw` must be pristine — no derived plannedDelivery* fields leaked in.
-    for bucket in ("incoming_active", "incoming_delivered", "outgoing_active", "outgoing_delivered"):
+    for bucket in (
+        "incoming_active",
+        "incoming_delivered",
+        "outgoing_active",
+        "outgoing_delivered",
+    ):
         for parcel in result[bucket]:
             assert "plannedDeliveryFrom" not in parcel["raw"]
             assert "plannedDeliveryTo" not in parcel["raw"]
@@ -1312,13 +1395,15 @@ async def test_first_refresh_suppresses_registered_events(hass):
     """Parcels present on the first poll do not yield registered events."""
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [
-            shipment_sample("ORDER_CREATED", parcel_number="A"),
-            shipment_sample("PARCEL_HANDED", parcel_number="B"),
-        ],
-        "sendingShipments": [],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [
+                shipment_sample("ORDER_CREATED", parcel_number="A"),
+                shipment_sample("PARCEL_HANDED", parcel_number="B"),
+            ],
+            "sendingShipments": [],
+        }
+    )
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
@@ -1334,19 +1419,23 @@ async def test_second_refresh_fires_registered_event_for_new_parcel(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {
-            "incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")],
-            "sendingShipments": [],
-        },
-        {
-            "incomingShipments": [
-                shipment_sample("PARCEL_HANDED", parcel_number="A"),
-                shipment_sample("ORDER_CREATED", parcel_number="NEW"),
-            ],
-            "sendingShipments": [],
-        },
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A"),
+                    shipment_sample("ORDER_CREATED", parcel_number="NEW"),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1367,18 +1456,22 @@ async def test_status_change_fires_status_changed_event(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {
-            "incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")],
-            "sendingShipments": [],
-        },
-        {
-            "incomingShipments": [
-                shipment_sample("PARCEL_OUT_FOR_DELIVERY", parcel_number="A"),
-            ],
-            "sendingShipments": [],
-        },
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_OUT_FOR_DELIVERY", parcel_number="A"),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1398,16 +1491,32 @@ async def test_status_change_fires_status_changed_event(hass):
 async def test_incoming_delivered_fires_dedicated_event(hass):
     """An incoming parcel that transitions to delivered fires parcel_delivered
     and NOT parcel_status_changed (delivered takes precedence)."""
-    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {"incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
-        {"incomingShipments": [
-            shipment_sample("DELIVERED", parcel_number="A", event_dt=None, tz_id=None, delivery_date=recent),
-        ], "sendingShipments": []},
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "DELIVERED",
+                        parcel_number="A",
+                        event_dt=None,
+                        tz_id=None,
+                        delivery_date=recent,
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
     await coordinator._async_update_data()
@@ -1425,17 +1534,33 @@ async def test_incoming_delivered_fires_dedicated_event(hass):
 
 async def test_no_events_for_new_already_delivered_incoming(hass):
     """A barcode first seen already delivered fires neither registered nor delivered."""
-    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {"incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
-        {"incomingShipments": [
-            shipment_sample("PARCEL_HANDED", parcel_number="A"),
-            shipment_sample("DELIVERED", parcel_number="B", event_dt=None, tz_id=None, delivery_date=recent),
-        ], "sendingShipments": []},
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A"),
+                    shipment_sample(
+                        "DELIVERED",
+                        parcel_number="B",
+                        event_dt=None,
+                        tz_id=None,
+                        delivery_date=recent,
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
     await coordinator._async_update_data()
@@ -1456,10 +1581,12 @@ async def test_unchanged_status_fires_no_event(hass):
     # Same description across two polls — should not trigger a change.
     shipment = shipment_sample("PARCEL_HANDED", parcel_number="A")
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [shipment],
-        "sendingShipments": [],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [shipment],
+            "sendingShipments": [],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1478,10 +1605,12 @@ async def test_first_refresh_suppresses_outgoing_events(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [],
-        "sendingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="S")],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [],
+            "sendingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="S")],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     changed = _capture(hass, "dpd_outgoing_parcel_status_changed")
@@ -1499,10 +1628,22 @@ async def test_outgoing_status_change_fires_outgoing_status_changed(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {"incomingShipments": [], "sendingShipments": [shipment_sample("ORDER_CREATED", parcel_number="S")]},
-        {"incomingShipments": [], "sendingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="S")]},
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [],
+                "sendingShipments": [
+                    shipment_sample("ORDER_CREATED", parcel_number="S")
+                ],
+            },
+            {
+                "incomingShipments": [],
+                "sendingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="S")
+                ],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1521,16 +1662,32 @@ async def test_outgoing_status_change_fires_outgoing_status_changed(hass):
 async def test_outgoing_delivered_fires_dedicated_event(hass):
     """A sent shipment that transitions to delivered fires outgoing_parcel_delivered
     and NOT outgoing_parcel_status_changed (delivered takes precedence)."""
-    recent = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    recent = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {"incomingShipments": [], "sendingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="S")]},
-        {"incomingShipments": [], "sendingShipments": [
-            shipment_sample("DELIVERED", parcel_number="S", event_dt=None, tz_id=None, delivery_date=recent),
-        ]},
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [],
+                "sendingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="S")
+                ],
+            },
+            {
+                "incomingShipments": [],
+                "sendingShipments": [
+                    shipment_sample(
+                        "DELIVERED",
+                        parcel_number="S",
+                        event_dt=None,
+                        tz_id=None,
+                        delivery_date=recent,
+                    ),
+                ],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry("days", 7))
     await coordinator._async_update_data()
@@ -1556,11 +1713,26 @@ async def test_inter_in_transit_descriptions_do_not_fire(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {"incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")], "sendingShipments": []},
-        {"incomingShipments": [shipment_sample("IN_TRANSIT", parcel_number="A")], "sendingShipments": []},
-        {"incomingShipments": [shipment_sample("AT_DELIVERY_CENTER", parcel_number="A")], "sendingShipments": []},
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [shipment_sample("IN_TRANSIT", parcel_number="A")],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample("AT_DELIVERY_CENTER", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1578,22 +1750,26 @@ async def test_delivery_time_changed_fires_when_planned_time_appears(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {
-            "incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")],
-            "sendingShipments": [],
-        },
-        {
-            "incomingShipments": [
-                shipment_sample(
-                    "PARCEL_HANDED",
-                    parcel_number="A",
-                    delivery_date="2026-06-27",
-                ),
-            ],
-            "sendingShipments": [],
-        },
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "PARCEL_HANDED",
+                        parcel_number="A",
+                        delivery_date="2026-06-27",
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1614,28 +1790,30 @@ async def test_delivery_time_changed_fires_when_planned_time_shifts(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {
-            "incomingShipments": [
-                shipment_sample(
-                    "PARCEL_HANDED",
-                    parcel_number="A",
-                    delivery_date="2026-06-27",
-                ),
-            ],
-            "sendingShipments": [],
-        },
-        {
-            "incomingShipments": [
-                shipment_sample(
-                    "PARCEL_HANDED",
-                    parcel_number="A",
-                    delivery_date="2026-06-28",
-                ),
-            ],
-            "sendingShipments": [],
-        },
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "PARCEL_HANDED",
+                        parcel_number="A",
+                        delivery_date="2026-06-27",
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "PARCEL_HANDED",
+                        parcel_number="A",
+                        delivery_date="2026-06-28",
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1654,22 +1832,26 @@ async def test_no_delivery_time_changed_event_when_planned_time_clears(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(side_effect=[
-        {
-            "incomingShipments": [
-                shipment_sample(
-                    "PARCEL_HANDED",
-                    parcel_number="A",
-                    delivery_date="2026-06-27",
-                ),
-            ],
-            "sendingShipments": [],
-        },
-        {
-            "incomingShipments": [shipment_sample("PARCEL_HANDED", parcel_number="A")],
-            "sendingShipments": [],
-        },
-    ])
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "PARCEL_HANDED",
+                        parcel_number="A",
+                        delivery_date="2026-06-27",
+                    ),
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number="A")
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1686,11 +1868,15 @@ async def test_no_delivery_time_changed_event_when_planned_time_unchanged(hass):
     client = MagicMock()
     client.async_fmp_delivery_window = AsyncMock(return_value=None)
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    shipment = shipment_sample("PARCEL_HANDED", parcel_number="A", delivery_date="2026-06-27")
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [shipment],
-        "sendingShipments": [],
-    })
+    shipment = shipment_sample(
+        "PARCEL_HANDED", parcel_number="A", delivery_date="2026-06-27"
+    )
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [shipment],
+            "sendingShipments": [],
+        }
+    )
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
     await coordinator._async_update_data()
@@ -1709,13 +1895,17 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
     }
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=None)
-    client.async_get_parcels = AsyncMock(return_value={
-        "incomingShipments": [
-            shipment_sample("PARCEL_OUT_FOR_DELIVERY", parcel_number="A", fmp_hashcode="hashA"),
-            shipment_sample("PARCEL_HANDED", parcel_number="B"),
-        ],
-        "sendingShipments": [],
-    })
+    client.async_get_parcels = AsyncMock(
+        return_value={
+            "incomingShipments": [
+                shipment_sample(
+                    "PARCEL_OUT_FOR_DELIVERY", parcel_number="A", fmp_hashcode="hashA"
+                ),
+                shipment_sample("PARCEL_HANDED", parcel_number="B"),
+            ],
+            "sendingShipments": [],
+        }
+    )
     client.async_fmp_delivery_window = AsyncMock(return_value=window)
 
     coordinator = DpdCoordinator(hass, client, _mock_entry())
@@ -1732,8 +1922,6 @@ async def test_coordinator_calls_fmp_for_eligible_shipments(hass):
 # Dynamic polling (Section 2.2, account-based) — pure
 # helpers
 # ---------------------------------------------------------------------------
-
-UTC = timezone.utc
 
 
 def test_quiet_window_is_midnight_to_six():
@@ -1790,9 +1978,7 @@ def test_tier_is_hot_when_out_for_delivery_without_planned_from():
 
 def test_tier_is_hot_when_planned_from_is_unparseable():
     now = datetime(2026, 1, 1, 12, tzinfo=UTC)
-    parcels = [
-        {"status": ParcelStatus.OUT_FOR_DELIVERY, "planned_from": "not-a-date"}
-    ]
+    parcels = [{"status": ParcelStatus.OUT_FOR_DELIVERY, "planned_from": "not-a-date"}]
     assert _hottest_tier_minutes(parcels, now) == HOT_INTERVAL_MINUTES
 
 
@@ -1867,9 +2053,7 @@ async def test_polling_goes_hot_for_out_for_delivery(hass):
     client.bu = "DPD-NL"
     client.async_get_parcel_detail = AsyncMock(return_value=None)
     client.async_get_parcels = AsyncMock(
-        return_value=envelope(
-            incoming=[shipment_sample("PARCEL_OUT_FOR_DELIVERY")]
-        )
+        return_value=envelope(incoming=[shipment_sample("PARCEL_OUT_FOR_DELIVERY")])
     )
     coordinator = DpdCoordinator(hass, client, entry)
 
@@ -1933,7 +2117,9 @@ def test_augment_dimensions_returns_none_for_empty_input():
 # ---------------------------------------------------------------------------
 
 
-def _norm(barcode: str, planned_from: str | None = None, delivered_at: str | None = None) -> dict:
+def _norm(
+    barcode: str, planned_from: str | None = None, delivered_at: str | None = None
+) -> dict:
     return {
         "barcode": barcode,
         "planned_from": planned_from,
@@ -1957,7 +2143,10 @@ def test_sort_orders_descending_for_delivered_at():
         _norm("newest", delivered_at="2026-06-15T10:00:00+00:00"),
         _norm("mid", delivered_at="2026-06-14T12:00:00+00:00"),
     ]
-    ordered = [p["barcode"] for p in sort_parcels_by_ts(parcels, "delivered_at", descending=True)]
+    ordered = [
+        p["barcode"]
+        for p in sort_parcels_by_ts(parcels, "delivered_at", descending=True)
+    ]
     assert ordered == ["newest", "mid", "oldest"]
 
 
@@ -1995,9 +2184,13 @@ def test_map_event_status_known_codes():
     assert map_event_status("ENA") == ParcelStatus.REGISTERED
     assert map_event_status("ORI") == ParcelStatus.IN_TRANSIT
     assert map_event_status("SPW") == ParcelStatus.IN_TRANSIT
-    assert map_event_status("SPE") == ParcelStatus.IN_TRANSIT  # Status parcel - Information (#4)
+    assert (
+        map_event_status("SPE") == ParcelStatus.IN_TRANSIT
+    )  # Status parcel - Information (#4)
     assert map_event_status("DLO") == ParcelStatus.OUT_FOR_DELIVERY
-    assert map_event_status("MSDLO") == ParcelStatus.IN_TRANSIT  # notification, not the physical OFD scan
+    assert (
+        map_event_status("MSDLO") == ParcelStatus.IN_TRANSIT
+    )  # notification, not the physical OFD scan
     assert map_event_status("DEY") == ParcelStatus.DELIVERED
     assert map_event_status("DEYY") == ParcelStatus.DELIVERED
 
@@ -2005,8 +2198,19 @@ def test_map_event_status_known_codes():
 def test_map_event_status_gsmt_additions():
     """Codes added from DPD's GSMT matrix (Tier 1 + parcelshop/PUDO)."""
     # Hub / sort / scan / held / driver-return → in_transit
-    for code in ("HUI", "HUS", "HUZ", "SPS", "SPV", "SPZ", "DLZ",
-                 "ORW", "HUW", "DLW", "DLR"):
+    for code in (
+        "HUI",
+        "HUS",
+        "HUZ",
+        "SPS",
+        "SPV",
+        "SPZ",
+        "DLZ",
+        "ORW",
+        "HUW",
+        "DLW",
+        "DLR",
+    ):
         assert map_event_status(code) == ParcelStatus.IN_TRANSIT, code
     # Exceptions / anomalies → problem
     for code in ("ENX", "ORX", "HUX", "SPX", "DLX", "DEX", "DODEX"):
@@ -2016,8 +2220,10 @@ def test_map_event_status_gsmt_additions():
         assert map_event_status(code) == ParcelStatus.RETURNING, code
     # Parcelshop / PUDO flow
     assert map_event_status("DEHD") == ParcelStatus.IN_TRANSIT
-    assert map_event_status("DODEI") == ParcelStatus.AT_PICKUP_POINT  # ready for collection
-    assert map_event_status("DODEY") == ParcelStatus.DELIVERED       # collected
+    assert (
+        map_event_status("DODEI") == ParcelStatus.AT_PICKUP_POINT
+    )  # ready for collection
+    assert map_event_status("DODEY") == ParcelStatus.DELIVERED  # collected
     assert map_event_status("DODEYY") == ParcelStatus.DELIVERED
 
 
@@ -2039,9 +2245,24 @@ def test_map_event_status_none_for_unmapped_code(caplog):
 
 
 _EVENTS = [
-    {"date": "2026-06-24", "time": "08:00:00", "eventType": "ENA", "eventTypeText": "Data received and integrated"},
-    {"date": "2026-06-24", "time": "10:25:29", "eventType": "DLO", "eventTypeText": "Destination depot - Out for delivery"},
-    {"date": "2026-06-24", "time": "13:09:04", "eventType": "DEY", "eventTypeText": "Delivery - Delivered"},
+    {
+        "date": "2026-06-24",
+        "time": "08:00:00",
+        "eventType": "ENA",
+        "eventTypeText": "Data received and integrated",
+    },
+    {
+        "date": "2026-06-24",
+        "time": "10:25:29",
+        "eventType": "DLO",
+        "eventTypeText": "Destination depot - Out for delivery",
+    },
+    {
+        "date": "2026-06-24",
+        "time": "13:09:04",
+        "eventType": "DEY",
+        "eventTypeText": "Delivery - Delivered",
+    },
 ]
 
 
@@ -2065,8 +2286,13 @@ def test_build_history_sorts_unsorted_input_oldest_first():
 
 def test_build_history_caps_to_max_events():
     many = [
-        {"date": "2026-06-24", "time": f"{hour:02d}:00:00", "eventType": "ORI", "eventTypeText": "Origin depot"}
-        for hour in range(0, 24)
+        {
+            "date": "2026-06-24",
+            "time": f"{hour:02d}:00:00",
+            "eventType": "ORI",
+            "eventTypeText": "Origin depot",
+        }
+        for hour in range(24)
     ]
     history = build_history(many)
     assert len(history) == 20
@@ -2078,19 +2304,33 @@ def test_build_history_respects_custom_cap():
 
 
 def test_build_history_unmapped_code_is_null_status():
-    history = build_history([
-        {"date": "2026-06-24", "time": "08:00:00", "eventType": "QQ1", "eventTypeText": "Onbekend"},
-    ])
+    history = build_history(
+        [
+            {
+                "date": "2026-06-24",
+                "time": "08:00:00",
+                "eventType": "QQ1",
+                "eventTypeText": "Onbekend",
+            },
+        ]
+    )
     assert history[0]["status"] is None
     assert history[0]["raw_status"] == "Onbekend"
 
 
 def test_build_history_skips_entries_without_date_or_time():
-    history = build_history([
-        {"time": "08:00:00", "eventType": "ENA", "eventTypeText": "no date"},
-        {"date": "2026-06-24", "eventType": "ENA", "eventTypeText": "no time"},
-        {"date": "2026-06-24", "time": "09:00:00", "eventType": "ENA", "eventTypeText": "ok"},
-    ])
+    history = build_history(
+        [
+            {"time": "08:00:00", "eventType": "ENA", "eventTypeText": "no date"},
+            {"date": "2026-06-24", "eventType": "ENA", "eventTypeText": "no time"},
+            {
+                "date": "2026-06-24",
+                "time": "09:00:00",
+                "eventType": "ENA",
+                "eventTypeText": "ok",
+            },
+        ]
+    )
     assert len(history) == 1
     assert history[0]["raw_status"] == "ok"
 
@@ -2125,7 +2365,13 @@ def test_normalize_parcel_history_defaults_to_none():
 
 def test_normalize_parcel_history_passes_through_top_level():
     raw = shipment_sample("PARCEL_HANDED", parcel_number="01XYZ")
-    events = [{"timestamp": "2026-06-24T13:09:04", "status": "delivered", "raw_status": "Delivery - Delivered"}]
+    events = [
+        {
+            "timestamp": "2026-06-24T13:09:04",
+            "status": "delivered",
+            "raw_status": "Delivery - Delivered",
+        }
+    ]
     normalized = normalize_parcel(raw, history=events)
     assert normalized["history"] == events
     # Top-level so it survives the aggregator's strip_raw(); not under raw.
@@ -2188,7 +2434,10 @@ async def test_enrich_detail_cache_refetches_on_status_change_when_history_on(ha
     await coordinator._enrich_detail_cache([shipment], [])
 
     client.async_get_parcel_detail.assert_awaited_once()
-    assert coordinator._detail_cache["01ABC"]["_status_description"] == "PARCEL_OUT_FOR_DELIVERY"
+    assert (
+        coordinator._detail_cache["01ABC"]["_status_description"]
+        == "PARCEL_OUT_FOR_DELIVERY"
+    )
 
 
 async def test_enrich_detail_cache_no_refetch_when_status_unchanged(hass):
@@ -2211,7 +2460,9 @@ async def test_enrich_detail_cache_no_refetch_when_status_unchanged(hass):
     client.async_get_parcel_detail.assert_not_called()
 
 
-async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_change(hass):
+async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_change(
+    hass,
+):
     client = MagicMock()
     client.async_get_parcel_detail = AsyncMock(return_value=_DETAIL_WITH_EVENTS)
     coordinator = DpdCoordinator(hass, client, _mock_entry(include_history=False))
@@ -2239,10 +2490,6 @@ async def test_enrich_detail_cache_no_refetch_with_history_off_even_on_status_ch
 
 async def test_device_id_resolves_and_caches(hass):
     """_device_id finds the account's device and caches it for later events."""
-    from homeassistant.helpers import device_registry as dr
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-    from custom_components.dpd.const import DOMAIN
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -2269,9 +2516,6 @@ async def test_device_id_resolves_and_caches(hass):
 
 async def test_device_id_none_when_no_device(hass):
     """_device_id stays None until a device has been registered."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-    from custom_components.dpd.const import DOMAIN
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -2358,7 +2602,9 @@ async def test_coordinator_at_fills_outgoing_from_sent_and_returns(hass):
 async def test_coordinator_at_needs_only_one_call(hass):
     """The lifecycle is embedded per parcel, so there is no detail fan-out."""
     at_session = MagicMock()
-    at_session.async_get_parcels = AsyncMock(return_value=_at_inbox(inc=[_at_parcel("A")]))
+    at_session.async_get_parcels = AsyncMock(
+        return_value=_at_inbox(inc=[_at_parcel("A")])
+    )
     at_session.async_get_lifecycle = AsyncMock(return_value={})
     coordinator = DpdCoordinator(hass, None, _mock_entry(), at_session=at_session)
 
@@ -2370,7 +2616,9 @@ async def test_coordinator_at_needs_only_one_call(hass):
 
 async def test_coordinator_at_includes_history_when_the_option_is_on(hass):
     at_session = MagicMock()
-    at_session.async_get_parcels = AsyncMock(return_value=_at_inbox(inc=[_at_parcel("A")]))
+    at_session.async_get_parcels = AsyncMock(
+        return_value=_at_inbox(inc=[_at_parcel("A")])
+    )
     coordinator = DpdCoordinator(
         hass, None, _mock_entry(include_history=True), at_session=at_session
     )
@@ -2387,7 +2635,6 @@ async def test_coordinator_at_includes_history_when_the_option_is_on(hass):
 
 
 async def test_coordinator_at_auth_error_requests_reauth(hass):
-    from homeassistant.exceptions import ConfigEntryAuthFailed
 
     at_session = MagicMock()
     at_session.async_get_parcels = AsyncMock(side_effect=DpdAuthError("nope"))
@@ -2399,7 +2646,6 @@ async def test_coordinator_at_auth_error_requests_reauth(hass):
 
 async def test_coordinator_at_api_error_is_a_transient_update_failure(hass):
     """A 429 must retry, not push the user into reauth."""
-    from homeassistant.helpers.update_coordinator import UpdateFailed
 
     at_session = MagicMock()
     at_session.async_get_parcels = AsyncMock(side_effect=DpdApiError(429))

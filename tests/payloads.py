@@ -8,9 +8,10 @@ to fix.
 Every helper returns a **fresh** dict, so a test may mutate what it gets back
 without leaking into the next one.
 """
+
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 DELIVERED_NO = "01XXXXXXXXXXXX"
 
@@ -71,7 +72,7 @@ DE_POSTCODE = "99999"
 _P = "ContentPlaceHolder1_"
 
 
-def de_form_state(token: str = "A") -> str:
+def de_form_state(token: str = "A") -> str:  # noqa: S107 - placeholder token, not a credential
     """Hidden form state, distinct per ``token`` so a test can tell pages apart."""
     return (
         f'<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="VS-{token}" />'
@@ -82,14 +83,13 @@ def de_form_state(token: str = "A") -> str:
 
 def de_slots(*pairs: tuple[str, str]) -> list[tuple[str, str]]:
     """Five ``(text, date)`` slots; missing trailing ones read as unreached."""
-    slots = list(pairs) + [("-", "")] * (5 - len(pairs))
-    return slots
+    return list(pairs) + [("-", "")] * (5 - len(pairs))
 
 
 def de_inbox_page(
     rows: Iterable[dict] = (),
     *,
-    token: str = "A",
+    token: str = "A",  # noqa: S107 - placeholder token, not a credential
     counters: tuple[int, int, int] | None = None,
     detail: dict | None = None,
     signed_in: bool = True,
@@ -113,7 +113,7 @@ def de_inbox_page(
         de_form_state(token),
         marker,
     ]
-    for tab, count in zip(("Incoming", "Sending", "Returning"), counters):
+    for tab, count in zip(("Incoming", "Sending", "Returning"), counters, strict=False):
         out.append(
             f'<a id="{_P}btnGet{tab}Parcel"><span id="{_P}counterGet{tab}Parcel" '
             f'class="counterParcelFilter">{count}</span></a>'
@@ -147,6 +147,7 @@ def de_inbox_page(
         for name, (text, date) in zip(
             ("Start", "OnTheRoad", "DeliveryDepot", "CarLoad", "Delivered"),
             detail["slots"],
+            strict=False,
         ):
             out.append(
                 f'<span id="{_P}labStatus{name}" class="labSub13">{text}</span>'
@@ -157,7 +158,7 @@ def de_inbox_page(
     return "".join(out)
 
 
-def de_portal_page(*, signed_in: bool = True, token: str = "P") -> str:
+def de_portal_page(*, signed_in: bool = True, token: str = "P") -> str:  # noqa: S107 - placeholder token, not a credential
     """The portal dashboard the hop is posted from."""
     return (
         "<html><body>"
@@ -166,16 +167,14 @@ def de_portal_page(*, signed_in: bool = True, token: str = "P") -> str:
         '<input type="submit" name="ctl00$cphBody$ctl00$btnGo" value="Go" />'
         '<input type="password" name="ctl00$cphBody$ctl00$pw" value="secret" />'
         '<input type="checkbox" name="ctl00$cphBody$ctl00$chk" value="on" />'
-        "<input value=\"orphan\" />"
-        f"{'<a id=\"cphBody_btnHomeMyParcel\">Meine Pakete</a>' if signed_in else ''}"
+        '<input value="orphan" />'
+        f"{'<a id="cphBody_btnHomeMyParcel">Meine Pakete</a>' if signed_in else ''}"
         "<a>Abmelden</a>"
         "</form></body></html>"
     )
 
 
-def de_login_page(
-    *, form_class: str = "", captcha: str = "", message: str = ""
-) -> str:
+def de_login_page(*, form_class: str = "", captcha: str = "", message: str = "") -> str:
     """The login form, as the login POST re-renders it."""
     return (
         "<html><head><style>form.dgs-form-has-captcha .dgs-row-recaptcha "

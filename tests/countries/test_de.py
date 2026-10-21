@@ -1,6 +1,7 @@
 """Tests for DPD Germany's status map and normalizer (pure, no HTTP)."""
-import logging
+
 from datetime import date
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,8 +12,7 @@ from custom_components.dpd.countries.de import (
     map_parcel_status_de,
     normalize_parcel_de,
 )
-
-from ..payloads import DE_BARCODE, DE_BARCODE_2
+from tests.payloads import DE_BARCODE, DE_BARCODE_2
 
 TODAY = date(2026, 10, 20)
 _SLOT_NAMES = ("Start", "OnTheRoad", "DeliveryDepot", "CarLoad", "Delivered")
@@ -27,7 +27,7 @@ def _slots(*pairs):
     pairs = list(pairs) + [("-", "")] * (5 - len(pairs))
     return [
         {"slot": name, "text": text, "date": day}
-        for name, (text, day) in zip(_SLOT_NAMES, pairs)
+        for name, (text, day) in zip(_SLOT_NAMES, pairs, strict=False)
     ]
 
 
@@ -80,7 +80,9 @@ def test_rung1_a_return_beats_delivered():
         ("-", ""),
         (_DONE, "09.10."),
     )
-    parcel = _parcel("Retoure an Versender - Geliefert am: 09.10.", 3, slots, tab="returning")
+    parcel = _parcel(
+        "Retoure an Versender - Geliefert am: 09.10.", 3, slots, tab="returning"
+    )
     result = normalize_parcel_de(parcel, today=TODAY)
     assert result["status"] is ParcelStatus.RETURNING
     assert result["delivered"] is False
@@ -104,7 +106,13 @@ def test_rung2_pickup_in_the_furthest_slot_text():
 
 
 def test_rung2_does_not_apply_once_delivered():
-    slots = _slots((_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "20.10."), (_DONE, "20.10."))
+    slots = _slots(
+        (_START, "18.10."),
+        (_ROAD, "19.10."),
+        (_DEPOT, "19.10."),
+        (_CAR, "20.10."),
+        (_DONE, "20.10."),
+    )
     parcel = _parcel("Geliefert, Abholung im Paketshop", 6, slots)
     assert _status(parcel) is ParcelStatus.DELIVERED
 
@@ -140,11 +148,15 @@ def test_rung3_a_slot_with_text_but_no_date_is_not_reached():
 
 
 def test_rung4_problem_words_in_the_sentence():
-    assert _status(_parcel("Zustellversuch nicht erfolgreich", 2)) is ParcelStatus.PROBLEM
+    assert (
+        _status(_parcel("Zustellversuch nicht erfolgreich", 2)) is ParcelStatus.PROBLEM
+    )
 
 
 def test_rung4_loses_to_a_dated_slot():
-    slots = _slots((_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "20.10."))
+    slots = _slots(
+        (_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "20.10.")
+    )
     assert _status(_parcel("Zustellversuch", 2, slots)) is ParcelStatus.OUT_FOR_DELIVERY
 
 
@@ -177,7 +189,9 @@ def test_rung7_unknown_warns_once_with_the_issue_link(caplog):
     with caplog.at_level(logging.WARNING):
         assert _status(parcel) is ParcelStatus.UNKNOWN
         assert _status(parcel) is ParcelStatus.UNKNOWN
-    warnings = [r.getMessage() for r in caplog.records if "classified" in r.getMessage()]
+    warnings = [
+        r.getMessage() for r in caplog.records if "classified" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert "unrecognised_status.yml" in warnings[0]
     assert "Etwas ganz Neues" in warnings[0]
@@ -267,13 +281,21 @@ def test_a_day_that_does_not_exist_is_skipped():
 
 def test_weight_comma_decimal_is_kilograms():
     slots = _slots((_START, "18.10."))
-    assert normalize_parcel_de(_parcel("U", 1, slots, weight="10,95"), today=TODAY)["weight"] == 10.95
+    assert (
+        normalize_parcel_de(_parcel("U", 1, slots, weight="10,95"), today=TODAY)[
+            "weight"
+        ]
+        == 10.95
+    )
 
 
 @pytest.mark.parametrize("text", ["", "n/a", "0", "0,00", "1,2,3"])
 def test_weight_empty_or_unusable_is_none(text):
     slots = _slots((_START, "18.10."))
-    assert normalize_parcel_de(_parcel("U", 1, slots, weight=text), today=TODAY)["weight"] is None
+    assert (
+        normalize_parcel_de(_parcel("U", 1, slots, weight=text), today=TODAY)["weight"]
+        is None
+    )
 
 
 def test_weight_without_a_detail_panel_is_none():
@@ -281,20 +303,26 @@ def test_weight_without_a_detail_panel_is_none():
 
 
 def test_planned_window_only_when_out_for_delivery():
-    slots = _slots((_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "20.10."))
+    slots = _slots(
+        (_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "20.10.")
+    )
     result = normalize_parcel_de(_parcel("U", 4, slots), today=TODAY)
     assert result["status"] is ParcelStatus.OUT_FOR_DELIVERY
     assert result["planned_from"] == "2026-10-20T00:00:00+02:00"
     assert result["planned_to"] == "2026-10-20T23:59:59+02:00"
     assert result["delivered_at"] is None
 
-    transit = normalize_parcel_de(_parcel("U", 4, _slots((_START, "18.10."))), today=TODAY)
+    transit = normalize_parcel_de(
+        _parcel("U", 4, _slots((_START, "18.10."))), today=TODAY
+    )
     assert transit["planned_from"] is None
     assert transit["planned_to"] is None
 
 
 def test_out_for_delivery_with_an_unreadable_day_has_no_window():
-    slots = _slots((_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "heute"))
+    slots = _slots(
+        (_START, "18.10."), (_ROAD, "19.10."), (_DEPOT, "19.10."), (_CAR, "heute")
+    )
     result = normalize_parcel_de(_parcel("U", 4, slots), today=TODAY)
     assert result["status"] is ParcelStatus.OUT_FOR_DELIVERY
     assert result["planned_from"] is None
@@ -302,7 +330,13 @@ def test_out_for_delivery_with_an_unreadable_day_has_no_window():
 
 
 def test_delivered_at_only_when_delivered():
-    slots = _slots((_START, "15.10."), (_ROAD, "16.10."), (_DEPOT, "17.10."), (_CAR, "18.10."), (_DONE, "18.10."))
+    slots = _slots(
+        (_START, "15.10."),
+        (_ROAD, "16.10."),
+        (_DEPOT, "17.10."),
+        (_CAR, "18.10."),
+        (_DONE, "18.10."),
+    )
     result = normalize_parcel_de(_parcel("Geliefert", 6, slots), today=TODAY)
     assert result["status"] is ParcelStatus.DELIVERED
     assert result["delivered"] is True
@@ -318,7 +352,9 @@ def test_delivered_by_icon_has_no_delivery_day():
 
 def test_the_contract_fields():
     slots = _slots((_START, "18.10."))
-    result = normalize_parcel_de(_parcel("Unterwegs", 1, slots, weight="1,5"), today=TODAY)
+    result = normalize_parcel_de(
+        _parcel("Unterwegs", 1, slots, weight="1,5"), today=TODAY
+    )
     assert result["carrier"] == "DPD"
     assert result["barcode"] == DE_BARCODE
     assert result["sender"] is None
@@ -327,11 +363,28 @@ def test_the_contract_fields():
     assert result["pickup"] is False
     assert result["pickup_point"] is None
     assert result["dimensions"] is None
-    assert result["url"] == f"https://my.dpd.de/redirect.aspx?action=12&parcelno={DE_BARCODE}"
+    assert (
+        result["url"]
+        == f"https://my.dpd.de/redirect.aspx?action=12&parcelno={DE_BARCODE}"
+    )
     assert set(result) == {
-        "carrier", "barcode", "sender", "receiver", "status", "raw_status",
-        "delivered", "delivered_at", "planned_from", "planned_to", "pickup",
-        "pickup_point", "url", "weight", "dimensions", "history", "raw",
+        "carrier",
+        "barcode",
+        "sender",
+        "receiver",
+        "status",
+        "raw_status",
+        "delivered",
+        "delivered_at",
+        "planned_from",
+        "planned_to",
+        "pickup",
+        "pickup_point",
+        "url",
+        "weight",
+        "dimensions",
+        "history",
+        "raw",
     }
 
 
@@ -345,34 +398,62 @@ def test_today_defaults_to_the_berlin_date():
 
 def test_history_is_oldest_first_and_skips_unreached_slots():
     slots = _slots((_START, "15.10."), (_ROAD, "16.10."), ("-", ""), (_CAR, "18.10."))
-    result = normalize_parcel_de(_parcel("U", 4, slots), include_history=True, today=TODAY)
+    result = normalize_parcel_de(
+        _parcel("U", 4, slots), include_history=True, today=TODAY
+    )
     assert result["history"] == [
-        {"timestamp": "2026-10-15T00:00:00+02:00", "status": ParcelStatus.REGISTERED, "raw_status": _START},
-        {"timestamp": "2026-10-16T00:00:00+02:00", "status": ParcelStatus.IN_TRANSIT, "raw_status": _ROAD},
-        {"timestamp": "2026-10-18T00:00:00+02:00", "status": ParcelStatus.OUT_FOR_DELIVERY, "raw_status": _CAR},
+        {
+            "timestamp": "2026-10-15T00:00:00+02:00",
+            "status": ParcelStatus.REGISTERED,
+            "raw_status": _START,
+        },
+        {
+            "timestamp": "2026-10-16T00:00:00+02:00",
+            "status": ParcelStatus.IN_TRANSIT,
+            "raw_status": _ROAD,
+        },
+        {
+            "timestamp": "2026-10-18T00:00:00+02:00",
+            "status": ParcelStatus.OUT_FOR_DELIVERY,
+            "raw_status": _CAR,
+        },
     ]
 
 
 def test_history_is_gated_by_the_option():
     slots = _slots((_START, "15.10."))
     assert normalize_parcel_de(_parcel("U", 1, slots), today=TODAY)["history"] is None
-    assert normalize_parcel_de(_parcel("U", 1, slots), include_history=True, today=TODAY)["history"]
+    assert normalize_parcel_de(
+        _parcel("U", 1, slots), include_history=True, today=TODAY
+    )["history"]
 
 
 def test_history_with_no_dated_slot_is_none():
-    result = normalize_parcel_de(_parcel("U", 1, _slots()), include_history=True, today=TODAY)
+    result = normalize_parcel_de(
+        _parcel("U", 1, _slots()), include_history=True, today=TODAY
+    )
     assert result["history"] is None
 
 
 def test_history_of_a_return_is_not_marked_delivered():
-    slots = _slots(("Retoure Paket an DPD übergeben", "05.10."), ("Retoure unterwegs", "07.10."), ("Retoure an Versender", "09.10."), ("-", ""), (_DONE, "09.10."))
-    result = normalize_parcel_de(_parcel("Retoure an Versender", 3, slots), include_history=True, today=TODAY)
+    slots = _slots(
+        ("Retoure Paket an DPD übergeben", "05.10."),
+        ("Retoure unterwegs", "07.10."),
+        ("Retoure an Versender", "09.10."),
+        ("-", ""),
+        (_DONE, "09.10."),
+    )
+    result = normalize_parcel_de(
+        _parcel("Retoure an Versender", 3, slots), include_history=True, today=TODAY
+    )
     assert {entry["status"] for entry in result["history"]} == {ParcelStatus.RETURNING}
 
 
 def test_history_without_a_fresh_detail_comes_from_the_stale_one():
     stale = {"slots": _slots((_START, "15.10."))}
-    result = normalize_parcel_de(_parcel("Neu", 9, stale=stale), include_history=True, today=TODAY)
+    result = normalize_parcel_de(
+        _parcel("Neu", 9, stale=stale), include_history=True, today=TODAY
+    )
     assert [e["raw_status"] for e in result["history"]] == [_START]
     assert result["raw"]["slots"] is None
 
@@ -382,7 +463,9 @@ def test_history_without_a_fresh_detail_comes_from_the_stale_one():
 
 def test_raw_carries_every_extracted_field_and_no_postcode():
     slots = _slots((_START, "15.10."))
-    result = normalize_parcel_de(_parcel("U", 2, slots, weight="2,5", tab="sending"), today=TODAY)
+    result = normalize_parcel_de(
+        _parcel("U", 2, slots, weight="2,5", tab="sending"), today=TODAY
+    )
     assert result["raw"] == {
         "barcode": DE_BARCODE,
         "label": "DPD Paket",
@@ -395,7 +478,9 @@ def test_raw_carries_every_extracted_field_and_no_postcode():
         "flow_type": "0",
         "ucid": "",
     }
-    assert not any("zip" in key.lower() or "post" in key.lower() for key in result["raw"])
+    assert not any(
+        "zip" in key.lower() or "post" in key.lower() for key in result["raw"]
+    )
 
 
 def test_raw_without_a_detail_panel():

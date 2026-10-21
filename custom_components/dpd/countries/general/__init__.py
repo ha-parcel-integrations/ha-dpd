@@ -13,11 +13,12 @@ A package (not a flat module) to mirror ``countries/de/``'s nested shape.
 parameter of it, not a suite-level concept, and DE has none. They stay
 defined in ``const.py`` to avoid an import cycle with ``config_flow.py``.
 """
+
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timezone
 import logging
-from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -65,17 +66,17 @@ __all__ = [
     "BUSINESS_UNITS",
     "DEFAULT_BU",
     "NEW_COUNTRY_ISSUE_URL",
-    "GeneralApiClient",
     "DpdApiError",
     "DpdAuthError",
-    "map_parcel_status",
-    "normalize_parcel",
-    "log_unknown_descriptions",
-    "map_event_status",
+    "GeneralApiClient",
     "build_history",
     "filter_active_shipments",
     "filter_delivered_shipments",
     "fmp_hashcode",
+    "log_unknown_descriptions",
+    "map_event_status",
+    "map_parcel_status",
+    "normalize_parcel",
     "shipment_delivery_dt",
     "shipment_planned_dt",
     "shipment_planned_window",
@@ -177,6 +178,7 @@ class GeneralApiClient:
 
     async def async_get_parcels(self) -> dict[str, Any]:
         """Retrieve the parcels payload, re-authenticating once on session expiry."""
+
         async def _fetch() -> dict[str, Any]:
             async with self._session.post(
                 DPD_PARCELS_URL,
@@ -254,7 +256,8 @@ class GeneralApiClient:
         except DpdApiError as err:
             _LOGGER.debug(
                 "FMP authenticate failed for hashcode %s: HTTP %d",
-                hashcode[:8], err.status_code,
+                hashcode[:8],
+                err.status_code,
             )
             return None
         except DpdAuthError as err:
@@ -266,7 +269,8 @@ class GeneralApiClient:
         except DpdApiError as err:
             _LOGGER.debug(
                 "FMP shipment fetch failed for hashcode %s: HTTP %d",
-                hashcode[:8], err.status_code,
+                hashcode[:8],
+                err.status_code,
             )
             return None
 
@@ -387,7 +391,7 @@ def _augment_dimensions(dims: dict | None) -> dict | None:
     """Return a copy of ``dims`` with a ``text`` field added (``L x W x H cm``).
 
     Suite-wide format: integer values, lowercase ``x`` separator, length
-    first per the L × W × H shipping convention. ``text`` is ``None`` when
+    first per the L x W x H shipping convention. ``text`` is ``None`` when
     any of the three required fields is missing so callers can still rely
     on the key being present.
     """
@@ -399,8 +403,9 @@ def _augment_dimensions(dims: dict | None) -> dict | None:
     if length is None or width is None or height is None:
         text: str | None = None
     else:
-        text = f"{int(round(length))} x {int(round(width))} x {int(round(height))} cm"
+        text = f"{round(length)} x {round(width)} x {round(height)} cm"
     return {**dims, "text": text}
+
 
 # DPD status.description → canonical ParcelStatus. Every value in
 # KNOWN_DESCRIPTIONS is mapped here; anything else falls back to
@@ -430,52 +435,52 @@ _DESCRIPTION_MAP: dict[str, ParcelStatus] = {
 # that actually appear).
 _EVENT_TYPE_MAP: dict[str, ParcelStatus] = {
     # --- Data / registration ---
-    "ENA": ParcelStatus.REGISTERED,        # Data received and integrated
+    "ENA": ParcelStatus.REGISTERED,  # Data received and integrated
     # --- In the network (origin, hub, sorting, destination depot) ---
-    "ORI": ParcelStatus.IN_TRANSIT,        # Origin depot – Inbound
-    "ORW": ParcelStatus.IN_TRANSIT,        # Origin depot – Held
-    "HUI": ParcelStatus.IN_TRANSIT,        # Hub – Inbound
-    "HUS": ParcelStatus.IN_TRANSIT,        # Hub – Sorted
-    "HUW": ParcelStatus.IN_TRANSIT,        # Hub – Held
-    "HUZ": ParcelStatus.IN_TRANSIT,        # Hub – Scan
-    "SPE": ParcelStatus.IN_TRANSIT,        # Status parcel – Information (benign)
-    "SPL": ParcelStatus.IN_TRANSIT,        # Status parcel – Loaded
-    "SPS": ParcelStatus.IN_TRANSIT,        # Status parcel – Sorted
-    "SPV": ParcelStatus.IN_TRANSIT,        # Status parcel – Control
-    "SPW": ParcelStatus.IN_TRANSIT,        # Status parcel – Held (benign)
-    "SPZ": ParcelStatus.IN_TRANSIT,        # Status parcel – Scan
-    "DLI": ParcelStatus.IN_TRANSIT,        # Destination depot – Inbound
-    "DLS": ParcelStatus.IN_TRANSIT,        # Destination depot – Sorted
-    "DLW": ParcelStatus.IN_TRANSIT,        # Destination depot – Held
-    "DLZ": ParcelStatus.IN_TRANSIT,        # Destination depot – Scan
-    "DLR": ParcelStatus.IN_TRANSIT,        # Destination depot – Driver's return (failed attempt, back to depot)
-    "MSDLO": ParcelStatus.IN_TRANSIT,      # Message Notification — a "delivery coming" heads-up, not the physical out-for-delivery scan (that's DLO)
+    "ORI": ParcelStatus.IN_TRANSIT,  # Origin depot - Inbound
+    "ORW": ParcelStatus.IN_TRANSIT,  # Origin depot - Held
+    "HUI": ParcelStatus.IN_TRANSIT,  # Hub - Inbound
+    "HUS": ParcelStatus.IN_TRANSIT,  # Hub - Sorted
+    "HUW": ParcelStatus.IN_TRANSIT,  # Hub - Held
+    "HUZ": ParcelStatus.IN_TRANSIT,  # Hub - Scan
+    "SPE": ParcelStatus.IN_TRANSIT,  # Status parcel - Information (benign)
+    "SPL": ParcelStatus.IN_TRANSIT,  # Status parcel - Loaded
+    "SPS": ParcelStatus.IN_TRANSIT,  # Status parcel - Sorted
+    "SPV": ParcelStatus.IN_TRANSIT,  # Status parcel - Control
+    "SPW": ParcelStatus.IN_TRANSIT,  # Status parcel - Held (benign)
+    "SPZ": ParcelStatus.IN_TRANSIT,  # Status parcel - Scan
+    "DLI": ParcelStatus.IN_TRANSIT,  # Destination depot - Inbound
+    "DLS": ParcelStatus.IN_TRANSIT,  # Destination depot - Sorted
+    "DLW": ParcelStatus.IN_TRANSIT,  # Destination depot - Held
+    "DLZ": ParcelStatus.IN_TRANSIT,  # Destination depot - Scan
+    "DLR": ParcelStatus.IN_TRANSIT,  # Destination depot - Driver's return (failed attempt, back to depot)
+    "MSDLO": ParcelStatus.IN_TRANSIT,  # Message Notification — a "delivery coming" heads-up, not the physical out-for-delivery scan (that's DLO)
     # --- Out for delivery ---
-    "DLO": ParcelStatus.OUT_FOR_DELIVERY,  # Destination depot – Out for delivery
+    "DLO": ParcelStatus.OUT_FOR_DELIVERY,  # Destination depot - Out for delivery
     # --- Parcelshop / PUDO flow (not yet confirmed in consumer parcelEvents) ---
-    "DEHD": ParcelStatus.IN_TRANSIT,       # Handover by the driver to the PUDO (arriving)
-    "DEHDY": ParcelStatus.IN_TRANSIT,      # Proof of handover by the driver to the PUDO
-    "DOMSDLO": ParcelStatus.IN_TRANSIT,    # PUDO – Notification sent: available in PUDO
-    "DOPKY": ParcelStatus.IN_TRANSIT,      # PUDO – Drop Off (sender drop-off)
-    "DODEI": ParcelStatus.AT_PICKUP_POINT, # PUDO – Received and available for consignee collection
+    "DEHD": ParcelStatus.IN_TRANSIT,  # Handover by the driver to the PUDO (arriving)
+    "DEHDY": ParcelStatus.IN_TRANSIT,  # Proof of handover by the driver to the PUDO
+    "DOMSDLO": ParcelStatus.IN_TRANSIT,  # PUDO - Notification sent: available in PUDO
+    "DOPKY": ParcelStatus.IN_TRANSIT,  # PUDO - Drop Off (sender drop-off)
+    "DODEI": ParcelStatus.AT_PICKUP_POINT,  # PUDO - Received and available for consignee collection
     # --- Delivered / collected ---
-    "DEY": ParcelStatus.DELIVERED,         # Delivery – Delivered
-    "DEYY": ParcelStatus.DELIVERED,        # Delivery – Proof of delivery
-    "DODEY": ParcelStatus.DELIVERED,       # PUDO – Collected by the consignee
-    "DODEYY": ParcelStatus.DELIVERED,      # PUDO – Proof of delivery, signature in PUDO
+    "DEY": ParcelStatus.DELIVERED,  # Delivery - Delivered
+    "DEYY": ParcelStatus.DELIVERED,  # Delivery - Proof of delivery
+    "DODEY": ParcelStatus.DELIVERED,  # PUDO - Collected by the consignee
+    "DODEYY": ParcelStatus.DELIVERED,  # PUDO - Proof of delivery, signature in PUDO
     # --- Returning to sender ---
-    "SPR": ParcelStatus.RETURNING,         # Status parcel – Return
-    "DEN": ParcelStatus.RETURNING,         # Delivery – Refusal
-    "DODEN": ParcelStatus.RETURNING,       # PUDO – Not collected by the consignee
-    "DODEH": ParcelStatus.RETURNING,       # PUDO – Handed back from PUDO to the driver
+    "SPR": ParcelStatus.RETURNING,  # Status parcel - Return
+    "DEN": ParcelStatus.RETURNING,  # Delivery - Refusal
+    "DODEN": ParcelStatus.RETURNING,  # PUDO - Not collected by the consignee
+    "DODEH": ParcelStatus.RETURNING,  # PUDO - Handed back from PUDO to the driver
     # --- Exceptions / anomalies (problem) ---
-    "ENX": ParcelStatus.PROBLEM,           # Data exchange – Exception
-    "ORX": ParcelStatus.PROBLEM,           # Origin depot – Exception
-    "HUX": ParcelStatus.PROBLEM,           # Hub – Exception
-    "SPX": ParcelStatus.PROBLEM,           # Status parcel – Exception
-    "DLX": ParcelStatus.PROBLEM,           # Destination depot – Exception
-    "DEX": ParcelStatus.PROBLEM,           # Delivery – Delivery Exception
-    "DODEX": ParcelStatus.PROBLEM,         # PUDO – Collection anomaly
+    "ENX": ParcelStatus.PROBLEM,  # Data exchange - Exception
+    "ORX": ParcelStatus.PROBLEM,  # Origin depot - Exception
+    "HUX": ParcelStatus.PROBLEM,  # Hub - Exception
+    "SPX": ParcelStatus.PROBLEM,  # Status parcel - Exception
+    "DLX": ParcelStatus.PROBLEM,  # Destination depot - Exception
+    "DEX": ParcelStatus.PROBLEM,  # Delivery - Delivery Exception
+    "DODEX": ParcelStatus.PROBLEM,  # PUDO - Collection anomaly
 }
 
 # New-issue link surfaced in the unknown-status warnings so users can paste a
@@ -574,11 +579,11 @@ def _parse_iso(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(value))
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -753,13 +758,13 @@ def shipment_planned_window(shipment: dict) -> tuple[datetime | None, datetime |
     unparseable.
     """
     tz_id = (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
-    tz: timezone | ZoneInfo = timezone.utc
+    tz: timezone | ZoneInfo = UTC
     if tz_id:
         try:
             # suite: allow zoneinfo (loaded off the event loop by the coordinator before parsing)
             tz = ZoneInfo(tz_id)
         except Exception:  # noqa: BLE001 - bad tz string from API
-            tz = timezone.utc
+            tz = UTC
 
     fmp = shipment.get("fmpDeliveryDateAndTime") or {}
     fmp_date = fmp.get("deliveryDate")
@@ -837,19 +842,19 @@ def shipment_delivery_dt(shipment: dict) -> datetime | None:
     moment = status.get("eventDateAndTime")
     if moment:
         try:
-            dt = datetime.fromisoformat(moment.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(moment)
         except ValueError:
             dt = None
         if dt is not None:
             if dt.tzinfo is None:
                 tz_id = status.get("eventDateAndTimeZoneId")
-                tz: timezone | ZoneInfo = timezone.utc
+                tz: timezone | ZoneInfo = UTC
                 if tz_id:
                     try:
                         # suite: allow zoneinfo (loaded off the event loop by the coordinator before parsing)
                         tz = ZoneInfo(tz_id)
                     except Exception:  # noqa: BLE001 - bad tz string from API
-                        tz = timezone.utc
+                        tz = UTC
                 dt = dt.replace(tzinfo=tz)
             return dt
 
@@ -860,4 +865,4 @@ def shipment_delivery_dt(shipment: dict) -> datetime | None:
         d = datetime.fromisoformat(date_str)
     except ValueError:
         return None
-    return d.replace(tzinfo=timezone.utc)
+    return d.replace(tzinfo=UTC)

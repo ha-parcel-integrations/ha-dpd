@@ -1,8 +1,9 @@
 """DPD custom component for Home Assistant."""
+
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -82,10 +83,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
             )
             await de_session.async_login(respect_backoff=True)
         elif country == COUNTRY_PL.upper():
+
             def _store_refresh_token(token: str) -> None:
                 hass.config_entries.async_update_entry(
                     entry, data={**entry.data, CONF_REFRESH_TOKEN: token}
                 )
+
             pl_session = DpdPlSession(
                 session, entry.data.get(CONF_REFRESH_TOKEN), _store_refresh_token
             )
@@ -155,7 +158,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
 
     # The PL provider can rotate refresh tokens during the first poll.
     if pl_session and pl_session.refresh_token != entry.data.get(CONF_REFRESH_TOKEN):
-        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_REFRESH_TOKEN: pl_session.refresh_token})
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_REFRESH_TOKEN: pl_session.refresh_token}
+        )
     entry.runtime_data = DpdData(
         client=client,
         coordinator=coordinator,

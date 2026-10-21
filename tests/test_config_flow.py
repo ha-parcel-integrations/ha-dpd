@@ -1,11 +1,13 @@
 """Tests for the DPD config flow."""
+
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
-import pytest
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResultType
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dpd.api import DpdApiError, DpdAuthError
 from custom_components.dpd.const import (
@@ -24,6 +26,7 @@ from custom_components.dpd.const import (
     DOMAIN,
     DpdCaptchaError,
 )
+from custom_components.dpd.countries.de import session as de_session
 
 _USER_INPUT = {
     CONF_EMAIL: "user@example.com",
@@ -105,7 +108,6 @@ async def test_user_flow_cannot_connect(hass):
 
 @pytest.mark.asyncio
 async def test_user_flow_aborts_when_already_configured(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     MockConfigEntry(
         domain=DOMAIN,
@@ -130,7 +132,6 @@ async def test_user_flow_aborts_when_already_configured(hass):
 
 @pytest.mark.asyncio
 async def test_options_flow_updates_filter_and_history(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -174,7 +175,6 @@ async def test_options_flow_ignores_a_legacy_refresh_interval_option(hass):
     user next saves the form, and is simply never read; submitting the form
     drops it without the flow tripping over it.
     """
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -209,7 +209,6 @@ async def test_options_flow_ignores_a_legacy_refresh_interval_option(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_flow_updates_credentials_and_reloads(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -250,7 +249,6 @@ async def test_reauth_flow_updates_credentials_and_reloads(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_flow_surfaces_invalid_auth(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -277,7 +275,6 @@ async def test_reauth_flow_surfaces_invalid_auth(hass):
 @pytest.mark.asyncio
 async def test_reauth_flow_aborts_on_different_account(hass):
     """Reauthenticating with another account's credentials aborts the flow."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -304,7 +301,6 @@ async def test_reauth_flow_aborts_on_different_account(hass):
 @pytest.mark.asyncio
 async def test_pl_reauth_updates_existing_entry_instead_of_aborting_as_duplicate(hass):
     """The existing PL number is valid in reauth; it must not be a duplicate."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     phone = "612345678"
     entry = MockConfigEntry(
@@ -448,9 +444,7 @@ async def test_user_flow_de_validates_on_its_own_cookie_jar(hass):
             "custom_components.dpd.config_flow.DpdDeSession.async_login",
             new=_login,
         ),
-        patch(
-            "custom_components.dpd.config_flow.async_get_clientsession"
-        ) as shared,
+        patch("custom_components.dpd.config_flow.async_get_clientsession") as shared,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -530,7 +524,6 @@ async def test_user_flow_de_maps_each_error(hass, error, key):
     ],
 )
 async def test_reauth_flow_de_maps_each_error(hass, error, key):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -559,7 +552,6 @@ async def test_reauth_flow_de_maps_each_error(hass, error, key):
 
 @pytest.mark.asyncio
 async def test_user_flow_de_aborts_when_already_configured(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     MockConfigEntry(
         domain=DOMAIN,
@@ -589,7 +581,6 @@ async def test_user_flow_de_aborts_when_already_configured(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_flow_de_updates_credentials_and_reloads(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -626,7 +617,6 @@ async def test_reauth_flow_de_updates_credentials_and_reloads(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_flow_de_surfaces_invalid_auth(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -728,7 +718,6 @@ async def test_user_flow_at_cannot_connect(hass):
 @pytest.mark.asyncio
 async def test_user_flow_at_is_a_separate_account_from_the_same_address_on_nl(hass):
     """An AT entry must not collide with an NL one for the same email."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     MockConfigEntry(
         domain=DOMAIN, unique_id=f"DPD-NL:{_AT_EMAIL}", data={}
@@ -753,11 +742,10 @@ async def test_user_flow_at_is_a_separate_account_from_the_same_address_on_nl(ha
 
 @pytest.mark.asyncio
 async def test_user_flow_at_aborts_when_already_configured(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    MockConfigEntry(
-        domain=DOMAIN, unique_id=f"AT:{_AT_EMAIL}", data={}
-    ).add_to_hass(hass)
+    MockConfigEntry(domain=DOMAIN, unique_id=f"AT:{_AT_EMAIL}", data={}).add_to_hass(
+        hass
+    )
 
     with patch(
         "custom_components.dpd.config_flow.DpdAtSession.async_login",
@@ -775,7 +763,6 @@ async def test_user_flow_at_aborts_when_already_configured(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_at_updates_the_password(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -805,7 +792,6 @@ async def test_reauth_at_updates_the_password(hass):
 
 @pytest.mark.asyncio
 async def test_reauth_at_rejects_a_different_account(hass):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -887,7 +873,6 @@ async def test_the_country_step_still_routes_poland_past_the_credential_step(has
 
 @pytest.mark.asyncio
 async def test_user_flow_de_logs_in_during_the_backoff_and_clears_it(hass):
-    from custom_components.dpd.countries.de import session as de_session
 
     de_session._CAPTCHA_UNTIL[_DE_EMAIL.lower()] = float("inf")
     de_session._UNOPENED_UNTIL[_DE_EMAIL.lower()] = float("inf")

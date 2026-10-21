@@ -1,4 +1,5 @@
 """Every language file carries the same config-flow error keys."""
+
 import json
 from pathlib import Path
 

@@ -1,8 +1,9 @@
 """Tests for DPD Germany's web-account session, against a scripted fake site."""
+
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 import re
-from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 import pytest
@@ -10,8 +11,7 @@ import pytest
 from custom_components.dpd.const import DpdApiError, DpdAuthError, DpdCaptchaError
 from custom_components.dpd.countries.de import session as de_session
 from custom_components.dpd.countries.de.session import DpdDeSession
-
-from ..payloads import (
+from tests.payloads import (
     DE_BARCODE,
     DE_BARCODE_2,
     de_inbox_page,
@@ -68,13 +68,19 @@ class FakeDpd:
 
     # -- helpers for the tests
     def selects(self):
-        return [c for c in self.calls if c["target"] and "btnSelectParcel" in c["target"]]
+        return [
+            c for c in self.calls if c["target"] and "btnSelectParcel" in c["target"]
+        ]
 
     def logins(self):
         return [c for c in self.calls if c["url"] == LOGIN]
 
     def hops(self):
-        return [c for c in self.calls if c["target"] == "ctl00$cphBody$ctl00$btnHomeMyParcel"]
+        return [
+            c
+            for c in self.calls
+            if c["target"] == "ctl00$cphBody$ctl00$btnHomeMyParcel"
+        ]
 
     def expire_my(self):
         self.my_session = False
@@ -85,7 +91,9 @@ class FakeDpd:
 
     # -- the aiohttp surface
     @asynccontextmanager
-    async def request(self, method, url, *, data=None, headers=None, allow_redirects=True):
+    async def request(
+        self, method, url, *, data=None, headers=None, allow_redirects=True
+    ):
         assert allow_redirects is False
         if self.yield_on_request:
             await asyncio.sleep(0)
@@ -128,11 +136,15 @@ class FakeDpd:
         if mode == "captcha_form":
             return FakeResponse(200, de_login_page(form_class="dgs-form-has-captcha"))
         if mode == "captcha_sitekey":
-            return FakeResponse(200, de_login_page(captcha='<div data-sitekey="k"></div>'))
+            return FakeResponse(
+                200, de_login_page(captcha='<div data-sitekey="k"></div>')
+            )
         if mode == "captcha_script":
             return FakeResponse(
                 200,
-                de_login_page(captcha='<script src="https://www.google.com/recaptcha/api.js"></script>'),
+                de_login_page(
+                    captcha='<script src="https://www.google.com/recaptcha/api.js"></script>'
+                ),
             )
         if mode == "rejected":
             message = '<div class="dgs-inline-message"><p>Zugangsdaten falsch</p></div>'
@@ -186,7 +198,9 @@ class FakeDpd:
         self.served += 1
         token = f"{self.served}-{tab}"
         self.expected_state = f"VS-{token}"
-        counts = tuple(len(self.tabs[name]) for name in ("incoming", "sending", "returning"))
+        counts = tuple(
+            len(self.tabs[name]) for name in ("incoming", "sending", "returning")
+        )
         page = de_inbox_page(
             self.tabs[tab],
             token=token,
@@ -195,18 +209,27 @@ class FakeDpd:
             signed_in=self.my_session,
         )
         if self.counters_hidden:
-            page = re.sub(r'<span id="ContentPlaceHolder1_counterGet\w+".*?</span>', "", page)
+            page = re.sub(
+                r'<span id="ContentPlaceHolder1_counterGet\w+".*?</span>', "", page
+            )
         return page
 
 
 def _row(barcode=DE_BARCODE, sentence="Paket unterwegs", icon=2):
-    return {"barcode": barcode, "label": "DPD Paket", "sentence": sentence, "icon": icon}
+    return {
+        "barcode": barcode,
+        "label": "DPD Paket",
+        "sentence": sentence,
+        "icon": icon,
+    }
 
 
 def _detail(barcode=DE_BARCODE, **kwargs):
     return {
         "barcode": barcode,
-        "slots": de_slots(("Paketinfo an DPD übergeben", "18.10."), ("Paket unterwegs", "19.10.")),
+        "slots": de_slots(
+            ("Paketinfo an DPD übergeben", "18.10."), ("Paket unterwegs", "19.10.")
+        ),
         "weight": "10,95",
         "flow_type": "0",
         "icon": 2,
@@ -357,7 +380,9 @@ async def test_a_portal_hop_that_ends_signed_out_leads_to_the_login():
 
 @pytest.mark.parametrize("failing", ["inbox", "portal"])
 @pytest.mark.parametrize("status", [429, 503])
-async def test_http_errors_in_the_cheap_rungs_fail_the_poll_without_a_login(failing, status):
+async def test_http_errors_in_the_cheap_rungs_fail_the_poll_without_a_login(
+    failing, status
+):
     site = _site()
     session = _session(site)
     await session.async_login()
@@ -409,7 +434,9 @@ async def test_two_concurrent_polls_produce_one_login():
     site = _site()
     site.yield_on_request = True
     session = _session(site)
-    first, second = await asyncio.gather(session.async_get_inbox(), session.async_get_inbox())
+    first, second = await asyncio.gather(
+        session.async_get_inbox(), session.async_get_inbox()
+    )
     assert len(site.logins()) == 1
     assert first["incoming"][0]["barcode"] == second["incoming"][0]["barcode"]
 
@@ -420,9 +447,8 @@ async def test_two_concurrent_polls_produce_one_login():
 @pytest.mark.parametrize("mode", ["captcha_form", "captcha_sitekey", "captcha_script"])
 async def test_each_captcha_marker_alone_raises_the_captcha_error(mode, caplog):
     site = _site(login_mode=mode)
-    with caplog.at_level(logging.WARNING):
-        with pytest.raises(DpdCaptchaError):
-            await _session(site).async_login()
+    with caplog.at_level(logging.WARNING), pytest.raises(DpdCaptchaError):
+        await _session(site).async_login()
     assert "captcha" in caplog.text
 
 
@@ -482,7 +508,9 @@ async def test_backoff_blocks_the_login_rung_but_not_the_cheap_ones(monkeypatch)
     assert len(site.logins()) == 1
 
 
-async def test_only_the_config_flow_bypasses_the_backoff_and_a_success_clears_it(monkeypatch):
+async def test_only_the_config_flow_bypasses_the_backoff_and_a_success_clears_it(
+    monkeypatch,
+):
     clock = [1000.0]
     monkeypatch.setattr(de_session.time, "monotonic", lambda: clock[0])
     site = _site(login_mode="captcha_form")
@@ -556,7 +584,9 @@ async def test_http_errors_are_api_errors_carrying_the_status(status):
 async def test_non_html_is_an_api_error():
     site = _site()
     session = _session(site)
-    site._respond = lambda m, u, d: FakeResponse(200, "{}", content_type="application/json")
+    site._respond = lambda m, u, d: FakeResponse(
+        200, "{}", content_type="application/json"
+    )
     with pytest.raises(DpdApiError):
         await session._fetch("GET", INBOX)
 
@@ -595,7 +625,9 @@ async def test_an_error_page_redirect_is_an_api_error(target):
 async def test_a_runtime_error_page_is_an_api_error():
     site = _site()
     session = _session(site)
-    site._respond = lambda m, u, d: FakeResponse(200, "<html><title>Server Runtime Error</title></html>")
+    site._respond = lambda m, u, d: FakeResponse(
+        200, "<html><title>Server Runtime Error</title></html>"
+    )
     with pytest.raises(DpdApiError):
         await session._fetch("GET", INBOX)
 
@@ -619,7 +651,9 @@ async def test_a_redirect_loop_ends():
     assert err.value.status_code == 310
 
 
-async def test_a_postback_source_without_form_state_is_an_api_error_and_one_warning(caplog):
+async def test_a_postback_source_without_form_state_is_an_api_error_and_one_warning(
+    caplog,
+):
     site = _site()
     session = _session(site)
     broken = de_portal_page().replace('name="__VIEWSTATE"', 'name="x"')
@@ -642,7 +676,9 @@ async def test_the_other_tabs_are_skipped_while_their_counters_are_zero():
     inbox = await session.async_get_inbox()
     assert inbox["sending"] == [] and inbox["returning"] == []
     assert not [c for c in site.calls if c["target"] and "btnGetSending" in c["target"]]
-    assert not [c for c in site.calls if c["target"] and "btnGetReturning" in c["target"]]
+    assert not [
+        c for c in site.calls if c["target"] and "btnGetReturning" in c["target"]
+    ]
 
 
 async def test_a_tab_postback_carries_the_form_state_of_the_page_before_it():

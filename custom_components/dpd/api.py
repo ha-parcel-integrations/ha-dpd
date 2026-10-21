@@ -9,6 +9,7 @@ DPD Germany doesn't use this client — its web-account transport
 is ``countries/de/session.py``, constructed directly once ``CONF_COUNTRY`` is
 known.
 """
+
 from __future__ import annotations
 
 from .const import DpdApiError, DpdAuthError

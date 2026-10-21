@@ -4,6 +4,7 @@ apis.track.dpd.co.uk/v1/reference is a wholly separate, keyless host from
 the myDPD backend the rest of api.py talks to — no token, no session. See
 const.py's DPD_UK_REFERENCE_URL comment for how this was confirmed live.
 """
+
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
@@ -43,14 +44,21 @@ def _client(session: MagicMock) -> DpdApiClient:
 
 @pytest.mark.asyncio
 async def test_uk_tracking_code_returns_parcel_code_on_match():
-    session = _mock_session(_mock_response(200, {
-        "data": [{
-            "parcelStatus": "Your parcel is waiting for you at home",
-            "parcelNumber": "0123 4567 890 123 4",
-            "parcelCode": "01234567890123*99999",
-            "consignmentNumber": "0123456789",
-        }],
-    }))
+    session = _mock_session(
+        _mock_response(
+            200,
+            {
+                "data": [
+                    {
+                        "parcelStatus": "Your parcel is waiting for you at home",
+                        "parcelNumber": "0123 4567 890 123 4",
+                        "parcelCode": "01234567890123*99999",
+                        "consignmentNumber": "0123456789",
+                    }
+                ],
+            },
+        )
+    )
     client = _client(session)
 
     result = await client.async_get_uk_tracking_code("01234567890123")
@@ -66,9 +74,17 @@ async def test_uk_tracking_code_returns_parcel_code_on_match():
 
 @pytest.mark.asyncio
 async def test_uk_tracking_code_returns_none_on_404():
-    session = _mock_session(_mock_response(404, {
-        "error": {"statusCode": 404, "message": "Your reference number could not be found"},
-    }))
+    session = _mock_session(
+        _mock_response(
+            404,
+            {
+                "error": {
+                    "statusCode": 404,
+                    "message": "Your reference number could not be found",
+                },
+            },
+        )
+    )
     client = _client(session)
 
     assert await client.async_get_uk_tracking_code("00000000000000") is None

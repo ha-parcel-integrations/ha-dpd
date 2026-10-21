@@ -1,8 +1,9 @@
 """Sensor platform for the DPD integration."""
+
 from __future__ import annotations
 
-import logging
 from datetime import datetime
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -41,7 +42,9 @@ def _migrate_summary_unique_ids(registry: er.EntityRegistry, entry_id: str) -> N
         if registry.async_get_entity_id("sensor", DOMAIN, new_unique_id) is not None:
             _LOGGER.warning(
                 "Both legacy and canonical pickup summary entities exist; "
-                "reconcile %s and %s manually", old_unique_id, new_unique_id
+                "reconcile %s and %s manually",
+                old_unique_id,
+                new_unique_id,
             )
             continue
         registry.async_update_entity(old_entity_id, new_unique_id=new_unique_id)
@@ -87,7 +90,7 @@ async def async_setup_entry(
             and entity_entry.unique_id.startswith(f"{entry_id}_")
             and entity_entry.unique_id not in non_parcel_unique_ids
         ):
-            parcel_number = entity_entry.unique_id[len(f"{entry_id}_"):]
+            parcel_number = entity_entry.unique_id[len(f"{entry_id}_") :]
             if parcel_number not in current_numbers:
                 registry.async_remove(entity_entry.entity_id)
 
@@ -109,8 +112,6 @@ async def async_setup_entry(
             entities.append(DpdParcelSensor(coordinator, entry, barcode))
 
     async_add_entities(entities)
-
-
 
 
 class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
@@ -163,16 +164,13 @@ class DpdIncomingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     def _handle_coordinator_update(self) -> None:
         current_numbers = {
-            p.get("barcode", "")
-            for p in self._parcels
-            if p.get("barcode")
+            p.get("barcode", "") for p in self._parcels if p.get("barcode")
         }
 
         new_numbers = current_numbers - self._known_parcel_numbers
         if new_numbers:
             self._async_add_entities(
-                DpdParcelSensor(self.coordinator, self._entry, n)
-                for n in new_numbers
+                DpdParcelSensor(self.coordinator, self._entry, n) for n in new_numbers
             )
 
         removed_numbers = self._known_parcel_numbers - current_numbers
@@ -231,7 +229,6 @@ class DpdParcelSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         return dict(parcel) if parcel else {}
 
 
-
 class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
     """Summary sensor reporting the count of active outgoing DPD shipments."""
 
@@ -262,7 +259,9 @@ class DpdOutgoingParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
         return {"parcels": self._shipments}
 
 
-class DpdOutgoingDeliveredParcelsSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
+class DpdOutgoingDeliveredParcelsSensor(
+    CoordinatorEntity[DpdCoordinator], SensorEntity
+):
     """Sensor reporting recently delivered outgoing DPD shipments."""
 
     _attr_has_entity_name = True
@@ -397,9 +396,9 @@ class DpdEnRouteToPickupPointSensor(CoordinatorEntity[DpdCoordinator], SensorEnt
 
     def _get_parcelshop_parcels(self) -> list[dict]:
         return [
-            p for p in (self.coordinator.data or {}).get("incoming_active", [])
-            if p.get("pickup")
-            and p.get("status") != ParcelStatus.AT_PICKUP_POINT
+            p
+            for p in (self.coordinator.data or {}).get("incoming_active", [])
+            if p.get("pickup") and p.get("status") != ParcelStatus.AT_PICKUP_POINT
         ]
 
     @property
@@ -436,7 +435,8 @@ class DpdAwaitingPickupSensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     def _get_awaiting_parcels(self) -> list[dict]:
         return [
-            p for p in (self.coordinator.data or {}).get("incoming_active", [])
+            p
+            for p in (self.coordinator.data or {}).get("incoming_active", [])
             if p.get("status") == ParcelStatus.AT_PICKUP_POINT
         ]
 

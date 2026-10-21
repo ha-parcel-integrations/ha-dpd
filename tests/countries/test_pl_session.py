@@ -1,8 +1,9 @@
 """Tests for DPD Polska's public OAuth session: SMS registration, token
 refresh/rotation, and the 401-retry-once authorized-request path.
 """
+
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -138,7 +139,7 @@ async def test_authorized_request_reuses_unexpired_token_without_refreshing():
     session = _mock_session(request=[_mock_response(200, {"packages": []})])
     pl = DpdPlSession(session, refresh_token="rt-1")
     pl._access_token = "still-valid"
-    pl._expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    pl._expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
     result = await pl.async_get_parcels()
 
@@ -182,10 +183,12 @@ async def test_authorized_request_raises_auth_error_when_second_attempt_also_401
 
 
 async def test_get_parcels_filters_out_non_dict_entries_and_ignores_missing_key():
-    session = _mock_session(request=[_mock_response(200, {"packages": [{"waybill": "A"}, "garbage"]})])
+    session = _mock_session(
+        request=[_mock_response(200, {"packages": [{"waybill": "A"}, "garbage"]})]
+    )
     pl = DpdPlSession(session, refresh_token="rt-1")
     pl._access_token = "valid"
-    pl._expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    pl._expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
     result = await pl.async_get_parcels()
 
@@ -196,7 +199,7 @@ async def test_get_parcels_returns_empty_list_when_packages_key_missing():
     session = _mock_session(request=[_mock_response(200, {})])
     pl = DpdPlSession(session, refresh_token="rt-1")
     pl._access_token = "valid"
-    pl._expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    pl._expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
     result = await pl.async_get_parcels()
 
@@ -204,10 +207,12 @@ async def test_get_parcels_returns_empty_list_when_packages_key_missing():
 
 
 async def test_get_parcel_detail_returns_body_for_authenticated_request():
-    session = _mock_session(request=[_mock_response(200, {"waybill": "A", "extra": True})])
+    session = _mock_session(
+        request=[_mock_response(200, {"waybill": "A", "extra": True})]
+    )
     pl = DpdPlSession(session, refresh_token="rt-1")
     pl._access_token = "valid"
-    pl._expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    pl._expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
     result = await pl.async_get_parcel_detail("A")
 

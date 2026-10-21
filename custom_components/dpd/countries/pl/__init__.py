@@ -1,8 +1,9 @@
 """DPD Polska parcel normalization."""
+
 from __future__ import annotations
 
-import logging
 from datetime import datetime
+import logging
 from typing import Any
 
 from ...const import ParcelStatus
@@ -14,13 +15,23 @@ _BAD_TIMESTAMPS: set[str] = set()
 _ISSUE_URL = "https://github.com/ha-parcel-integrations/ha-dpd/issues/new?template=unrecognised_status.yml"
 _STATUS_MAP = {
     "READY_TO_SEND": ParcelStatus.REGISTERED,
-    "RECEIVED_FROM_SENDER": ParcelStatus.IN_TRANSIT, "SENT": ParcelStatus.IN_TRANSIT, "IN_TRANSPORT": ParcelStatus.IN_TRANSIT, "RECEIVED_IN_DEPOT": ParcelStatus.IN_TRANSIT, "REDIRECTED": ParcelStatus.IN_TRANSIT, "RESCHEDULED": ParcelStatus.IN_TRANSIT,
+    "RECEIVED_FROM_SENDER": ParcelStatus.IN_TRANSIT,
+    "SENT": ParcelStatus.IN_TRANSIT,
+    "IN_TRANSPORT": ParcelStatus.IN_TRANSIT,
+    "RECEIVED_IN_DEPOT": ParcelStatus.IN_TRANSIT,
+    "REDIRECTED": ParcelStatus.IN_TRANSIT,
+    "RESCHEDULED": ParcelStatus.IN_TRANSIT,
     "HANDED_OVER_FOR_DELIVERY": ParcelStatus.OUT_FOR_DELIVERY,
-    "READY_TO_PICK_UP": ParcelStatus.AT_PICKUP_POINT, "SELF_PICKUP": ParcelStatus.AT_PICKUP_POINT, "HARD_RESERVED": ParcelStatus.AT_PICKUP_POINT,
-    "DELIVERED": ParcelStatus.DELIVERED, "PICKED_UP": ParcelStatus.DELIVERED,
-    "RETURNED_TO_SENDER": ParcelStatus.RETURNING, "EXPIRED_PICKUP": ParcelStatus.RETURNING,
+    "READY_TO_PICK_UP": ParcelStatus.AT_PICKUP_POINT,
+    "SELF_PICKUP": ParcelStatus.AT_PICKUP_POINT,
+    "HARD_RESERVED": ParcelStatus.AT_PICKUP_POINT,
+    "DELIVERED": ParcelStatus.DELIVERED,
+    "PICKED_UP": ParcelStatus.DELIVERED,
+    "RETURNED_TO_SENDER": ParcelStatus.RETURNING,
+    "EXPIRED_PICKUP": ParcelStatus.RETURNING,
     "UNSUCCESSFUL_DELIVERY": ParcelStatus.PROBLEM,
 }
+
 
 def map_parcel_status_pl(raw: str | None) -> ParcelStatus:
     """Map Poland's observed status vocabulary to the parcel contract."""
@@ -34,13 +45,14 @@ def map_parcel_status_pl(raw: str | None) -> ParcelStatus:
         )
     return status
 
+
 def _timestamp(value: Any) -> str | None:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+        return datetime.fromisoformat(value).isoformat()
     except ValueError:
-        shape = f"string length={len(value)} separators={sorted(set(c for c in value if not c.isalnum()))!r}"
+        shape = f"string length={len(value)} separators={sorted({c for c in value if not c.isalnum()})!r}"
         if shape not in _BAD_TIMESTAMPS:
             _BAD_TIMESTAMPS.add(shape)
             _LOGGER.warning(
@@ -59,8 +71,7 @@ def _warn_unexpected_shape(path: str, value: Any) -> None:
         return
     _UNEXPECTED_SHAPES.add(description)
     _LOGGER.warning(
-        "DPD Poland returned an unexpected payload shape — report it at %s "
-        "(%s)",
+        "DPD Poland returned an unexpected payload shape — report it at %s (%s)",
         _ISSUE_URL,
         description,
     )
@@ -70,6 +81,7 @@ def _status_timestamp(status: dict[str, Any]) -> Any:
     """Read all timestamp spellings present in the Android API models."""
     return status.get("date") or status.get("create_time") or status.get("createTime")
 
+
 def normalize_parcel_pl(
     parcel: dict[str, Any], *, include_history: bool = False
 ) -> dict[str, Any]:
@@ -77,7 +89,9 @@ def normalize_parcel_pl(
     main_status = parcel.get("main_status")
     if main_status is not None and not isinstance(main_status, dict):
         _warn_unexpected_shape("main_status", main_status)
-    raw_status = (main_status or {}).get("status") if isinstance(main_status, dict) else None
+    raw_status = (
+        (main_status or {}).get("status") if isinstance(main_status, dict) else None
+    )
     delivery = parcel.get("delivery") or {}
     if delivery and not isinstance(delivery, dict):
         _warn_unexpected_shape("delivery", delivery)
@@ -101,10 +115,23 @@ def normalize_parcel_pl(
     )
     status = map_parcel_status_pl(raw_status)
     return {
-        "carrier": "DPD Polska", "barcode": parcel.get("waybill"), "sender": ((parcel.get("sender") or {}).get("name")), "receiver": None,
-        "status": status, "raw_status": raw_status, "delivered": status is ParcelStatus.DELIVERED,
-        "planned_from": _timestamp(delivery.get("planned_delivery_date") or parcel.get("planned_delivery_date")), "planned_to": None,
-        "delivered_at": _timestamp(delivery.get("delivered_datetime")), "pickup": False, "pickup_point": None, "weight": None, "dimensions": None,
-        "history": history, "url": None,
+        "carrier": "DPD Polska",
+        "barcode": parcel.get("waybill"),
+        "sender": ((parcel.get("sender") or {}).get("name")),
+        "receiver": None,
+        "status": status,
+        "raw_status": raw_status,
+        "delivered": status is ParcelStatus.DELIVERED,
+        "planned_from": _timestamp(
+            delivery.get("planned_delivery_date") or parcel.get("planned_delivery_date")
+        ),
+        "planned_to": None,
+        "delivered_at": _timestamp(delivery.get("delivered_datetime")),
+        "pickup": False,
+        "pickup_point": None,
+        "weight": None,
+        "dimensions": None,
+        "history": history,
+        "url": None,
         "raw": parcel,
     }

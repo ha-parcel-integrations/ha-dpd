@@ -4,9 +4,11 @@ Covers the login/JWT exchange, the HTTP-200-with-``state: failure`` envelope
 that the portal uses for every rejection, the re-login-once path (there is no
 refresh route), 429 handling, and the three-direction inbox unwrap.
 """
+
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from custom_components.dpd.const import DpdApiError, DpdAuthError
@@ -50,7 +52,7 @@ def _mock_session(*responses: MagicMock) -> MagicMock:
     return session
 
 
-def _ok(payload: object, token: str = "jwt-next") -> MagicMock:
+def _ok(payload: object, token: str = "jwt-next") -> MagicMock:  # noqa: S107 - placeholder token, not a credential
     """A data-call response, in the portal's real nested shape.
 
     No top-level ``state``: the token is lifted out, ``data`` is then the only
@@ -226,7 +228,9 @@ async def test_a_failed_relogin_raises_auth_error():
 async def test_the_inbox_returns_all_three_directions_from_one_call():
     session = _mock_session(
         _login_ok(),
-        _inbox(inc=[{"parcelno": "1"}], send=[{"parcelno": "2"}], ret=[{"parcelno": "3"}]),
+        _inbox(
+            inc=[{"parcelno": "1"}], send=[{"parcelno": "2"}], ret=[{"parcelno": "3"}]
+        ),
     )
     at = DpdAtSession(session, "user@example.test", "secret")
     await at.async_login()
@@ -325,7 +329,6 @@ async def test_the_portal_is_primed_once_before_the_first_login():
 
 async def test_a_portal_that_cannot_be_primed_still_attempts_the_login():
     """A changed landing page must not break setup by itself."""
-    import aiohttp
 
     session = _mock_session(_login_ok(), _inbox())
     session.get = MagicMock(side_effect=aiohttp.ClientError("boom"))

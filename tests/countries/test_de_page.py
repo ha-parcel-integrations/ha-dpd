@@ -1,4 +1,5 @@
 """Tests for DPD Germany's page reader (synthetic pages only)."""
+
 import logging
 
 import pytest
@@ -16,8 +17,7 @@ from custom_components.dpd.countries.de.page import (
     login_rejected,
     warn_pager,
 )
-
-from ..payloads import (
+from tests.payloads import (
     DE_BARCODE,
     DE_BARCODE_2,
     DE_POSTCODE,
@@ -155,16 +155,16 @@ def test_a_missing_counter_is_none_and_warns_once(caplog):
     with caplog.at_level(logging.WARNING):
         assert page.counter("sending") is None
         assert page.counter("sending") is None
-    assert [r.getMessage().count("counterGetSendingParcel") for r in caplog.records] == [1]
+    assert [
+        r.getMessage().count("counterGetSendingParcel") for r in caplog.records
+    ] == [1]
 
 
 # -- rows -------------------------------------------------------------------
 
 
 def test_rows_are_read_until_the_first_absent_one_with_no_cap():
-    rows = [
-        {**_ROW, "barcode": f"0123456789{index:04d}"} for index in range(12)
-    ]
+    rows = [{**_ROW, "barcode": f"0123456789{index:04d}"} for index in range(12)]
     parsed = list_rows(Page(de_inbox_page(rows)))
     assert len(parsed) == 12
     assert parsed[11]["barcode"] == "01234567890011"
@@ -252,9 +252,7 @@ def test_no_panel_is_none_and_warns_once(caplog):
 
 
 def test_a_panel_missing_a_milestone_control_warns(caplog):
-    page = Page(
-        '<input id="ContentPlaceHolder1_hidParcelNo" value="x" />'
-    )
+    page = Page('<input id="ContentPlaceHolder1_hidParcelNo" value="x" />')
     with caplog.at_level(logging.WARNING):
         panel = detail(page)
     assert panel["slots"][0] == {"slot": "Start", "text": "", "date": ""}
@@ -266,7 +264,9 @@ def test_a_panel_missing_a_milestone_control_warns(caplog):
 
 
 def test_a_pager_like_control_warns_once(caplog):
-    page = Page(de_inbox_page([_ROW], extra='<a id="ContentPlaceHolder1_btnNextPage"></a>'))
+    page = Page(
+        de_inbox_page([_ROW], extra='<a id="ContentPlaceHolder1_btnNextPage"></a>')
+    )
     with caplog.at_level(logging.WARNING):
         warn_pager(page)
         warn_pager(page)
@@ -275,9 +275,11 @@ def test_a_pager_like_control_warns_once(caplog):
 
 def test_the_real_page_ids_do_not_look_like_a_pager(caplog):
     page = Page(
-        de_inbox_page([_ROW], extra='<span id="ContentPlaceHolder1_labMoreDetailsHead"></span>')
+        de_inbox_page(
+            [_ROW], extra='<span id="ContentPlaceHolder1_labMoreDetailsHead"></span>'
+        )
     )
     with caplog.at_level(logging.WARNING):
         warn_pager(page)
     assert caplog.records == []
-    assert de_page._PAGER_LOGGED == set()
+    assert set() == de_page._PAGER_LOGGED

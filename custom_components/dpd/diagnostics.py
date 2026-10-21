@@ -1,4 +1,5 @@
 """Diagnostics support for the DPD integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -125,11 +126,15 @@ async def async_get_config_entry_diagnostics(
                 else None
             ),
         },
-        "incoming_active": async_redact_data(data.get("incoming_active", []), TO_REDACT),
+        "incoming_active": async_redact_data(
+            data.get("incoming_active", []), TO_REDACT
+        ),
         "incoming_delivered": async_redact_data(
             data.get("incoming_delivered", []), TO_REDACT
         ),
-        "outgoing_active": async_redact_data(data.get("outgoing_active", []), TO_REDACT),
+        "outgoing_active": async_redact_data(
+            data.get("outgoing_active", []), TO_REDACT
+        ),
         "outgoing_delivered": async_redact_data(
             data.get("outgoing_delivered", []), TO_REDACT
         ),

@@ -9,19 +9,16 @@ icon table holds observed values only.
 Only a handful of parcels have been seen, so every wording this module does
 not recognise is reported once by a WARNING instead of being guessed.
 """
+
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 import logging
 import re
-from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ...const import (
-    DPD_DE_TRACKING_URL,
-    HISTORY_MAX_EVENTS,
-    ParcelStatus,
-)
+from ...const import DPD_DE_TRACKING_URL, HISTORY_MAX_EVENTS, ParcelStatus
 from .page import SLOTS
 from .session import DpdDeSession
 
@@ -171,9 +168,7 @@ def map_parcel_status_de(fields: dict[str, Any]) -> ParcelStatus:
 # ---------------------------------------------------------------------------
 
 
-def _infer_dates(
-    slots: list[dict[str, str]], today: date
-) -> list[date | None]:
+def _infer_dates(slots: list[dict[str, str]], today: date) -> list[date | None]:
     """Give each milestone day its year, in slot order.
 
     A day more than a week after today belongs to the previous year, and a
@@ -224,9 +219,7 @@ def _midnight(day: date | None) -> str | None:
 def _end_of_day(day: date | None) -> str | None:
     if day is None:
         return None
-    return datetime(
-        day.year, day.month, day.day, 23, 59, 59, tzinfo=_DE_TZ
-    ).isoformat()
+    return datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=_DE_TZ).isoformat()
 
 
 def _history(
@@ -240,7 +233,7 @@ def _history(
     if not slots:
         return []
     entries = []
-    for slot, day in zip(slots, _infer_dates(slots, today)):
+    for slot, day in zip(slots, _infer_dates(slots, today), strict=True):
         timestamp = _midnight(day)
         if timestamp is None:
             continue
@@ -248,9 +241,7 @@ def _history(
             {
                 "timestamp": timestamp,
                 "status": (
-                    ParcelStatus.RETURNING
-                    if returning
-                    else _SLOT_STATUS[slot["slot"]]
+                    ParcelStatus.RETURNING if returning else _SLOT_STATUS[slot["slot"]]
                 ),
                 "raw_status": slot["text"],
             }
@@ -281,16 +272,14 @@ def _collect(parcel: dict[str, Any], status: ParcelStatus) -> None:
     if flow_type not in ("", "0"):
         _warn_once(
             ("flow", flow_type),
-            "DPD Germany parcel flow type %r not seen before — report it at "
-            "%s",
+            "DPD Germany parcel flow type %r not seen before — report it at %s",
             flow_type,
             _ISSUE_URL,
         )
     if _TIME_OF_DAY.search(parcel["status_sentence"]):
         _warn_once(
             "time",
-            "DPD Germany shows a time of day in a parcel status — report it "
-            "at %s (%r)",
+            "DPD Germany shows a time of day in a parcel status — report it at %s (%r)",
             _ISSUE_URL,
             parcel["status_sentence"],
         )
@@ -351,7 +340,7 @@ def normalize_parcel_de(
     )
     _collect(parcel, status)
 
-    days = dict(zip(SLOTS, _infer_dates(slots, today) if slots else []))
+    days = dict(zip(SLOTS, _infer_dates(slots, today) if slots else [], strict=False))
     delivered = status is ParcelStatus.DELIVERED
     out_for_delivery = status is ParcelStatus.OUT_FOR_DELIVERY
     barcode = parcel["barcode"]

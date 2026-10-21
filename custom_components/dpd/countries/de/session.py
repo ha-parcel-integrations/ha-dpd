@@ -14,6 +14,7 @@ parcel list, so a login happens only when the existing session is gone:
 The hop from the portal dashboard is mandatory: without it the parcel list
 renders an empty inbox instead of asking for a login.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -228,9 +229,7 @@ class DpdDeSession:
 
     async def _async_hop(self, portal_html: str) -> str:
         """Open the parcel list from the portal dashboard."""
-        return await self._postback(
-            DPD_DE_PORTAL_HOME_URL, portal_html, _HOP_TARGET
-        )
+        return await self._postback(DPD_DE_PORTAL_HOME_URL, portal_html, _HOP_TARGET)
 
     async def _async_login_and_open(self, *, respect_backoff: bool) -> str:
         portal = await self._async_full_login(respect_backoff=respect_backoff)
@@ -313,9 +312,7 @@ class DpdDeSession:
                     parcels.append(parcel)
                 inbox[tab] = parcels
             self._details = {
-                key: entry
-                for key, entry in self._details.items()
-                if key in seen
+                key: entry for key, entry in self._details.items() if key in seen
             }
             return inbox
 

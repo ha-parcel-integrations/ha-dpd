@@ -4,12 +4,13 @@ Everything is read by server-control id, never by position or layout. The
 recipient-postcode gate, ``hidZipCode`` and every address block are
 deliberately not read here.
 """
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 import html as html_lib
 import logging
 import re
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -227,8 +228,7 @@ def _warn_missing(control_id: str) -> None:
         return
     _MISSING_LOGGED.add(control_id)
     _LOGGER.warning(
-        "A DPD Germany parcel page is missing an expected field (%s) — report "
-        "it at %s",
+        "A DPD Germany parcel page is missing an expected field (%s) — report it at %s",
         control_id,
         _ISSUE_URL,
     )

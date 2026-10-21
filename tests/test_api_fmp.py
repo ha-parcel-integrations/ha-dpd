@@ -4,6 +4,7 @@ The main parcels / auth API has broader test coverage planned in
 DPD 2.0.0 Phase 6d (mirroring ha-dhl-nl's test_api.py). This file
 focuses on the FMP sub-API shipped in 1.3.0.
 """
+
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
@@ -33,7 +34,7 @@ def _mock_session(*responses: MagicMock) -> MagicMock:
     return session
 
 
-def _client(session: MagicMock, token: str | None = "main-token") -> DpdApiClient:
+def _client(session: MagicMock, token: str | None = "main-token") -> DpdApiClient:  # noqa: S107 - placeholder token, not a credential
     client = DpdApiClient(
         email="user@example.com",
         password="secret",

@@ -1,4 +1,5 @@
 """Tests for DPD Austria canonical normalization and status derivation."""
+
 from datetime import date
 
 import pytest
@@ -180,7 +181,9 @@ def test_a_winter_stamp_gets_the_winter_offset():
     assert _timestamp("20260115103000") == "2026-01-15T10:30:00+01:00"
 
 
-@pytest.mark.parametrize("value", ["", None, "2026-10-09", "20261009140", "notadate!!!"])
+@pytest.mark.parametrize(
+    "value", ["", None, "2026-10-09", "20261009140", "notadate!!!"]
+)
 def test_an_unparseable_stamp_is_dropped(value):
     assert _timestamp(value) is None
 
@@ -260,7 +263,9 @@ def test_deliver_date_is_the_fallback_when_no_scan_is_dated():
 
 
 def test_deliver_date_also_accepts_an_iso_date():
-    parcel = _parcel(5, entries=[], deliver_date={"date": "2026-10-09", "time": "14:05"})
+    parcel = _parcel(
+        5, entries=[], deliver_date={"date": "2026-10-09", "time": "14:05"}
+    )
     assert normalize_parcel_at(parcel)["delivered_at"] == _STAMP_ISO
 
 
@@ -355,8 +360,7 @@ def test_history_drops_undated_entries():
 
 def test_history_is_capped_to_the_most_recent_events():
     entries = [
-        _entry(f"2026100910{minute:02d}00", name="ON_THE_WAY")
-        for minute in range(30)
+        _entry(f"2026100910{minute:02d}00", name="ON_THE_WAY") for minute in range(30)
     ]
     history = build_history_at(entries, max_events=5)
     assert [item["timestamp"][11:16] for item in history] == [
@@ -569,15 +573,32 @@ def _real_parcel() -> dict:
             "predict": None,
             "entries": [
                 entry("20260804190600", 0, "ORDER_DATA", "Auftragsdaten übermittelt"),
-                entry("20260805142800", 2, "ON_THE_WAY", "Paket unterwegs",
-                      depot_data=["Leopoldsdorf", "AT"]),
-                entry("20260806052600", 3, "IN_DEPOT", "Im Paketzustellzentrum",
-                      depot="0635", depot_data=["Seyring", "AT"]),
-                entry("20260806053100", 4, "IN_DELIVERY", "In Zustellung",
-                      depot="0635"),
-                entry("20260806102900", 5, "DELIVERED",
-                      "Paket wurde erfolgreich abgestellt", depot="0635",
-                      info="ASG"),
+                entry(
+                    "20260805142800",
+                    2,
+                    "ON_THE_WAY",
+                    "Paket unterwegs",
+                    depot_data=["Leopoldsdorf", "AT"],
+                ),
+                entry(
+                    "20260806052600",
+                    3,
+                    "IN_DEPOT",
+                    "Im Paketzustellzentrum",
+                    depot="0635",
+                    depot_data=["Seyring", "AT"],
+                ),
+                entry(
+                    "20260806053100", 4, "IN_DELIVERY", "In Zustellung", depot="0635"
+                ),
+                entry(
+                    "20260806102900",
+                    5,
+                    "DELIVERED",
+                    "Paket wurde erfolgreich abgestellt",
+                    depot="0635",
+                    info="ASG",
+                ),
             ],
             "isRetoure": False,
             "isShopRetoure": False,

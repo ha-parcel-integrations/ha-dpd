@@ -8,9 +8,10 @@ its original names, so existing imports keep working.
 ``sort_parcels_by_ts`` and ``_apply_delivered_filter`` stay here: they
 operate on already-normalized parcel dicts, the same regardless of country.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -39,6 +40,8 @@ from .countries.general import (
 )
 
 __all__ = [
+    "_apply_delivered_filter",
+    "_apply_delivered_filter_canonical",
     "_augment_dimensions",
     "_description",
     "_tracking_url",
@@ -55,8 +58,6 @@ __all__ = [
     "shipment_planned_dt",
     "shipment_planned_window",
     "sort_parcels_by_ts",
-    "_apply_delivered_filter",
-    "_apply_delivered_filter_canonical",
 ]
 
 
@@ -77,7 +78,7 @@ def sort_parcels_by_ts(
             without_ts.append(parcel)
             continue
         try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(value)
         except ValueError:
             without_ts.append(parcel)
             continue
@@ -94,17 +95,16 @@ def _apply_delivered_filter(shipments: list[dict], entry: ConfigEntry) -> list[d
     ``_apply_delivered_filter_canonical`` instead.
     """
     options = entry.options
-    filter_type = options.get(
-        CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
-    )
+    filter_type = options.get(CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE)
     filter_amount = int(
         options.get(CONF_DELIVERED_FILTER_AMOUNT, DEFAULT_DELIVERED_FILTER_AMOUNT)
     )
 
     if filter_type == "days":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=filter_amount)
+        cutoff = datetime.now(UTC) - timedelta(days=filter_amount)
         return [
-            s for s in shipments
+            s
+            for s in shipments
             if (dt := shipment_delivery_dt(s)) is None or dt >= cutoff
         ]
 
@@ -120,9 +120,7 @@ def _apply_delivered_filter_canonical(
     coordinator path normalizes before filtering, unlike the general path.
     """
     options = entry.options
-    filter_type = options.get(
-        CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
-    )
+    filter_type = options.get(CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE)
     filter_amount = int(
         options.get(CONF_DELIVERED_FILTER_AMOUNT, DEFAULT_DELIVERED_FILTER_AMOUNT)
     )
@@ -137,10 +135,7 @@ def _apply_delivered_filter_canonical(
             return None
 
     if filter_type == "days":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=filter_amount)
-        return [
-            p for p in parcels
-            if (dt := _delivered_at(p)) is None or dt >= cutoff
-        ]
+        cutoff = datetime.now(UTC) - timedelta(days=filter_amount)
+        return [p for p in parcels if (dt := _delivered_at(p)) is None or dt >= cutoff]
 
     return parcels[:filter_amount]

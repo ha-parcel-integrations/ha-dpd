@@ -4,6 +4,7 @@ FMP-specific tests live in test_api_fmp.py; this file covers the
 three-step login flow (Keycloak → mobile-app guest token → consignee
 SSO), the parcels fetch, and the one-shot reauth-on-401/403 retry.
 """
+
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
@@ -87,8 +88,9 @@ async def test_keycloak_login_returns_access_token():
 @pytest.mark.asyncio
 async def test_keycloak_login_raises_when_response_has_error_description():
     session = _mock_session(
-        _mock_response(401, {"error": "invalid_grant",
-                             "error_description": "Wrong password"})
+        _mock_response(
+            401, {"error": "invalid_grant", "error_description": "Wrong password"}
+        )
     )
     client = _client(session)
     with pytest.raises(DpdAuthError, match="Wrong password"):
@@ -197,11 +199,11 @@ async def test_get_parcels_raises_api_error_on_non_200():
 async def test_get_parcels_reauths_once_on_401():
     payload = {"incomingShipments": [], "sendingShipments": []}
     session = _mock_session(
-        _mock_response(401, None),                              # first parcels call
-        _mock_response(200, {"access_token": "kc-token"}),      # reauth: keycloak
-        _mock_response(200, {"access_token": "guest-token"}),   # reauth: guest
-        _mock_response(200, {"access_token": "new-dpd-token"}), # reauth: consignee
-        _mock_response(200, payload),                           # parcels retry
+        _mock_response(401, None),  # first parcels call
+        _mock_response(200, {"access_token": "kc-token"}),  # reauth: keycloak
+        _mock_response(200, {"access_token": "guest-token"}),  # reauth: guest
+        _mock_response(200, {"access_token": "new-dpd-token"}),  # reauth: consignee
+        _mock_response(200, payload),  # parcels retry
     )
     client = _client(session)
     client._token = "expired-token"

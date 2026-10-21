@@ -7,11 +7,12 @@ normalisation now carries carrier-agnostic parcel dicts (``barcode``,
 shape directly — bypassing the coordinator's raw-to-normalised
 transformation tested in ``test_coordinator.py``.
 """
-from datetime import datetime
+
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
 from homeassistant.helpers import entity_registry as er
+import pytest
 
 from custom_components.dpd.const import DOMAIN, ParcelStatus
 from custom_components.dpd.sensor import (
@@ -19,6 +20,7 @@ from custom_components.dpd.sensor import (
     DpdDeliveredParcelsSensor,
     DpdEnRouteToPickupPointSensor,
     DpdIncomingParcelsSensor,
+    DpdLastUpdateSensor,
     DpdNextDeliverySensor,
     DpdOutgoingDeliveredParcelsSensor,
     DpdOutgoingParcelsSensor,
@@ -33,7 +35,9 @@ def _make_coordinator(data: dict | None) -> MagicMock:
     return coordinator
 
 
-def _make_entry(entry_id: str = "test_entry", title: str = "user@example.com") -> MagicMock:
+def _make_entry(
+    entry_id: str = "test_entry", title: str = "user@example.com"
+) -> MagicMock:
     entry = MagicMock()
     entry.entry_id = entry_id
     entry.title = title
@@ -74,17 +78,21 @@ def _parcel(
 
 
 def test_incoming_sensor_counts_active_parcels():
-    coordinator = _make_coordinator({
-        "incoming_active": [_parcel("A"), _parcel("B")],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [_parcel("A"), _parcel("B")],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdIncomingParcelsSensor(coordinator, _make_entry(), lambda _: None)
     assert sensor.native_value == 2
 
 
 def test_incoming_sensor_zero_when_no_data():
-    sensor = DpdIncomingParcelsSensor(_make_coordinator(None), _make_entry(), lambda _: None)
+    sensor = DpdIncomingParcelsSensor(
+        _make_coordinator(None), _make_entry(), lambda _: None
+    )
     assert sensor.native_value == 0
     assert sensor.extra_state_attributes == {"parcels": []}
 
@@ -102,11 +110,13 @@ def test_summary_sensor_removes_stale_per_parcel_entity_from_registry():
     pattern raced with the coordinator-listener cleanup and could leave a
     ghost entity behind.
     """
-    coordinator = _make_coordinator({
-        "incoming_active": [_parcel("A1")],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [_parcel("A1")],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdIncomingParcelsSensor(
         coordinator,
         _make_entry(entry_id="cfg"),
@@ -118,17 +128,18 @@ def test_summary_sensor_removes_stale_per_parcel_entity_from_registry():
     registry = MagicMock()
     registry.async_get_entity_id.return_value = "sensor.dpd_parcel_a2"
 
-    with patch(
-        "custom_components.dpd.sensor.er.async_get",
-        return_value=registry,
-    ), patch.object(
-        DpdIncomingParcelsSensor.__bases__[0], "_handle_coordinator_update"
+    with (
+        patch(
+            "custom_components.dpd.sensor.er.async_get",
+            return_value=registry,
+        ),
+        patch.object(
+            DpdIncomingParcelsSensor.__bases__[0], "_handle_coordinator_update"
+        ),
     ):
         sensor._handle_coordinator_update()
 
-    registry.async_get_entity_id.assert_called_once_with(
-        "sensor", "dpd", "cfg_A2"
-    )
+    registry.async_get_entity_id.assert_called_once_with("sensor", "dpd", "cfg_A2")
     registry.async_remove.assert_called_once_with("sensor.dpd_parcel_a2")
 
 
@@ -139,22 +150,26 @@ def test_summary_sensor_removes_stale_per_parcel_entity_from_registry():
 
 def test_parcel_sensor_returns_parcel_status_enum_value():
     parcel = _parcel("X1", status=ParcelStatus.OUT_FOR_DELIVERY)
-    coordinator = _make_coordinator({
-        "incoming_active": [parcel],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [parcel],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdParcelSensor(coordinator, _make_entry(), "X1")
     assert sensor.native_value == ParcelStatus.OUT_FOR_DELIVERY
     assert sensor.native_value == "out_for_delivery"
 
 
 def test_parcel_sensor_returns_none_when_missing():
-    coordinator = _make_coordinator({
-        "incoming_active": [_parcel("A")],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [_parcel("A")],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdParcelSensor(coordinator, _make_entry(), "MISSING")
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
@@ -162,11 +177,13 @@ def test_parcel_sensor_returns_none_when_missing():
 
 def test_parcel_sensor_attributes_contain_full_parcel():
     parcel = _parcel("A")
-    coordinator = _make_coordinator({
-        "incoming_active": [parcel],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [parcel],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdParcelSensor(coordinator, _make_entry(), "A")
     assert sensor.extra_state_attributes == parcel
 
@@ -186,11 +203,13 @@ def test_parcel_sensor_unique_id_is_namespaced():
 
 
 def test_outgoing_sensor_counts_active_shipments():
-    coordinator = _make_coordinator({
-        "incoming_active": [],
-        "incoming_delivered": [],
-        "outgoing_active": [_parcel("X"), _parcel("Y")],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [],
+            "incoming_delivered": [],
+            "outgoing_active": [_parcel("X"), _parcel("Y")],
+        }
+    )
     sensor = DpdOutgoingParcelsSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
@@ -207,15 +226,17 @@ def test_outgoing_sensor_zero_when_no_data():
 
 
 def test_outgoing_delivered_sensor_counts_delivered_shipments():
-    coordinator = _make_coordinator({
-        "incoming_active": [],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-        "outgoing_delivered": [
-            _parcel("X", status=ParcelStatus.DELIVERED, delivered=True),
-            _parcel("Y", status=ParcelStatus.DELIVERED, delivered=True),
-        ],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+            "outgoing_delivered": [
+                _parcel("X", status=ParcelStatus.DELIVERED, delivered=True),
+                _parcel("Y", status=ParcelStatus.DELIVERED, delivered=True),
+            ],
+        }
+    )
     sensor = DpdOutgoingDeliveredParcelsSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
@@ -233,12 +254,14 @@ def test_outgoing_delivered_sensor_attributes_pass_through_parcels():
         delivered=True,
         delivered_at="2026-06-05T14:23:12+02:00",
     )
-    coordinator = _make_coordinator({
-        "incoming_active": [],
-        "incoming_delivered": [],
-        "outgoing_active": [],
-        "outgoing_delivered": [parcel],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+            "outgoing_delivered": [parcel],
+        }
+    )
     sensor = DpdOutgoingDeliveredParcelsSensor(coordinator, _make_entry())
     attrs = sensor.extra_state_attributes
     assert attrs["parcels"][0]["barcode"] == "R1"
@@ -251,14 +274,16 @@ def test_outgoing_delivered_sensor_attributes_pass_through_parcels():
 
 
 def test_delivered_sensor_count_matches_coordinator():
-    coordinator = _make_coordinator({
-        "incoming_active": [],
-        "incoming_delivered": [
-            _parcel("A", status=ParcelStatus.DELIVERED, delivered=True),
-            _parcel("B", status=ParcelStatus.DELIVERED, delivered=True),
-        ],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [],
+            "incoming_delivered": [
+                _parcel("A", status=ParcelStatus.DELIVERED, delivered=True),
+                _parcel("B", status=ParcelStatus.DELIVERED, delivered=True),
+            ],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdDeliveredParcelsSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
@@ -277,11 +302,13 @@ def test_delivered_sensor_attributes_pass_through_normalized_parcels():
         delivered=True,
         delivered_at="2026-06-05T14:23:12+02:00",
     )
-    coordinator = _make_coordinator({
-        "incoming_active": [],
-        "incoming_delivered": [parcel],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [],
+            "incoming_delivered": [parcel],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdDeliveredParcelsSensor(coordinator, _make_entry())
     assert sensor.extra_state_attributes == {"parcels": [parcel]}
 
@@ -297,11 +324,13 @@ def test_next_delivery_picks_earliest_planned_from():
         _parcel("B", planned_from="2026-06-17T08:00:00+02:00"),
         _parcel("C", planned_from="2026-06-19T15:00:00+02:00"),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels,
-        "incoming_delivered": [],
-        "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     result = sensor.native_value
     assert result is not None
@@ -313,9 +342,13 @@ def test_next_delivery_attributes_describe_earliest_parcel():
         _parcel("A", sender="Sender A", planned_from="2026-06-17T10:00:00+02:00"),
         _parcel("B", sender="Sender B", planned_from="2026-06-20T10:00:00+02:00"),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     attrs = sensor.extra_state_attributes
     assert attrs["barcode"] == "A"
@@ -327,9 +360,13 @@ def test_next_delivery_skips_parcels_without_planned_from():
         _parcel("A", planned_from=None),
         _parcel("B", planned_from="2026-06-17T10:00:00+02:00"),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     assert sensor.native_value is not None
     assert sensor.extra_state_attributes["barcode"] == "B"
@@ -343,9 +380,13 @@ def test_next_delivery_none_when_no_parcels():
 
 def test_next_delivery_none_when_no_planned_from():
     parcels = [_parcel("A", planned_from=None)]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     assert sensor.native_value is None
 
@@ -361,18 +402,26 @@ def test_en_route_counts_pickup_parcels():
         _parcel("B", pickup=False),
         _parcel("C", pickup=True),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
 
 
 def test_en_route_excludes_home_delivery():
     parcels = [_parcel("A", pickup=False)]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 0
 
@@ -384,9 +433,13 @@ def test_en_route_zero_when_no_parcels():
 
 def test_en_route_attribute_lists_parcels():
     parcel = _parcel("A", pickup=True)
-    coordinator = _make_coordinator({
-        "incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": [parcel],
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.extra_state_attributes == {"parcels": [parcel]}
 
@@ -397,9 +450,13 @@ def test_en_route_excludes_parcels_ready_at_parcelshop():
         _parcel("A", pickup=True, status=ParcelStatus.IN_TRANSIT),
         _parcel("B", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdEnRouteToPickupPointSensor(coordinator, _make_entry())
     assert sensor.native_value == 1
     assert sensor.extra_state_attributes["parcels"][0]["barcode"] == "A"
@@ -412,16 +469,23 @@ def test_en_route_excludes_parcels_ready_at_parcelshop():
 
 def test_awaiting_pickup_counts_every_parcel_at_pickup_point():
     parcels = [
-        _parcel("A", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),   # ready
-        _parcel("B", pickup=True, status=ParcelStatus.IN_TRANSIT),        # still en route
+        _parcel("A", pickup=True, status=ParcelStatus.AT_PICKUP_POINT),  # ready
+        _parcel("B", pickup=True, status=ParcelStatus.IN_TRANSIT),  # still en route
         _parcel("C", pickup=False, status=ParcelStatus.AT_PICKUP_POINT),
     ]
-    coordinator = _make_coordinator({
-        "incoming_active": parcels, "incoming_delivered": [], "outgoing_active": [],
-    })
+    coordinator = _make_coordinator(
+        {
+            "incoming_active": parcels,
+            "incoming_delivered": [],
+            "outgoing_active": [],
+        }
+    )
     sensor = DpdAwaitingPickupSensor(coordinator, _make_entry())
     assert sensor.native_value == 2
-    assert {p["barcode"] for p in sensor.extra_state_attributes["parcels"]} == {"A", "C"}
+    assert {p["barcode"] for p in sensor.extra_state_attributes["parcels"]} == {
+        "A",
+        "C",
+    }
 
 
 def test_awaiting_pickup_zero_when_no_parcels():
@@ -436,19 +500,15 @@ def test_awaiting_pickup_zero_when_no_parcels():
 
 
 def test_last_update_sensor_reports_coordinator_timestamp():
-    from datetime import timezone
-
-    from custom_components.dpd.sensor import DpdLastUpdateSensor
 
     coordinator = _make_coordinator(None)
-    moment = datetime(2026, 6, 30, 12, 0, tzinfo=timezone.utc)
+    moment = datetime(2026, 6, 30, 12, 0, tzinfo=UTC)
     coordinator.last_success_time = moment
     sensor = DpdLastUpdateSensor(coordinator, _make_entry())
     assert sensor.native_value == moment
 
 
 def test_last_update_sensor_none_before_first_success():
-    from custom_components.dpd.sensor import DpdLastUpdateSensor
 
     coordinator = _make_coordinator(None)
     coordinator.last_success_time = None
@@ -470,13 +530,17 @@ _RENAMES = [
 async def test_migration_keeps_custom_entity_id(hass, old_suffix, new_suffix):
     registry = er.async_get(hass)
     old = registry.async_get_or_create("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}")
-    registry.async_update_entity(old.entity_id, new_entity_id="sensor.my_pickup_parcels")
+    registry.async_update_entity(
+        old.entity_id, new_entity_id="sensor.my_pickup_parcels"
+    )
 
     _migrate_summary_unique_ids(registry, _SCOPE)
 
     new_id = registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{new_suffix}")
     assert new_id == "sensor.my_pickup_parcels"
-    assert registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}") is None
+    assert (
+        registry.async_get_entity_id("sensor", DOMAIN, f"{_SCOPE}_{old_suffix}") is None
+    )
 
 
 @pytest.mark.parametrize(("old_suffix", "new_suffix"), _RENAMES)

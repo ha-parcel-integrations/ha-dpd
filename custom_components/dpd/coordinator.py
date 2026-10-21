@@ -1,10 +1,11 @@
 """Coordinator for the DPD integration."""
+
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import hashlib
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -72,10 +73,9 @@ def _next_anchor(now: datetime) -> datetime:
     )
     if now < six_today:
         return six_today
-    midnight_tomorrow = (now + timedelta(days=1)).replace(
+    return (now + timedelta(days=1)).replace(
         hour=QUIET_WINDOW_START_HOUR, minute=0, second=0, microsecond=0
     )
-    return midnight_tomorrow
 
 
 def _hottest_tier_minutes(active_parcels: list[dict], now: datetime) -> int:
@@ -166,9 +166,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._known_state: dict[str, ParcelStatus] | None = None
         # barcode -> last seen (planned_from, planned_to) tuple. Mirrors
         # ``_known_state`` for delivery-time-change detection.
-        self._known_delivery_times: (
-            dict[str, tuple[str | None, str | None]] | None
-        ) = None
+        self._known_delivery_times: dict[str, tuple[str | None, str | None]] | None = (
+            None
+        )
         # barcode -> last seen ParcelStatus for *outgoing* parcels (sent +
         # returns), tracked across the active and delivered buckets so a status
         # change or a transition-to-delivered fires an outgoing event. ``None``
@@ -219,7 +219,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             return self._cached_device_id
         registry = dr.async_get(self.hass)
         device = next(
-            iter(dr.async_entries_for_config_entry(registry, self.config_entry.entry_id)),
+            iter(
+                dr.async_entries_for_config_entry(registry, self.config_entry.entry_id)
+            ),
             None,
         )
         if device is not None:
@@ -251,7 +253,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             p["barcode"]: p["status"] for p in outgoing_all if p.get("barcode")
         }
 
-        self.last_success_time = datetime.now(timezone.utc)
+        self.last_success_time = datetime.now(UTC)
 
         incoming_active = [p for p in incoming_all if not p["delivered"]]
         outgoing_active = [p for p in outgoing_all if not p["delivered"]]
@@ -319,8 +321,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         )
         if self._client.bu == "DPD-UK":
             await self._enrich_uk_tracking_cache(
-                incoming_active + incoming_delivered
-                + outgoing_active + outgoing_delivered
+                incoming_active
+                + incoming_delivered
+                + outgoing_active
+                + outgoing_delivered
             )
 
         _LOGGER.debug(
@@ -363,7 +367,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             )
 
         normalized_active = sort_parcels_by_ts(
-            [_normalize(p) for p in incoming_active], "planned_from",
+            [_normalize(p) for p in incoming_active],
+            "planned_from",
         )
         normalized_delivered = sort_parcels_by_ts(
             [_normalize(p) for p in incoming_delivered],
@@ -371,7 +376,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             descending=True,
         )
         normalized_outgoing = sort_parcels_by_ts(
-            [_normalize(p) for p in outgoing_active], "planned_from",
+            [_normalize(p) for p in outgoing_active],
+            "planned_from",
         )
         normalized_outgoing_delivered = sort_parcels_by_ts(
             [_normalize(p) for p in outgoing_delivered],
@@ -451,8 +457,19 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         assert self._pl_session is not None
         try:
             parcels = await self._pl_session.async_get_parcels()
-            active = [p for p in parcels if ((p.get("main_status") or {}).get("status")) not in {"DELIVERED", "PICKED_UP", "RETURNED_TO_SENDER", "EXPIRED_PICKUP"}]
+            active = [
+                p
+                for p in parcels
+                if ((p.get("main_status") or {}).get("status"))
+                not in {
+                    "DELIVERED",
+                    "PICKED_UP",
+                    "RETURNED_TO_SENDER",
+                    "EXPIRED_PICKUP",
+                }
+            ]
             semaphore = asyncio.Semaphore(3)
+
             async def detail(parcel: dict) -> dict:
                 waybill = parcel.get("waybill")
                 if not waybill:
@@ -465,6 +482,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                         return {**parcel, **detail_payload}
                 except (DpdApiError, aiohttp.ClientError):
                     return parcel
+
             enriched = await asyncio.gather(*(detail(p) for p in active))
         except DpdAuthError as err:
             _LOGGER.error("DPD Poland authentication failed: %s", err)
@@ -479,8 +497,16 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             )
             for parcel in parcels
         ]
-        incoming_active = sort_parcels_by_ts([p for p in normalized if not p["delivered"]], "planned_from")
-        incoming_delivered = sort_parcels_by_ts(_apply_delivered_filter_canonical([p for p in normalized if p["delivered"]], self.config_entry), "delivered_at", descending=True)
+        incoming_active = sort_parcels_by_ts(
+            [p for p in normalized if not p["delivered"]], "planned_from"
+        )
+        incoming_delivered = sort_parcels_by_ts(
+            _apply_delivered_filter_canonical(
+                [p for p in normalized if p["delivered"]], self.config_entry
+            ),
+            "delivered_at",
+            descending=True,
+        )
         return incoming_active + incoming_delivered, []
 
     async def _async_fetch_at(self) -> tuple[list[dict], list[dict]]:
@@ -679,9 +705,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     def _include_history(self) -> bool:
         """Whether the opt-in per-parcel history option is enabled."""
         return bool(
-            self.config_entry.options.get(
-                CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
-            )
+            self.config_entry.options.get(CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY)
         )
 
     async def _enrich_detail_cache(
@@ -772,9 +796,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             barcode = shipment.get("parcelNumber")
             if not barcode or barcode in self._uk_tracking_cache:
                 continue
-            self._uk_tracking_cache[barcode] = (
-                await self._client.async_get_uk_tracking_code(barcode)
-            )
+            self._uk_tracking_cache[
+                barcode
+            ] = await self._client.async_get_uk_tracking_code(barcode)
 
     def _apply_delivered_filter(self, shipments: list[dict]) -> list[dict]:
         """Trim the delivered list according to the configured options."""

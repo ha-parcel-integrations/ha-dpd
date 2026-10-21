@@ -1,13 +1,13 @@
 """Config flow for the DPD integration."""
+
 from __future__ import annotations
 
+from collections.abc import Mapping
 import logging
 import re
-from collections.abc import Mapping
 from typing import Any
 
 import aiohttp
-import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -22,6 +22,7 @@ from homeassistant.helpers.aiohttp_client import (
     async_create_clientsession,
     async_get_clientsession,
 )
+import voluptuous as vol
 
 from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
@@ -62,6 +63,7 @@ _AT_BU_VALUE = "DPD-AT"
 # user on the credential step. The dropdown itself is translated by HA from
 # ``selector.bu.options``; this is the fallback those translations key off.
 _COUNTRY_LABELS = {option["value"]: option["label"] for option in COUNTRY_OPTIONS}
+
 
 def _unique_id(country: str, bu: str, email: str) -> str:
     """Build an entry's unique ID for the account it belongs to.
@@ -236,12 +238,21 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             # only, so users always see the country-first flow.
             if CONF_EMAIL in user_input and CONF_PASSWORD in user_input:
                 return await self.async_step_credentials(
-                    {CONF_EMAIL: user_input[CONF_EMAIL], CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                    {
+                        CONF_EMAIL: user_input[CONF_EMAIL],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    }
                 )
             return await self.async_step_credentials()
-        return self.async_show_form(step_id="user", data_schema=_COUNTRY_SCHEMA, description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL})
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_COUNTRY_SCHEMA,
+            description_placeholders={"issue_url": NEW_COUNTRY_ISSUE_URL},
+        )
 
-    async def async_step_credentials(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Validate the email/password route used by general, German and Austrian DPD."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -260,7 +271,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             except (DpdApiError, aiohttp.ClientError):
                 errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(_unique_id(self._country, self._bu, email))
+                await self.async_set_unique_id(
+                    _unique_id(self._country, self._bu, email)
+                )
                 self._abort_if_unique_id_configured()
                 self._email, self._password = email, password
                 return await self.async_step_delivered()
@@ -271,7 +284,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"country": self._selected_country_label()},
         )
 
-    async def async_step_phone(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_phone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Send one SMS to the supplied Polish mobile number."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -285,7 +300,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_PHONE] = "invalid_phone"
             else:
                 try:
-                    await DpdPlSession(async_get_clientsession(self.hass)).async_send_sms(phone)
+                    await DpdPlSession(
+                        async_get_clientsession(self.hass)
+                    ).async_send_sms(phone)
                 except DpdAuthError:
                     errors[CONF_PHONE] = "invalid_phone"
                 except (DpdApiError, aiohttp.ClientError):
@@ -293,9 +310,13 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
                     self._phone = phone
                     return await self.async_step_sms()
-        return self.async_show_form(step_id="phone", data_schema=_PHONE_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="phone", data_schema=_PHONE_SCHEMA, errors=errors
+        )
 
-    async def async_step_sms(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_sms(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Exchange the one-time SMS code for persistable OAuth tokens."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -325,7 +346,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 self._abort_if_unique_id_configured()
                 return await self.async_step_delivered()
-        return self.async_show_form(step_id="sms", data_schema=_SMS_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="sms", data_schema=_SMS_SCHEMA, errors=errors
+        )
 
     async def async_step_delivered(
         self, user_input: dict[str, Any] | None = None

@@ -8,11 +8,11 @@ newest history entry instead.
 Status text arrives already translated for the account's language, so it is
 ``raw_status`` material and never a mapping key.
 """
+
 from __future__ import annotations
 
+from datetime import date as date_cls, datetime
 import logging
-from datetime import date as date_cls
-from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -52,11 +52,11 @@ _KNOWN_FAILURE_REASONS = frozenset({"FULL", "TOO_BIG", "UNAVAILABLE"})
 # numeric stage wherever it maps, because the stage cannot say which of
 # several meanings a value carries.
 _STATE_NAME_MAP = {
-    "ORDER_DATA": ParcelStatus.REGISTERED,        # value 0
-    "ON_THE_WAY": ParcelStatus.IN_TRANSIT,        # value 2
-    "IN_DEPOT": ParcelStatus.IN_TRANSIT,          # value 3
+    "ORDER_DATA": ParcelStatus.REGISTERED,  # value 0
+    "ON_THE_WAY": ParcelStatus.IN_TRANSIT,  # value 2
+    "IN_DEPOT": ParcelStatus.IN_TRANSIT,  # value 3
     "IN_DELIVERY": ParcelStatus.OUT_FOR_DELIVERY,  # value 4
-    "DELIVERED": ParcelStatus.DELIVERED,          # value 5
+    "DELIVERED": ParcelStatus.DELIVERED,  # value 5
 }
 _SEEN_STATE_NAMES: set[Any] = set()
 
@@ -217,8 +217,7 @@ def _entry_status_name(entry: dict[str, Any] | None) -> str | None:
         _warn_once(
             _SEEN_STATE_NAMES,
             name,
-            "DPD Austria reported an unmapped status name — report it at %s "
-            "(name=%r)",
+            "DPD Austria reported an unmapped status name — report it at %s (name=%r)",
             _ISSUE_URL,
             name,
         )
@@ -391,9 +390,7 @@ def build_history_at(
                 timestamp,
                 {
                     "timestamp": timestamp,
-                    "status": (
-                        _STATE_NAME_MAP[name] if name else ParcelStatus.UNKNOWN
-                    ),
+                    "status": (_STATE_NAME_MAP[name] if name else ParcelStatus.UNKNOWN),
                     "raw_status": raw_name if isinstance(raw_name, str) else None,
                 },
             )
@@ -476,12 +473,12 @@ def _delivery_window(
         return None, None
     day = today or datetime.now(_VIENNA).date()
     return (
-        datetime.fromisoformat(f"{day.isoformat()}T{start}").replace(
-            tzinfo=_VIENNA
-        ).isoformat(),
-        datetime.fromisoformat(f"{day.isoformat()}T{end}").replace(
-            tzinfo=_VIENNA
-        ).isoformat(),
+        datetime.fromisoformat(f"{day.isoformat()}T{start}")
+        .replace(tzinfo=_VIENNA)
+        .isoformat(),
+        datetime.fromisoformat(f"{day.isoformat()}T{end}")
+        .replace(tzinfo=_VIENNA)
+        .isoformat(),
     )
 
 
@@ -511,8 +508,10 @@ def _delivered_at(lifecycle: dict[str, Any]) -> str | None:
             day = datetime.strptime(date_part.strip(), pattern).date()
         except ValueError:
             continue
-        return datetime.fromisoformat(f"{day.isoformat()}T{clock}").replace(
-            tzinfo=_VIENNA
-        ).isoformat()
+        return (
+            datetime.fromisoformat(f"{day.isoformat()}T{clock}")
+            .replace(tzinfo=_VIENNA)
+            .isoformat()
+        )
     _warn_unexpected_shape("lifecycle.deliver_date.date", date_part)
     return None

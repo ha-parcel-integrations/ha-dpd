@@ -1,4 +1,5 @@
 """Tests for DPD Polska canonical normalization."""
+
 from custom_components.dpd.const import ParcelStatus
 from custom_components.dpd.countries.pl import (
     _timestamp,
@@ -16,7 +17,11 @@ def _parcel(status: str = "HANDED_OVER_FOR_DELIVERY") -> dict:
         "delivery": {"planned_delivery_date": "2026-09-10", "delivered_datetime": None},
         "is_manageable": True,
         "user_actions": [{"code": "MANAGE_PACKAGE", "validation_token": "secret"}],
-        "mps": {"current_parcel_number": 1, "parcels_count": 2, "parcels": [{"waybill": "other"}]},
+        "mps": {
+            "current_parcel_number": 1,
+            "parcels_count": 2,
+            "parcels": [{"waybill": "other"}],
+        },
     }
 
 
@@ -33,16 +38,20 @@ def test_normalize_maps_canonical_fields_and_keeps_the_full_raw_response():
 
 def test_normalize_includes_history_only_when_requested():
     parcel = normalize_parcel_pl(_parcel(), include_history=True)
-    assert parcel["history"] == [{
-        "timestamp": "2026-09-08T10:00:00+00:00",
-        "status": ParcelStatus.REGISTERED,
-        "raw_status": "READY_TO_SEND",
-    }]
+    assert parcel["history"] == [
+        {
+            "timestamp": "2026-09-08T10:00:00+00:00",
+            "status": ParcelStatus.REGISTERED,
+            "raw_status": "READY_TO_SEND",
+        }
+    ]
 
 
 def test_normalize_accepts_the_apk_create_time_timestamp_alias():
     raw = _parcel()
-    raw["statuses"] = [{"status": "READY_TO_SEND", "create_time": "2026-09-08T10:00:00Z"}]
+    raw["statuses"] = [
+        {"status": "READY_TO_SEND", "create_time": "2026-09-08T10:00:00Z"}
+    ]
     parcel = normalize_parcel_pl(raw, include_history=True)
     assert parcel["history"][0]["timestamp"] == "2026-09-08T10:00:00+00:00"
 

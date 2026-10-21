@@ -1,4 +1,5 @@
 """Constants for the DPD integration."""
+
 from enum import StrEnum
 
 from homeassistant.const import Platform
@@ -43,14 +44,17 @@ class ParcelStatus(StrEnum):
     aggregator. Listed in roughly the order a parcel moves through.
     """
 
-    REGISTERED = "registered"               # Sender announced the parcel; carrier has not handed-over yet
-    IN_TRANSIT = "in_transit"               # In the carrier's network, somewhere between sender and delivery point
-    OUT_FOR_DELIVERY = "out_for_delivery"   # On a delivery vehicle today
-    AT_PICKUP_POINT = "at_pickup_point"     # Arrived at the chosen ServicePoint / PostNL Point / ParcelShop
-    DELIVERED = "delivered"                 # Handed over (mailbox, recipient, neighbour, picked up)
-    RETURNING = "returning"                 # Failed delivery, going back to sender
-    PROBLEM = "problem"                     # Carrier reports an exception, intervention, or other issue
-    UNKNOWN = "unknown"                     # Raw status we have not mapped yet — logged at info level
+    REGISTERED = (
+        "registered"  # Sender announced the parcel; carrier has not handed-over yet
+    )
+    IN_TRANSIT = "in_transit"  # In the carrier's network, somewhere between sender and delivery point
+    OUT_FOR_DELIVERY = "out_for_delivery"  # On a delivery vehicle today
+    AT_PICKUP_POINT = "at_pickup_point"  # Arrived at the chosen ServicePoint / PostNL Point / ParcelShop
+    DELIVERED = "delivered"  # Handed over (mailbox, recipient, neighbour, picked up)
+    RETURNING = "returning"  # Failed delivery, going back to sender
+    PROBLEM = "problem"  # Carrier reports an exception, intervention, or other issue
+    UNKNOWN = "unknown"  # Raw status we have not mapped yet — logged at info level
+
 
 PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.CALENDAR, Platform.SENSOR]
 
@@ -139,9 +143,7 @@ DPD_UK_TRACKING_URL = "https://track.dpd.co.uk/parcels"
 
 # myDPD Mobile App client credentials (base64 of "<client_id>:<client_secret>"),
 # fetched from DPD's Firebase Remote Config and hardcoded in the mobile app.
-DPD_BASIC_TOKEN = (
-    "bXlEUEQgTW9iaWxlIEFwcDpaMVdzeTQ4RGpseWcweDdVWjhvWTlYdmZIT2xIbW4yTmpJdnYycmpVVjY3N1hDOGhiTGlkNHY2OWpCQzlvZnpU"
-)
+DPD_BASIC_TOKEN = "bXlEUEQgTW9iaWxlIEFwcDpaMVdzeTQ4RGpseWcweDdVWjhvWTlYdmZIT2xIbW4yTmpJdnYycmpVVjY3N1hDOGhiTGlkNHY2OWpCQzlvZnpU"
 
 USER_AGENT = "okhttp/4.12.0"
 
@@ -175,7 +177,8 @@ DEFAULT_BU = "DPD-NL"
 # apart from BUSINESS_UNITS itself: that constant is also used to build
 # general-backend requests (bu query values sent to myDPD/Keycloak), and
 # "DPD-DE" must never flow into that path.
-COUNTRY_OPTIONS = BUSINESS_UNITS + [
+COUNTRY_OPTIONS = [
+    *BUSINESS_UNITS,
     {"value": "DPD-DE", "label": "Germany"},
     {"value": "DPD-PL", "label": "Poland"},
     {"value": "DPD-AT", "label": "Austria"},
@@ -255,20 +258,28 @@ NEW_COUNTRY_ISSUE_URL = (
 # "delivered vs everything-else" (using `DELIVERED_DESCRIPTION`). The
 # 2.0.0 normalization layer will map each value onto the canonical
 # `ParcelStatus` enum used by the other carriers.
-STATUS_ORDER_CREATED = "ORDER_CREATED"                  # 0 — label printed; not yet collected
-STATUS_PARCEL_HANDED = "PARCEL_HANDED"                  # 1 — handed to DPD by the sender
-STATUS_IN_TRANSIT = "IN_TRANSIT"                        # 2 — in DPD's network
-STATUS_AT_DELIVERY_CENTER = "AT_DELIVERY_CENTER"        # 3 — at the regional sorting hub the morning of delivery
-STATUS_PARCEL_OUT_FOR_DELIVERY = "PARCEL_OUT_FOR_DELIVERY"  # 4 — on the delivery vehicle today
-STATUS_DELIVERED = "DELIVERED"                          # 5 — terminal
+STATUS_ORDER_CREATED = "ORDER_CREATED"  # 0 — label printed; not yet collected
+STATUS_PARCEL_HANDED = "PARCEL_HANDED"  # 1 — handed to DPD by the sender
+STATUS_IN_TRANSIT = "IN_TRANSIT"  # 2 — in DPD's network
+STATUS_AT_DELIVERY_CENTER = (
+    "AT_DELIVERY_CENTER"  # 3 — at the regional sorting hub the morning of delivery
+)
+STATUS_PARCEL_OUT_FOR_DELIVERY = (
+    "PARCEL_OUT_FOR_DELIVERY"  # 4 — on the delivery vehicle today
+)
+STATUS_DELIVERED = "DELIVERED"  # 5 — terminal
 
 # Additional status.description values used by the myDPD consumer app's own
 # `parcel_status` taxonomy (confirmed from the myDPD Android app, 3.78.26).
 # We never saw these in sample data (no parcelshop / return / failed-attempt
 # parcel was on the account), but they are first-class consumer statuses.
-STATUS_AVAILABLE_FOR_COLLECTION = "AVAILABLE_FOR_COLLECTION"  # ready to collect at a ParcelShop
-STATUS_RETURN_TO_SENDER = "RETURN_TO_SENDER"                  # going back to the sender
-STATUS_UNSUCCESSFUL_DELIVERY = "UNSUCCESSFUL_DELIVERY_ATTEMPT"  # missed attempt; will be retried
+STATUS_AVAILABLE_FOR_COLLECTION = (
+    "AVAILABLE_FOR_COLLECTION"  # ready to collect at a ParcelShop
+)
+STATUS_RETURN_TO_SENDER = "RETURN_TO_SENDER"  # going back to the sender
+STATUS_UNSUCCESSFUL_DELIVERY = (
+    "UNSUCCESSFUL_DELIVERY_ATTEMPT"  # missed attempt; will be retried
+)
 
 # Terminal status — every other status.description is treated as "active".
 DELIVERED_DESCRIPTION = STATUS_DELIVERED
@@ -276,17 +287,19 @@ DELIVERED_DESCRIPTION = STATUS_DELIVERED
 # All description values the integration recognises. Anything outside this
 # set is still treated as "active" (so we never accidentally swallow a
 # parcel) and surfaced via a one-shot warning so we can grow the list.
-KNOWN_DESCRIPTIONS: frozenset[str] = frozenset({
-    STATUS_ORDER_CREATED,
-    STATUS_PARCEL_HANDED,
-    STATUS_IN_TRANSIT,
-    STATUS_AT_DELIVERY_CENTER,
-    STATUS_PARCEL_OUT_FOR_DELIVERY,
-    STATUS_DELIVERED,
-    STATUS_AVAILABLE_FOR_COLLECTION,
-    STATUS_RETURN_TO_SENDER,
-    STATUS_UNSUCCESSFUL_DELIVERY,
-})
+KNOWN_DESCRIPTIONS: frozenset[str] = frozenset(
+    {
+        STATUS_ORDER_CREATED,
+        STATUS_PARCEL_HANDED,
+        STATUS_IN_TRANSIT,
+        STATUS_AT_DELIVERY_CENTER,
+        STATUS_PARCEL_OUT_FOR_DELIVERY,
+        STATUS_DELIVERED,
+        STATUS_AVAILABLE_FOR_COLLECTION,
+        STATUS_RETURN_TO_SENDER,
+        STATUS_UNSUCCESSFUL_DELIVERY,
+    }
+)
 
 CONF_DELIVERED_FILTER_TYPE = "delivered_filter_type"
 CONF_DELIVERED_FILTER_AMOUNT = "delivered_filter_amount"
@@ -342,9 +355,7 @@ CONF_DE_HARDWARE_ID = "de_hardware_id"
 
 # DPD Germany — the myDPD web account. countries/de/session.py is the only
 # module that sends these on the wire.
-DPD_DE_LOGIN_URL = (
-    "https://www.dpd.com/de/de/mydpd-anmelden-und-registrieren/?lng=DEU"
-)
+DPD_DE_LOGIN_URL = "https://www.dpd.com/de/de/mydpd-anmelden-und-registrieren/?lng=DEU"
 DPD_DE_PORTAL_HOME_URL = "https://portal.dpd.de/home_pn.aspx"
 DPD_DE_INBOX_URL = "https://my.dpd.de/myParcel.aspx"
 DPD_DE_TRACKING_URL = "https://my.dpd.de/redirect.aspx?action=12&parcelno={barcode}"

@@ -6,6 +6,7 @@ own login. There is no refresh route anywhere in the portal, so an expired
 token is recovered by logging in again — the credentials are what the config
 entry persists, never the JWT.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -73,9 +74,7 @@ class DpdAtSession:
                 headers={"User-Agent": DPD_AT_USER_AGENT},
             ) as response:
                 await response.read()
-                _LOGGER.debug(
-                    "DPD Austria portal primed (HTTP %s)", response.status
-                )
+                _LOGGER.debug("DPD Austria portal primed (HTTP %s)", response.status)
         except aiohttp.ClientError as err:
             _LOGGER.debug("DPD Austria portal could not be primed: %s", err)
 
@@ -195,9 +194,7 @@ class DpdAtSession:
             return inner
         return body
 
-    async def _async_authorized(
-        self, method: str, args: list[Any]
-    ) -> dict[str, Any]:
+    async def _async_authorized(self, method: str, args: list[Any]) -> dict[str, Any]:
         """Call ``method``, re-logging in once if the token has expired.
 
         There is no refresh route, so the only recovery is a fresh login. It
