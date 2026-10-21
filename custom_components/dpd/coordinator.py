@@ -130,6 +130,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     event-firing, the polling recompute) is shared.
     """
 
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -300,9 +302,11 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # Load each event zone off the event loop; the parsers then find it
         # already cached.
         for zone_name in {
-            (shipment.get("status") or {}).get("eventDateAndTimeZoneId")
+            zone
             for shipment in incoming + outgoing
-        } - {None}:
+            if (zone := (shipment.get("status") or {}).get("eventDateAndTimeZoneId"))
+            is not None
+        }:
             await dt_util.async_get_time_zone(zone_name)
 
         incoming_active = filter_active_shipments(incoming)
@@ -319,7 +323,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             incoming_active + incoming_delivered,
             outgoing_active + outgoing_delivered,
         )
-        if self._client.bu == "DPD-UK":
+        bu = self._client.bu
+        if bu == "DPD-UK":
             await self._enrich_uk_tracking_cache(
                 incoming_active
                 + incoming_delivered
@@ -360,7 +365,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 weight=weight,
                 dimensions=dimensions,
                 history=history,
-                bu=self._client.bu,
+                bu=bu,
                 uk_tracking_code=self._uk_tracking_cache.get(
                     parcel.get("parcelNumber") or ""
                 ),
@@ -455,8 +460,9 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     async def _async_fetch_pl(self) -> tuple[list[dict], list[dict]]:
         """Fetch Poland's receiver inbox and enrich active parcels only."""
         assert self._pl_session is not None
+        pl_session = self._pl_session
         try:
-            parcels = await self._pl_session.async_get_parcels()
+            parcels = await pl_session.async_get_parcels()
             active = [
                 p
                 for p in parcels
@@ -476,7 +482,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                     return parcel
                 try:
                     async with semaphore:
-                        detail_payload = await self._pl_session.async_get_parcel_detail(
+                        detail_payload = await pl_session.async_get_parcel_detail(
                             str(waybill)
                         )
                         return {**parcel, **detail_payload}

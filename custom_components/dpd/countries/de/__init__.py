@@ -132,7 +132,9 @@ def map_parcel_status_de(fields: dict[str, Any]) -> ParcelStatus:
     if furthest:
         delivered = furthest["slot"] == "Delivered"
     else:
-        delivered = _ICON_STATUS.get(icon) is ParcelStatus.DELIVERED
+        delivered = (
+            icon is not None and _ICON_STATUS.get(icon) is ParcelStatus.DELIVERED
+        )
     if not delivered and any(
         word in sentence or word in furthest_text for word in _PICKUP_WORDS
     ):
@@ -387,7 +389,8 @@ async def async_get_all_parcels_de(
     """
     inbox = await de_session.async_get_inbox()
     today = datetime.now(_DE_TZ).date()
-    incoming, outgoing = [], []
+    incoming: list[dict] = []
+    outgoing: list[dict] = []
     for tab, parcels in inbox.items():
         bucket = incoming if tab == "incoming" else outgoing
         bucket.extend(
