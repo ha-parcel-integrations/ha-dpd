@@ -2664,3 +2664,21 @@ async def test_coordinator_at_empty_inbox_is_not_an_error(hass):
 
     assert result["incoming_active"] == []
     assert result["outgoing_active"] == []
+
+
+async def test_failed_poll_drops_the_overnight_interval(hass):
+    coordinator = DpdCoordinator(hass, MagicMock(), _mock_entry())
+    coordinator.update_interval = timedelta(hours=5, minutes=40)
+
+    noon = datetime(2026, 1, 15, 12, tzinfo=UTC)
+    with (
+        patch.object(coordinator, "_async_poll", side_effect=TimeoutError),
+        patch("custom_components.dpd.coordinator.dt_util.now", return_value=noon),
+        pytest.raises(TimeoutError),
+    ):
+        await coordinator._async_update_data()
+
+    assert coordinator.update_interval is not None
+    assert coordinator.update_interval <= timedelta(
+        minutes=MID_INTERVAL_MINUTES + STAGGER_MINUTES
+    )
