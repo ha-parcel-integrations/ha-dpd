@@ -149,6 +149,16 @@ class FakeDpd:
         if mode == "rejected":
             message = '<div class="dgs-inline-message"><p>Zugangsdaten falsch</p></div>'
             return FakeResponse(200, de_login_page(message=message))
+        if mode == "rejected_field":
+            return FakeResponse(
+                200,
+                de_login_page(
+                    username_value="Login unsuccessful.",
+                    username_placeholder="Login unsuccessful.",
+                ),
+            )
+        if mode == "echoed_username":
+            return FakeResponse(200, de_login_page(username_value=EMAIL))
         if mode == "form_no_message":
             return FakeResponse(200, de_login_page())
         if mode == "other_200":
@@ -565,10 +575,19 @@ async def test_login_problems_are_api_errors_never_auth(mode, status):
     assert err.value.status_code == status
 
 
-async def test_a_rejected_login_with_a_message_is_the_only_auth_error():
-    site = _site(login_mode="rejected")
+@pytest.mark.parametrize("mode", ["rejected", "rejected_field"])
+async def test_a_rejected_login_with_a_message_is_the_only_auth_error(mode):
+    site = _site(login_mode=mode)
     with pytest.raises(DpdAuthError):
         await _session(site).async_login()
+
+
+async def test_a_form_that_only_echoes_the_username_is_not_an_auth_error():
+    """A re-render without a message stays uncertain, so it never reauths."""
+    site = _site(login_mode="echoed_username")
+    with pytest.raises(DpdApiError) as err:
+        await _session(site).async_login()
+    assert type(err.value) is DpdApiError
 
 
 @pytest.mark.parametrize("status", [404, 429, 500, 502, 503])

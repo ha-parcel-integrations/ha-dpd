@@ -223,7 +223,7 @@ class DpdDeSession:
                 "dpd.com in a browser may clear the captcha.",
             )
             raise DpdCaptchaError
-        if login_rejected(body):
+        if login_rejected(body, self._email):
             raise DpdAuthError("DPD Germany rejected the login")
         raise DpdApiError(200)
 

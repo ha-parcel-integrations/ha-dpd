@@ -104,7 +104,11 @@ are in `carrier-research/dpd/`, not here. The tripwires:
   successful login clears the back-offs. Never try to solve or get around it.
 - **Only a confirmed credential rejection reaches reauth.** Everything
   uncertain is `DpdApiError`; a user with a working password must never be
-  pushed into reauth.
+  pushed into reauth. A rejection arrives **in the login form's username
+  field**, not in a message element (`#24`): `login_rejected()` reads that
+  field's `value` and anything but the echoed address is the message. Its
+  `placeholder` is deliberately not read — a pristine form carries a hint
+  there, which would reauth every unexplained re-render.
 - **Dated milestones decide the status, the icon number is a DPD code and never
   overrides them, and `retour` beats delivered.**
 - **The recipient-postcode check is never submitted and no address data is
@@ -115,8 +119,8 @@ are in `carrier-research/dpd/`, not here. The tripwires:
 
 Only a login and one delivered return are confirmed on a real account.
 Everything else mapped is provisional (an active parcel, a pickup point, the
-other tabs, other icons, the wrong-password response), so `delivery_window` and
-`pickup_point` are pending capabilities. **Ship Germany changes as a
+other tabs, other icons), so `delivery_window` and `pickup_point` are pending
+capabilities. **Ship Germany changes as a
 pre-release (`bN`).**
 
 **Poland (`countries/pl/`)** — separate OAuth transport, receiver inbox only

@@ -84,13 +84,38 @@ def test_a_captcha_class_on_another_form_is_not_the_login_form():
     assert not has_captcha(f"<html>{other}</html>")
 
 
+EMAIL = "user@example.de"
+
+
 def test_login_rejection_needs_the_form_and_a_non_empty_message():
     message = '<div class="dgs-inline-message"><p>Falsche Zugangsdaten</p></div>'
-    assert login_rejected(de_login_page(message=message))
+    assert login_rejected(de_login_page(message=message), EMAIL)
     empty = '<div class="dgs-inline-message"><p> </p></div>'
-    assert not login_rejected(de_login_page(message=empty))
-    assert not login_rejected(de_login_page())
-    assert not login_rejected(f"<html>{message}</html>")
+    assert not login_rejected(de_login_page(message=empty), EMAIL)
+    assert not login_rejected(de_login_page(), EMAIL)
+    assert not login_rejected(f"<html>{message}</html>", EMAIL)
+
+
+def test_a_message_in_the_username_field_is_a_rejection():
+    """ha-dpd#24: the only error DPD renders sits in the username input."""
+    page = de_login_page(
+        username_value="Login unsuccessful.",
+        username_placeholder="Login unsuccessful.",
+    )
+    assert login_rejected(page, EMAIL)
+
+
+def test_an_echoed_username_is_not_a_rejection():
+    assert not login_rejected(de_login_page(username_value=EMAIL), EMAIL)
+    assert not login_rejected(de_login_page(username_value=EMAIL.upper()), EMAIL)
+    assert not login_rejected(de_login_page(username_value=f" {EMAIL} "), EMAIL)
+
+
+def test_a_placeholder_hint_alone_is_not_a_rejection():
+    """A pristine form carries its own hint; only ``value`` is read."""
+    assert not login_rejected(
+        de_login_page(username_placeholder="Bitte E-Mail-Adresse eingeben"), EMAIL
+    )
 
 
 # -- form state -------------------------------------------------------------

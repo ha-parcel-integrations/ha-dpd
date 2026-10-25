@@ -174,13 +174,22 @@ def de_portal_page(*, signed_in: bool = True, token: str = "P") -> str:  # noqa:
     )
 
 
-def de_login_page(*, form_class: str = "", captcha: str = "", message: str = "") -> str:
+def de_login_page(
+    *,
+    form_class: str = "",
+    captcha: str = "",
+    message: str = "",
+    username_value: str = "",
+    username_placeholder: str = "E-Mail-Adresse",
+) -> str:
     """The login form, as the login POST re-renders it."""
     return (
         "<html><head><style>form.dgs-form-has-captcha .dgs-row-recaptcha "
         "{margin-top: 0.5rem;} .dgs-inline-message {display: none;}</style></head>"
         f'<body>{captcha}<form name="german-sso-login-form" class="{form_class}" '
         'method="POST" action="">'
-        '<input name="dpg_username" /><input type="password" name="dpg_password" />'
+        f'<input name="dpg_username" placeholder="{username_placeholder}" '
+        f'value="{username_value}" />'
+        '<input type="password" name="dpg_password" />'
         f"{message}</form></body></html>"
     )

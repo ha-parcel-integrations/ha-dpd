@@ -198,8 +198,11 @@ e-mail, because a reload builds a new session object. Setup honours them too,
 so Home Assistant's automatic retries never log in; only the config flow (add
 or reauthenticate) makes a real attempt, and a successful login clears them.
 
-**Only a confirmed credential rejection reaches reauth**; the wrong-password
-response is not yet captured, so this errs toward "cannot connect".
+**Only a confirmed credential rejection reaches reauth.** DPD renders the
+rejection in the login form's own username field rather than a message
+element, so `login_rejected()` reads that field's value and treats anything
+other than the echoed address as the message; a re-rendered form without one
+stays "cannot connect".
 
 **Postbacks chain on the previous response's form state** and never run
 concurrently. A poll reads the Empfang tab, then Versand and Retoure only when

@@ -79,11 +79,31 @@ def has_captcha(html: str) -> bool:
     return bool(_SITEKEY.search(html) or _RECAPTCHA_SCRIPT.search(html))
 
 
-def login_rejected(html: str) -> bool:
-    """Whether the login form came back with a non-empty error message."""
+def login_rejected(html: str, username: str) -> bool:
+    """Whether the login form came back with a non-empty error message.
+
+    The message can arrive in the username field itself instead of a message
+    element, so any value there other than the echoed address is one. Only
+    ``value`` is read: a pristine form may well carry a placeholder hint,
+    which says nothing about the login.
+    """
     if 'name="dpg_username"' not in html:
         return False
-    return any(_text(inner) for _tag, inner in _INLINE_MESSAGE.findall(html))
+    if any(_text(inner) for _tag, inner in _INLINE_MESSAGE.findall(html)):
+        return True
+    return _username_field_message(html, username)
+
+
+def _username_field_message(html: str, username: str) -> bool:
+    submitted = username.strip().casefold()
+    for match in _INPUT.finditer(html):
+        attrs = _attrs(match.group(1))
+        if attrs.get("name") != "dpg_username":
+            continue
+        value = _WHITESPACE.sub(" ", attrs.get("value", "")).strip()
+        if value and value.casefold() != submitted:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
