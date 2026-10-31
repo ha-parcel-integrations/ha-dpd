@@ -16,7 +16,11 @@ def test_the_captcha_error_is_translated_everywhere(path):
     assert set(errors) == {
         "cannot_connect",
         "captcha",
+        "email_required",
         "invalid_auth",
         "invalid_phone",
         "invalid_sms_code",
+        "link_expired",
+        "not_a_consumer",
+        "unrecognised_link",
     }

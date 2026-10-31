@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS code"
         }
+      },
+      "request": {
+        "title": "DPD United Kingdom (MyDPD)",
+        "description": "In the DPD UK app or at login.dpd.co.uk choose email sign-in, then copy the full link from the email you receive. Do not open it. Paste it here; the link works once and expires quickly.",
+        "data": {
+          "email": "Email",
+          "magic_link": "Sign-in link"
+        },
+        "data_description": {
+          "email": "Only needed for the link from the DPD UK app. Leave empty for a login.dpd.co.uk link."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD is asking for a captcha right now. Log in once at dpd.com in your browser, then try again.",
       "invalid_auth": "Invalid email or password.",
       "invalid_phone": "Enter a valid Polish mobile number (nine digits, optionally prefixed with +48 or 0048).",
-      "invalid_sms_code": "Invalid or expired SMS code."
+      "invalid_sms_code": "Invalid or expired SMS code.",
+      "link_expired": "The sign-in link has expired or was already used. Request a new one and paste it straight away.",
+      "not_a_consumer": "This account has no DPD UK consumer profile yet. Finish creating your DPD UK account in the app or on the website, then try again.",
+      "email_required": "Enter the email address the app's sign-in link was sent to.",
+      "unrecognised_link": "This is not a DPD UK sign-in link. Copy the full link from the sign-in email."
     },
     "abort": {
       "already_configured": "This DPD account is already configured.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovakia",
         "dpd-si": "Slovenia",
         "dpd-ch": "Switzerland",
-        "dpd-uk": "United Kingdom",
+        "dpd-uk": "United Kingdom (Business)",
         "dpd-de": "Germany",
         "dpd-pl": "Poland",
-        "dpd-at": "Austria"
+        "dpd-at": "Austria",
+        "dpd-uk-app": "United Kingdom (MyDPD)"
       }
     }
   },

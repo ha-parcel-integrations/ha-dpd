@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "Código SMS"
         }
+      },
+      "request": {
+        "title": "DPD Reino Unido (MyDPD)",
+        "description": "Na app DPD UK ou em login.dpd.co.uk escolha o início de sessão por e-mail e copie a ligação completa do e-mail recebido. Não a abra. Cole-a aqui; a ligação só funciona uma vez e expira depressa.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Ligação de início de sessão"
+        },
+        "data_description": {
+          "email": "Só é necessário para a ligação da app DPD UK. Deixe vazio para uma ligação de login.dpd.co.uk."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "A DPD está a pedir um captcha neste momento. Inicie sessão uma vez em dpd.com no navegador e tente novamente.",
       "invalid_auth": "E-mail ou palavra-passe inválidos.",
       "invalid_phone": "Introduza um número de telemóvel polaco válido (nove algarismos, opcionalmente com +48 ou 0048).",
-      "invalid_sms_code": "Código SMS inválido ou expirado."
+      "invalid_sms_code": "Código SMS inválido ou expirado.",
+      "link_expired": "A ligação expirou ou já foi usada. Peça uma nova e cole-a de imediato.",
+      "not_a_consumer": "Esta conta ainda não tem perfil de consumidor DPD UK. Conclua a criação da conta na app ou no site e tente novamente.",
+      "email_required": "Introduza o endereço de e-mail para o qual a ligação da app foi enviada.",
+      "unrecognised_link": "Esta não é uma ligação de início de sessão DPD UK. Copie a ligação completa do e-mail."
     },
     "abort": {
       "already_configured": "Esta conta DPD já está configurada.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Eslováquia",
         "dpd-si": "Eslovénia",
         "dpd-ch": "Suíça",
-        "dpd-uk": "Reino Unido",
+        "dpd-uk": "Reino Unido (Business)",
         "dpd-de": "Alemanha",
         "dpd-pl": "Polónia",
-        "dpd-at": "Áustria"
+        "dpd-at": "Áustria",
+        "dpd-uk-app": "Reino Unido (MyDPD)"
       }
     }
   },

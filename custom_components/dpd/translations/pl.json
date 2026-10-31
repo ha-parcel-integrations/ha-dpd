@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "Kod SMS"
         }
+      },
+      "request": {
+        "title": "DPD Wielka Brytania (MyDPD)",
+        "description": "W aplikacji DPD UK lub na login.dpd.co.uk wybierz logowanie e-mailem i skopiuj pełny link z otrzymanej wiadomości. Nie otwieraj go. Wklej go tutaj; link działa raz i szybko wygasa.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Link logowania"
+        },
+        "data_description": {
+          "email": "Potrzebny tylko dla linku z aplikacji DPD UK. Zostaw puste dla linku z login.dpd.co.uk."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD wymaga teraz captcha. Zaloguj się raz na dpd.com w przeglądarce, a następnie spróbuj ponownie.",
       "invalid_auth": "Nieprawidłowy e-mail lub hasło.",
       "invalid_phone": "Podaj prawidłowy polski numer telefonu komórkowego (dziewięć cyfr, opcjonalnie z prefiksem +48 lub 0048).",
-      "invalid_sms_code": "Kod SMS jest nieprawidłowy lub wygasł."
+      "invalid_sms_code": "Kod SMS jest nieprawidłowy lub wygasł.",
+      "link_expired": "Link logowania wygasł lub został już użyty. Poproś o nowy i wklej go od razu.",
+      "not_a_consumer": "To konto nie ma jeszcze profilu konsumenta DPD UK. Dokończ zakładanie konta w aplikacji lub na stronie i spróbuj ponownie.",
+      "email_required": "Podaj adres e-mail, na który wysłano link logowania z aplikacji.",
+      "unrecognised_link": "To nie jest link logowania DPD UK. Skopiuj pełny link z wiadomości logowania."
     },
     "abort": {
       "already_configured": "To konto DPD jest już skonfigurowane.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Słowacja",
         "dpd-si": "Słowenia",
         "dpd-ch": "Szwajcaria",
-        "dpd-uk": "Wielka Brytania",
+        "dpd-uk": "Wielka Brytania (Business)",
         "dpd-de": "Niemcy",
         "dpd-pl": "Polska",
-        "dpd-at": "Austria"
+        "dpd-at": "Austria",
+        "dpd-uk-app": "Wielka Brytania (MyDPD)"
       }
     }
   },

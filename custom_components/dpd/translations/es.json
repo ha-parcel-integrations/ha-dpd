@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "Código SMS"
         }
+      },
+      "request": {
+        "title": "DPD Reino Unido (MyDPD)",
+        "description": "En la app DPD UK o en login.dpd.co.uk elige el acceso por correo y copia el enlace completo del mensaje recibido. No lo abras. Pégalo aquí; el enlace sirve una sola vez y caduca pronto.",
+        "data": {
+          "email": "Correo electrónico",
+          "magic_link": "Enlace de acceso"
+        },
+        "data_description": {
+          "email": "Solo hace falta para el enlace de la app DPD UK. Déjalo vacío con un enlace de login.dpd.co.uk."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD está pidiendo un captcha en este momento. Inicia sesión una vez en dpd.com desde el navegador y vuelve a intentarlo.",
       "invalid_auth": "Correo electrónico o contraseña no válidos.",
       "invalid_phone": "Introduce un número de móvil polaco válido (nueve dígitos, opcionalmente con +48 o 0048).",
-      "invalid_sms_code": "Código SMS no válido o caducado."
+      "invalid_sms_code": "Código SMS no válido o caducado.",
+      "link_expired": "El enlace de acceso ha caducado o ya se usó. Solicita uno nuevo y pégalo enseguida.",
+      "not_a_consumer": "Esta cuenta aún no tiene perfil de consumidor de DPD UK. Termina de crear la cuenta en la app o en la web e inténtalo de nuevo.",
+      "email_required": "Introduce la dirección de correo a la que se envió el enlace de acceso de la app.",
+      "unrecognised_link": "Este no es un enlace de acceso de DPD UK. Copia el enlace completo del correo de acceso."
     },
     "abort": {
       "already_configured": "Esta cuenta de DPD ya está configurada.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Eslovaquia",
         "dpd-si": "Eslovenia",
         "dpd-ch": "Suiza",
-        "dpd-uk": "Reino Unido",
+        "dpd-uk": "Reino Unido (Business)",
         "dpd-de": "Alemania",
         "dpd-pl": "Polonia",
-        "dpd-at": "Austria"
+        "dpd-at": "Austria",
+        "dpd-uk-app": "Reino Unido (MyDPD)"
       }
     }
   },

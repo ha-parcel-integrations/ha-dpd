@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS-code"
         }
+      },
+      "request": {
+        "title": "DPD Verenigd Koninkrijk (MyDPD)",
+        "description": "Kies in de DPD UK-app of op login.dpd.co.uk inloggen met e-mail en kopieer de volledige link uit de e-mail die je krijgt. Open hem niet. Plak hem hier; de link werkt maar één keer en verloopt snel.",
+        "data": {
+          "email": "E-mailadres",
+          "magic_link": "Inloglink"
+        },
+        "data_description": {
+          "email": "Alleen nodig voor de link uit de DPD UK-app. Laat leeg bij een link van login.dpd.co.uk."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD vraagt op dit moment om een captcha. Log eenmalig in op dpd.com in je browser en probeer het daarna opnieuw.",
       "invalid_auth": "Ongeldig e-mailadres of wachtwoord.",
       "invalid_phone": "Voer een geldig Pools mobiel nummer in (negen cijfers, eventueel voorafgegaan door +48 of 0048).",
-      "invalid_sms_code": "Ongeldige of verlopen sms-code."
+      "invalid_sms_code": "Ongeldige of verlopen sms-code.",
+      "link_expired": "De inloglink is verlopen of al gebruikt. Vraag een nieuwe aan en plak hem meteen.",
+      "not_a_consumer": "Dit account heeft nog geen DPD UK-consumentenprofiel. Maak je DPD UK-account eerst af in de app of op de website en probeer het opnieuw.",
+      "email_required": "Voer het e-mailadres in waarnaar de inloglink van de app is gestuurd.",
+      "unrecognised_link": "Dit is geen DPD UK-inloglink. Kopieer de volledige link uit de inlogmail."
     },
     "abort": {
       "already_configured": "Dit DPD-account is al geconfigureerd.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slowakije",
         "dpd-si": "Slovenië",
         "dpd-ch": "Zwitserland",
-        "dpd-uk": "Verenigd Koninkrijk",
+        "dpd-uk": "Verenigd Koninkrijk (Business)",
         "dpd-de": "Duitsland",
         "dpd-pl": "Polen",
-        "dpd-at": "Oostenrijk"
+        "dpd-at": "Oostenrijk",
+        "dpd-uk-app": "Verenigd Koninkrijk (MyDPD)"
       }
     }
   },

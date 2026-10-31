@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS-koda"
         }
+      },
+      "request": {
+        "title": "DPD Združeno kraljestvo (MyDPD)",
+        "description": "V aplikaciji DPD UK ali na login.dpd.co.uk izberite prijavo z e-pošto in kopirajte celotno povezavo iz prejetega sporočila. Ne odpirajte je. Prilepite jo sem; povezava deluje samo enkrat in hitro poteče.",
+        "data": {
+          "email": "E-pošta",
+          "magic_link": "Povezava za prijavo"
+        },
+        "data_description": {
+          "email": "Potrebno samo za povezavo iz aplikacije DPD UK. Pri povezavi z login.dpd.co.uk pustite prazno."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD trenutno zahteva captcho. Enkrat se prijavite na dpd.com v brskalniku in poskusite znova.",
       "invalid_auth": "Neveljaven e-poštni naslov ali geslo.",
       "invalid_phone": "Vnesite veljavno poljsko mobilno številko (devet številk, po želji s predpono +48 ali 0048).",
-      "invalid_sms_code": "Neveljavna ali potekla SMS-koda."
+      "invalid_sms_code": "Neveljavna ali potekla SMS-koda.",
+      "link_expired": "Povezava za prijavo je potekla ali je bila že uporabljena. Zahtevajte novo in jo takoj prilepite.",
+      "not_a_consumer": "Ta račun še nima potrošniškega profila DPD UK. Dokončajte ustvarjanje računa v aplikaciji ali na spletu in poskusite znova.",
+      "email_required": "Vnesite e-poštni naslov, na katerega je bila poslana povezava za prijavo iz aplikacije.",
+      "unrecognised_link": "To ni povezava za prijavo DPD UK. Kopirajte celotno povezavo iz e-pošte za prijavo."
     },
     "abort": {
       "already_configured": "Ta DPD račun je že konfiguriran.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovaška",
         "dpd-si": "Slovenija",
         "dpd-ch": "Švica",
-        "dpd-uk": "Združeno kraljestvo",
+        "dpd-uk": "Združeno kraljestvo (Business)",
         "dpd-de": "Nemčija",
         "dpd-pl": "Poljska",
-        "dpd-at": "Avstrija"
+        "dpd-at": "Avstrija",
+        "dpd-uk-app": "Združeno kraljestvo (MyDPD)"
       }
     }
   },

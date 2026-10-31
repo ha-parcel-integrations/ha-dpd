@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS-kood"
         }
+      },
+      "request": {
+        "title": "DPD Ühendkuningriik (MyDPD)",
+        "description": "Vali DPD UK rakenduses või aadressil login.dpd.co.uk e-posti teel sisselogimine ja kopeeri saadud kirjast kogu link. Ära ava seda. Kleebi see siia; link toimib ainult korra ja aegub kiiresti.",
+        "data": {
+          "email": "E-post",
+          "magic_link": "Sisselogimislink"
+        },
+        "data_description": {
+          "email": "Vajalik ainult DPD UK rakenduse lingi jaoks. Aadressi login.dpd.co.uk lingi puhul jäta tühjaks."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD nõuab praegu captchat. Logi korra brauseris aadressil dpd.com sisse ja proovi siis uuesti.",
       "invalid_auth": "Vale e-post või parool.",
       "invalid_phone": "Sisesta kehtiv Poola mobiilinumber (üheksa numbrit, soovi korral eesliitega +48 või 0048).",
-      "invalid_sms_code": "Vigane või aegunud SMS-kood."
+      "invalid_sms_code": "Vigane või aegunud SMS-kood.",
+      "link_expired": "Sisselogimislink on aegunud või juba kasutatud. Telli uus ja kleebi see kohe.",
+      "not_a_consumer": "Sellel kontol pole veel DPD UK tarbijaprofiili. Lõpeta konto loomine rakenduses või veebis ja proovi uuesti.",
+      "email_required": "Sisesta e-posti aadress, kuhu rakenduse sisselogimislink saadeti.",
+      "unrecognised_link": "See pole DPD UK sisselogimislink. Kopeeri sisselogimiskirjast kogu link."
     },
     "abort": {
       "already_configured": "See DPD konto on juba seadistatud.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovakkia",
         "dpd-si": "Sloveenia",
         "dpd-ch": "Šveits",
-        "dpd-uk": "Ühendkuningriik",
+        "dpd-uk": "Ühendkuningriik (Business)",
         "dpd-de": "Saksamaa",
         "dpd-pl": "Poola",
-        "dpd-at": "Austria"
+        "dpd-at": "Austria",
+        "dpd-uk-app": "Ühendkuningriik (MyDPD)"
       }
     }
   },

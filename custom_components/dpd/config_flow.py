@@ -6,6 +6,7 @@ from collections.abc import Mapping
 import logging
 import re
 from typing import Any
+import uuid
 
 import aiohttp
 from homeassistant.config_entries import (
@@ -30,15 +31,19 @@ from .const import (
     CONF_COUNTRY,
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
+    CONF_DEVICE_ID,
     CONF_INCLUDE_HISTORY,
+    CONF_MAGIC_LINK,
     CONF_PHONE,
     CONF_REFRESH_TOKEN,
     CONF_SMS_CODE,
+    CONF_UK_LINK_SOURCE,
     COUNTRY_AT,
     COUNTRY_DE,
     COUNTRY_GENERAL,
     COUNTRY_OPTIONS,
     COUNTRY_PL,
+    COUNTRY_UK,
     DEFAULT_BU,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
@@ -50,6 +55,13 @@ from .const import (
 from .countries.at.session import DpdAtSession
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
+from .countries.uk.session import (
+    DpdUkEmailRequiredError,
+    DpdUkLinkError,
+    DpdUkNotConsumerError,
+    DpdUkSession,
+    DpdUkUnrecognisedLinkError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +70,9 @@ _LOGGER = logging.getLogger(__name__)
 _DE_BU_VALUE = "DPD-DE"
 _PL_BU_VALUE = "DPD-PL"
 _AT_BU_VALUE = "DPD-AT"
+# The UK consumer-app stack is routed like DE/AT, not a BUSINESS_UNITS entry:
+# the existing "DPD-UK" option stays on the shared backend.
+_UK_APP_VALUE = "DPD-UK-APP"
 
 # BU value -> English display name, for naming the chosen country back to the
 # user on the credential step. The dropdown itself is translated by HA from
@@ -124,6 +139,9 @@ _USER_SCHEMA = vol.Schema(
 
 _PHONE_SCHEMA = vol.Schema({vol.Required(CONF_PHONE): str})
 _SMS_SCHEMA = vol.Schema({vol.Required(CONF_SMS_CODE): str})
+_REQUEST_SCHEMA = vol.Schema(
+    {vol.Required(CONF_MAGIC_LINK): str, vol.Optional(CONF_EMAIL, default=""): str}
+)
 
 _REAUTH_SCHEMA = vol.Schema(
     {
@@ -158,6 +176,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         self._bu: str = DEFAULT_BU
         self._phone: str = ""
         self._pl_refresh_token: str = ""
+        self._uk_refresh_token: str = ""
+        self._uk_device_id: str = ""
+        self._uk_source: str = "app"
 
     def _apply_country_selection(self, selected: str) -> None:
         """Route one BU dropdown value to the country it belongs to.
@@ -172,6 +193,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             self._country = COUNTRY_PL.upper()
         elif selected == _AT_BU_VALUE:
             self._country = COUNTRY_AT.upper()
+        elif selected == _UK_APP_VALUE:
+            self._country = COUNTRY_UK.upper()
         else:
             self._country, self._bu = COUNTRY_GENERAL.upper(), selected
 
@@ -181,6 +204,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             (COUNTRY_DE, _DE_BU_VALUE),
             (COUNTRY_PL, _PL_BU_VALUE),
             (COUNTRY_AT, _AT_BU_VALUE),
+            (COUNTRY_UK, _UK_APP_VALUE),
         ):
             if self._country == country.upper():
                 return _COUNTRY_LABELS.get(value, value)
@@ -233,6 +257,8 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             self._apply_country_selection(user_input[CONF_BU].upper())
             if self._country == COUNTRY_PL.upper():
                 return await self.async_step_phone()
+            if self._country == COUNTRY_UK.upper():
+                return await self.async_step_request()
             # Kept solely for migration-compatible programmatic callers that
             # supplied the old combined form. The UI schema renders country
             # only, so users always see the country-first flow.
@@ -350,6 +376,57 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="sms", data_schema=_SMS_SCHEMA, errors=errors
         )
 
+    async def async_step_request(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Exchange a pasted DPD UK magic link for a persistable session."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry() if self.source == "reauth" else None
+        if user_input is not None:
+            email = user_input.get(CONF_EMAIL, "").strip()
+            device_id = (
+                reauth_entry.data.get(CONF_DEVICE_ID) if reauth_entry else None
+            ) or uuid.uuid4().hex
+            uk = DpdUkSession(async_get_clientsession(self.hass), None, device_id)
+            try:
+                consumer_id = await uk.async_sign_in_with_link(
+                    email, user_input[CONF_MAGIC_LINK]
+                )
+            except DpdUkEmailRequiredError:
+                errors[CONF_EMAIL] = "email_required"
+            except DpdUkUnrecognisedLinkError:
+                errors[CONF_MAGIC_LINK] = "unrecognised_link"
+            except DpdUkLinkError:
+                errors["base"] = "link_expired"
+            except DpdUkNotConsumerError:
+                errors["base"] = "not_a_consumer"
+            except DpdAuthError:
+                errors["base"] = "invalid_auth"
+            except (DpdApiError, aiohttp.ClientError):
+                errors["base"] = "cannot_connect"
+            else:
+                await self.async_set_unique_id(f"UK:{consumer_id}")
+                self._email = email
+                self._uk_refresh_token = uk.refresh_token or ""
+                self._uk_device_id = device_id
+                self._uk_source = uk.source
+                if reauth_entry is not None:
+                    self._abort_if_unique_id_mismatch()
+                    return self.async_update_reload_and_abort(
+                        reauth_entry,
+                        data_updates={
+                            CONF_EMAIL: email,
+                            CONF_REFRESH_TOKEN: self._uk_refresh_token,
+                            CONF_DEVICE_ID: device_id,
+                            CONF_UK_LINK_SOURCE: self._uk_source,
+                        },
+                    )
+                self._abort_if_unique_id_configured()
+                return await self.async_step_delivered()
+        return self.async_show_form(
+            step_id="request", data_schema=_REQUEST_SCHEMA, errors=errors
+        )
+
     async def async_step_delivered(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -360,7 +437,14 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PASSWORD: self._password,
                 CONF_COUNTRY: self._country,
             }
-            if self._country == COUNTRY_GENERAL.upper():
+            if self._country == COUNTRY_UK.upper():
+                # Passwordless: the Firebase refresh token and the generated
+                # device id are all that is kept.
+                data.pop(CONF_PASSWORD)
+                data[CONF_REFRESH_TOKEN] = self._uk_refresh_token
+                data[CONF_DEVICE_ID] = self._uk_device_id
+                data[CONF_UK_LINK_SOURCE] = self._uk_source
+            elif self._country == COUNTRY_GENERAL.upper():
                 data[CONF_BU] = self._bu
             elif self._country in (COUNTRY_DE.upper(), COUNTRY_AT.upper()):
                 # Germany and Austria need nothing beyond the credentials
@@ -403,6 +487,9 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         if country == COUNTRY_PL.upper():
             self._country = COUNTRY_PL.upper()
             return await self.async_step_phone()
+        if country == COUNTRY_UK.upper():
+            self._country = COUNTRY_UK.upper()
+            return await self.async_step_request()
         bu = reauth_entry.data.get(CONF_BU, DEFAULT_BU)
 
         if user_input is not None:

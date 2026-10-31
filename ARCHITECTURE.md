@@ -30,7 +30,8 @@ custom_components/dpd/
     ├── general/         status map + normalize_parcel for the myDPD path
     ├── de/              Germany: web-account session + page reader + status derivation + normalize
     ├── pl/              Poland: OAuth session + status derivation + normalize
-    └── at/              Austria: portal JWT session + stage derivation + normalize
+    ├── at/              Austria: portal JWT session + stage derivation + normalize
+    └── uk/              UK MyDPD app: Firebase magic-link session + coarse normalize
 ```
 
 Each `countries/` package owns a `normalize_parcel*` and a status mapper.
@@ -44,6 +45,8 @@ There is **one dispatch point**, in `DpdCoordinator._async_update_data`:
 ```
 if self._de_session is not None:     ->  _async_fetch_de()
 elif self._pl_session is not None:   ->  _async_fetch_pl()
+elif self._at_session is not None:   ->  _async_fetch_at()
+elif self._uk_session is not None:   ->  _async_fetch_uk()
 else:                                ->  the general/BU path via DpdApiClient
 ```
 
@@ -60,6 +63,7 @@ fetch path, and adding one does not change the shared code.
 | Germany | `DpdDeSession` (`countries/de/session.py`) | myDPD web account, cookie session | `map_parcel_status_de` | `normalize_parcel_de` |
 | Poland | `DpdPlSession` (`countries/pl/session.py`) | public-client OAuth + JSON | `map_parcel_status_pl` | `normalize_parcel_pl` |
 | Austria | `DpdAtSession` (`countries/at/session.py`) | portal JSON-RPC + Bearer JWT | `map_parcel_status_at` | `normalize_parcel_at` |
+| UK MyDPD app | `DpdUkSession` (`countries/uk/session.py`) | Firebase magic link + Bearer id token + `dpdSession` header | none yet (active/inactive bucket only) | `normalize_parcel_uk` |
 
 ## Key design decisions
 
@@ -320,10 +324,34 @@ identifier the research had concluded did not exist. What is still unseen is a
 set of *cases* rather than a shape (stage 1, an active parcel, a pickup point,
 a failure, a return), so Austria ships as a pre-release.
 
+### UK MyDPD app: a Firebase account stack, payload still unseen
+
+`countries/uk/` is routed like Germany and Austria (`_UK_APP_VALUE` in
+`config_flow.py`), not a `BUSINESS_UNITS` entry; the shared-backend `DPD-UK`
+option is untouched. The user pastes a sign-in link; its shape picks one of two verify front doors
+(`classify_link`): a website `verificationId` link needs no email and its token
+already carries the consumer claim, the app's `oobCode` link needs the email and
+the claims upgrade. The two use different Firebase keys, and a refresh token only
+works with the key that issued it, so the entry stores which route it came
+through (`uk_link_source`). From `device/login` on the routes are identical. The session
+exchanges it, upgrades the claims, and mints a device session. Only the
+Firebase refresh token and a generated device id are stored; the id token and
+`dpdSession` live in memory. Tripwires:
+
+- **The claims upgrade is mandatory.** Without the `consumerId` claim every data
+  call is refused, so a missing claim ends in reauth with its own message.
+- **A refresh failure is reauth only when Firebase confirms a rejected token.**
+  Anything else is a plain API error, never a push into reauth.
+- **The parcel object is unseen.** Only the active/inactive bucket sets the
+  status; unseen field names are marked `ASSUMED` and each new key set and
+  status word is logged once (names only). Diagnostics withhold `raw`, the
+  barcode and the url for this stack because its personal fields cannot be
+  listed by name yet. Ship it as a pre-release until a real parcel lands.
+
 ### Capabilities are per variant, not flat
 
-`const.py` carries `CAPABILITIES_BY_VARIANT` with four keys — `Germany`,
-`Poland`, `Austria`, `Other` — rather than a single flat `CAPABILITIES`,
+`const.py` carries `CAPABILITIES_BY_VARIANT` with five keys — `Germany`,
+`Poland`, `Austria`, `United Kingdom (app)`, `Other` — rather than a single flat `CAPABILITIES`,
 because the transports genuinely populate different fields:
 
 | Variant | Never populated | Notes |
@@ -332,6 +360,7 @@ because the transports genuinely populate different fields:
 | `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
+| `United Kingdom (app)` | everything | nothing is confirmed; `url` is implemented but pending a real parcel |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so

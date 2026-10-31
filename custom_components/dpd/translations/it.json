@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "Codice SMS"
         }
+      },
+      "request": {
+        "title": "DPD Regno Unito (MyDPD)",
+        "description": "Nell'app DPD UK o su login.dpd.co.uk scegli l'accesso via e-mail e copia il link completo dal messaggio ricevuto. Non aprirlo. Incollalo qui; il link vale una sola volta e scade presto.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Link di accesso"
+        },
+        "data_description": {
+          "email": "Serve solo per il link dell'app DPD UK. Lascia vuoto per un link di login.dpd.co.uk."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD sta richiedendo un captcha in questo momento. Accedi una volta a dpd.com dal browser, quindi riprova.",
       "invalid_auth": "E-mail o password non validi.",
       "invalid_phone": "Inserisci un numero di cellulare polacco valido (nove cifre, facoltativamente precedute da +48 o 0048).",
-      "invalid_sms_code": "Codice SMS non valido o scaduto."
+      "invalid_sms_code": "Codice SMS non valido o scaduto.",
+      "link_expired": "Il link di accesso è scaduto o già usato. Richiedine uno nuovo e incollalo subito.",
+      "not_a_consumer": "Questo account non ha ancora un profilo consumatore DPD UK. Completa la creazione dell'account nell'app o sul sito e riprova.",
+      "email_required": "Inserisci l'indirizzo e-mail a cui è stato inviato il link di accesso dell'app.",
+      "unrecognised_link": "Questo non è un link di accesso DPD UK. Copia il link completo dall'e-mail di accesso."
     },
     "abort": {
       "already_configured": "Questo account DPD è già configurato.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovacchia",
         "dpd-si": "Slovenia",
         "dpd-ch": "Svizzera",
-        "dpd-uk": "Regno Unito",
+        "dpd-uk": "Regno Unito (Business)",
         "dpd-de": "Germania",
         "dpd-pl": "Polonia",
-        "dpd-at": "Austria"
+        "dpd-at": "Austria",
+        "dpd-uk-app": "Regno Unito (MyDPD)"
       }
     }
   },

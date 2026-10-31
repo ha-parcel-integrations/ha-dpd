@@ -90,6 +90,7 @@ CAPABILITIES_BY_VARIANT = {
     "Germany": frozenset({"weight", "url", "history"}),
     "Poland": frozenset({"delivery_window", "history"}),
     "Austria": frozenset({"history"}),
+    "United Kingdom (app)": frozenset(),
     "Other": frozenset(
         {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
     ),
@@ -104,6 +105,11 @@ PENDING_CAPABILITIES_BY_VARIANT = {
     # populated at the out-for-delivery stage, and the pickup point comes
     # from a ParcelShop scan. Move them above once a parcel shows either.
     "Austria": frozenset({"delivery_window", "pickup_point"}),
+    # Nothing but the coarse active/inactive state is mapped: no parcel
+    # object has been seen yet, so every field below awaits a real parcel.
+    "United Kingdom (app)": frozenset(
+        {"url", "history", "delivery_window", "pickup_point", "weight"}
+    ),
 }
 
 KEYCLOAK_TOKEN_URL = (
@@ -166,7 +172,7 @@ BUSINESS_UNITS = [
     {"value": "DPD-SK", "label": "Slovakia"},
     {"value": "DPD-SI", "label": "Slovenia"},
     {"value": "DPD-CH", "label": "Switzerland"},
-    {"value": "DPD-UK", "label": "United Kingdom"},
+    {"value": "DPD-UK", "label": "United Kingdom (Business)"},
 ]
 
 DEFAULT_BU = "DPD-NL"
@@ -182,6 +188,7 @@ COUNTRY_OPTIONS = [
     {"value": "DPD-DE", "label": "Germany"},
     {"value": "DPD-PL", "label": "Poland"},
     {"value": "DPD-AT", "label": "Austria"},
+    {"value": "DPD-UK-APP", "label": "United Kingdom (MyDPD)"},
 ]
 
 # Poland uses a separate public OAuth client and receiver-inbox API. It is
@@ -202,6 +209,30 @@ DPD_AT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 )
+# DPD UK's consumer-app account backend — a Firebase magic-link sign-in in
+# front of DPD's own REST host. Separate from the shared myDPD backend the
+# "DPD-UK" business unit rides on. countries/uk/session.py is the only module
+# that sends these. The Firebase Web API key is a public client identifier.
+CONF_DEVICE_ID = "device_id"
+CONF_MAGIC_LINK = "magic_link"
+DPD_UK_API_HOST = "https://apis.consumers.dpdgroup.co.uk"
+DPD_UK_AUTH_PREFIX = "/v1"
+DPD_UK_DATA_PREFIX = "/v1.5"
+# App sign-in key (the e-mailed link from the DPD UK app).
+DPD_UK_FIREBASE_API_KEY = "AIzaSyBFukCDTDWvqk2Sy8d6A9Bj1y64TELNoYg"
+# Website sign-in key (login.dpd.co.uk links). The entry remembers which door
+# it came through because only the app's route needs the claims upgrade.
+DPD_UK_WEB_FIREBASE_API_KEY = "AIzaSyBQ9Rp5RD4mlG3tsCMyxz3xtoGsQIE1kO0"
+DPD_UK_LOGIN_HOST = "https://apis.login.dpd.co.uk"
+CONF_UK_LINK_SOURCE = "uk_link_source"
+UK_SOURCE_APP = "app"
+UK_SOURCE_WEB = "web"
+DPD_UK_FIREBASE_SIGN_IN_URL = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken"
+)
+DPD_UK_FIREBASE_TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
+DPD_UK_ANDROID_PACKAGE = "com.dpd.yourdpd"
+
 DPD_AT_DIR_INCOMING = "inc"
 DPD_AT_DIR_SENT = "send"
 DPD_AT_DIR_RETURNS = "ret"
@@ -347,6 +378,7 @@ COUNTRY_GENERAL = "general"
 COUNTRY_DE = "de"
 COUNTRY_PL = "pl"
 COUNTRY_AT = "at"
+COUNTRY_UK = "uk"
 DEFAULT_COUNTRY = COUNTRY_GENERAL
 
 # Older German entries stored a device id here. It is no longer read; the

@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS kodas"
         }
+      },
+      "request": {
+        "title": "DPD Jungtinė Karalystė (MyDPD)",
+        "description": "DPD UK programėlėje arba login.dpd.co.uk pasirinkite prisijungimą el. paštu ir nukopijuokite visą gautame laiške esančią nuorodą. Neatidarykite jos. Įklijuokite ją čia; nuoroda veikia tik kartą ir greitai nustoja galioti.",
+        "data": {
+          "email": "El. paštas",
+          "magic_link": "Prisijungimo nuoroda"
+        },
+        "data_description": {
+          "email": "Reikalinga tik DPD UK programėlės nuorodai. login.dpd.co.uk nuorodai palikite tuščią."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD šiuo metu prašo captcha. Vieną kartą prisijunkite naršyklėje adresu dpd.com ir bandykite dar kartą.",
       "invalid_auth": "Neteisingas el. paštas arba slaptažodis.",
       "invalid_phone": "Įveskite galiojantį Lenkijos mobiliojo telefono numerį (devyni skaitmenys, pasirinktinai su +48 arba 0048).",
-      "invalid_sms_code": "Neteisingas arba pasibaigęs SMS kodas."
+      "invalid_sms_code": "Neteisingas arba pasibaigęs SMS kodas.",
+      "link_expired": "Prisijungimo nuoroda nebegalioja arba jau panaudota. Užsakykite naują ir įklijuokite iškart.",
+      "not_a_consumer": "Ši paskyra dar neturi DPD UK vartotojo profilio. Užbaikite paskyros kūrimą programėlėje ar svetainėje ir bandykite dar kartą.",
+      "email_required": "Įveskite el. pašto adresą, kuriuo išsiųsta programėlės prisijungimo nuoroda.",
+      "unrecognised_link": "Tai ne DPD UK prisijungimo nuoroda. Nukopijuokite visą nuorodą iš prisijungimo laiško."
     },
     "abort": {
       "already_configured": "Ši DPD paskyra jau sukonfigūruota.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovakija",
         "dpd-si": "Slovėnija",
         "dpd-ch": "Šveicarija",
-        "dpd-uk": "Jungtinė Karalystė",
+        "dpd-uk": "Jungtinė Karalystė (Business)",
         "dpd-de": "Vokietija",
         "dpd-pl": "Lenkija",
-        "dpd-at": "Austrija"
+        "dpd-at": "Austrija",
+        "dpd-uk-app": "Jungtinė Karalystė (MyDPD)"
       }
     }
   },

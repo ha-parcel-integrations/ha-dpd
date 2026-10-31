@@ -8,6 +8,10 @@ from pytest_homeassistant_custom_component.plugins import hass  # noqa: F401
 from custom_components.dpd.countries import at, de, general
 from custom_components.dpd.countries.at import session as at_session
 from custom_components.dpd.countries.de import page as de_page, session as de_session
+from custom_components.dpd.countries.uk import (
+    normalize as uk_normalize,
+    session as uk_session,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +44,9 @@ def reset_one_shot_warnings():
     at._SEEN_REASONS.clear()
     at._BAD_TIMESTAMPS.clear()
     at._UNEXPECTED_SHAPES.clear()
+    uk_normalize._SEEN_SHAPES.clear()
+    uk_normalize._UNMAPPED_STATUSES.clear()
+    uk_session._REFUSALS_LOGGED.clear()
 
 
 if sys.platform == "win32":

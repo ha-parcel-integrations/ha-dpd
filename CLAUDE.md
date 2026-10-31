@@ -176,8 +176,27 @@ Still unseen: one stage value, an active parcel (so the delivery window is
 unexercised), a pickup-point parcel, a failure and a return. **Ship AT as a
 pre-release (`bN`)** until those land, same rule as PL.
 
-**`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — four keys,
-`Germany` / `Poland` / `Austria` / `Other`, because the transports populate
+**UK MyDPD app (`countries/uk/`)** — a Firebase magic-link account stack,
+routed via `_UK_APP_VALUE` like DE/AT and separate from the shared `DPD-UK`
+option (which stays). The user pastes the sign-in link, from the app (needs the email) or the website
+(`verificationId`, no email); each route has its own Firebase key and the entry
+stores which one (`uk_link_source`) because only the app route needs the claims
+upgrade — refresh tokens are *not* key-bound (both keys refresh either token,
+measured 2026-10-27). **Sessions coexist** — a sign-in in the app or on the
+website does not revoke this entry's token (measured 2026-10-31), so don't
+build around a single-session assumption. But a stored token has once been
+**dead on arrival**, cause unknown, so `_prove_refresh_token` spends it before
+the entry keeps it; never store refresh material the sign-in has not proven.
+Only the Firebase
+refresh token and a generated device id are stored, never the id token or the
+`dpdSession`. Tripwires: the claims upgrade (`consumerId`) is mandatory and a
+missing claim is its own reauth message; only a Firebase-confirmed rejection
+reaches reauth; no parcel object has been seen, so the normalizer is coarse
+(`ASSUMED` fields), diagnostics withhold `raw`/barcode/url, and it ships as a
+pre-release (`bN`) until a real parcel lands.
+
+**`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — five keys,
+`Germany` / `Poland` / `Austria` / `United Kingdom (app)` / `Other`, because the transports populate
 different fields. It feeds the docs-site comparison table, so a wrong entry is a wrong
 claim on the website. **Keep it in lockstep with any change to any of the
 `normalize_parcel*` functions.**

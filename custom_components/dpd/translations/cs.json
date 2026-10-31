@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "Kód SMS"
         }
+      },
+      "request": {
+        "title": "DPD Spojené království (MyDPD)",
+        "description": "V aplikaci DPD UK nebo na login.dpd.co.uk zvolte přihlášení e-mailem a zkopírujte celý odkaz z přijatého e-mailu. Neotevírejte jej. Vložte jej sem; odkaz funguje jen jednou a brzy vyprší.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Přihlašovací odkaz"
+        },
+        "data_description": {
+          "email": "Potřeba jen pro odkaz z aplikace DPD UK. U odkazu z login.dpd.co.uk nechte prázdné."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD právě požaduje captcha. Přihlaste se jednou na dpd.com v prohlížeči a zkuste to znovu.",
       "invalid_auth": "Neplatný e-mail nebo heslo.",
       "invalid_phone": "Zadejte platné polské mobilní číslo (devět číslic, volitelně s +48 nebo 0048).",
-      "invalid_sms_code": "Neplatný nebo prošlý kód SMS."
+      "invalid_sms_code": "Neplatný nebo prošlý kód SMS.",
+      "link_expired": "Přihlašovací odkaz vypršel nebo byl již použit. Vyžádejte si nový a hned jej vložte.",
+      "not_a_consumer": "Tento účet zatím nemá spotřebitelský profil DPD UK. Dokončete vytvoření účtu v aplikaci nebo na webu a zkuste to znovu.",
+      "email_required": "Zadejte e-mailovou adresu, na kterou byl odeslán přihlašovací odkaz z aplikace.",
+      "unrecognised_link": "Toto není přihlašovací odkaz DPD UK. Zkopírujte celý odkaz z přihlašovacího e-mailu."
     },
     "abort": {
       "already_configured": "Tento účet DPD je již nakonfigurován.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovensko",
         "dpd-si": "Slovinsko",
         "dpd-ch": "Švýcarsko",
-        "dpd-uk": "Spojené království",
+        "dpd-uk": "Spojené království (Business)",
         "dpd-de": "Německo",
         "dpd-pl": "Polsko",
-        "dpd-at": "Rakousko"
+        "dpd-at": "Rakousko",
+        "dpd-uk-app": "Spojené království (MyDPD)"
       }
     }
   },

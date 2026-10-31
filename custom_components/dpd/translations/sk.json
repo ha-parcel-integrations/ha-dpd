@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS kód"
         }
+      },
+      "request": {
+        "title": "DPD Spojené kráľovstvo (MyDPD)",
+        "description": "V aplikácii DPD UK alebo na login.dpd.co.uk zvoľte prihlásenie e-mailom a skopírujte celý odkaz z prijatého e-mailu. Neotvárajte ho. Vložte ho sem; odkaz funguje iba raz a rýchlo vyprší.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Prihlasovací odkaz"
+        },
+        "data_description": {
+          "email": "Potrebné iba pre odkaz z aplikácie DPD UK. Pri odkaze z login.dpd.co.uk nechajte prázdne."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD momentálne vyžaduje captcha. Raz sa prihláste na dpd.com v prehliadači a skúste to znova.",
       "invalid_auth": "Neplatný e-mail alebo heslo.",
       "invalid_phone": "Zadajte platné poľské mobilné číslo (deväť číslic, voliteľne s +48 alebo 0048).",
-      "invalid_sms_code": "Neplatný alebo expirovaný SMS kód."
+      "invalid_sms_code": "Neplatný alebo expirovaný SMS kód.",
+      "link_expired": "Prihlasovací odkaz vypršal alebo už bol použitý. Vyžiadajte si nový a hneď ho vložte.",
+      "not_a_consumer": "Tento účet zatiaľ nemá spotrebiteľský profil DPD UK. Dokončite vytvorenie účtu v aplikácii alebo na webe a skúste to znova.",
+      "email_required": "Zadajte e-mailovú adresu, na ktorú bol odoslaný prihlasovací odkaz z aplikácie.",
+      "unrecognised_link": "Toto nie je prihlasovací odkaz DPD UK. Skopírujte celý odkaz z prihlasovacieho e-mailu."
     },
     "abort": {
       "already_configured": "Tento účet DPD je už nakonfigurovaný.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovensko",
         "dpd-si": "Slovinsko",
         "dpd-ch": "Švajčiarsko",
-        "dpd-uk": "Spojené kráľovstvo",
+        "dpd-uk": "Spojené kráľovstvo (Business)",
         "dpd-de": "Nemecko",
         "dpd-pl": "Poľsko",
-        "dpd-at": "Rakúsko"
+        "dpd-at": "Rakúsko",
+        "dpd-uk-app": "Spojené kráľovstvo (MyDPD)"
       }
     }
   },

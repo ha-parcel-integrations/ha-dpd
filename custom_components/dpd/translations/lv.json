@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS kods"
         }
+      },
+      "request": {
+        "title": "DPD Apvienotā Karaliste (MyDPD)",
+        "description": "DPD UK lietotnē vai login.dpd.co.uk izvēlieties pieteikšanos ar e-pastu un nokopējiet visu saiti no saņemtās ziņas. Neatveriet to. Ielīmējiet to šeit; saite derīga tikai vienu reizi un ātri beidzas.",
+        "data": {
+          "email": "E-pasts",
+          "magic_link": "Pieteikšanās saite"
+        },
+        "data_description": {
+          "email": "Nepieciešams tikai saitei no DPD UK lietotnes. Saitei no login.dpd.co.uk atstājiet tukšu."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD šobrīd pieprasa captcha. Vienreiz pieslēdzieties dpd.com pārlūkprogrammā un mēģiniet vēlreiz.",
       "invalid_auth": "Nederīgs e-pasts vai parole.",
       "invalid_phone": "Ievadiet derīgu Polijas mobilā tālruņa numuru (deviņi cipari, pēc izvēles ar +48 vai 0048).",
-      "invalid_sms_code": "Nederīgs vai beidzies SMS kods."
+      "invalid_sms_code": "Nederīgs vai beidzies SMS kods.",
+      "link_expired": "Pieteikšanās saite ir beigusies vai jau izmantota. Pieprasiet jaunu un uzreiz ielīmējiet.",
+      "not_a_consumer": "Šim kontam vēl nav DPD UK patērētāja profila. Pabeidziet konta izveidi lietotnē vai vietnē un mēģiniet vēlreiz.",
+      "email_required": "Ievadiet e-pasta adresi, uz kuru nosūtīta lietotnes pieteikšanās saite.",
+      "unrecognised_link": "Šī nav DPD UK pieteikšanās saite. Nokopējiet visu saiti no pieteikšanās e-pasta."
     },
     "abort": {
       "already_configured": "Šis DPD konts jau ir konfigurēts.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slovākija",
         "dpd-si": "Slovēnija",
         "dpd-ch": "Šveice",
-        "dpd-uk": "Apvienotā Karaliste",
+        "dpd-uk": "Apvienotā Karaliste (Business)",
         "dpd-de": "Vācija",
         "dpd-pl": "Polija",
-        "dpd-at": "Austrija"
+        "dpd-at": "Austrija",
+        "dpd-uk-app": "Apvienotā Karaliste (MyDPD)"
       }
     }
   },

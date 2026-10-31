@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS-Code"
         }
+      },
+      "request": {
+        "title": "DPD Vereinigtes Königreich (MyDPD)",
+        "description": "Wähle in der DPD-UK-App oder auf login.dpd.co.uk die Anmeldung per E-Mail und kopiere den vollständigen Link aus der E-Mail. Öffne ihn nicht. Füge ihn hier ein; der Link gilt nur einmal und läuft schnell ab.",
+        "data": {
+          "email": "E-Mail",
+          "magic_link": "Anmeldelink"
+        },
+        "data_description": {
+          "email": "Nur für den Link aus der DPD-UK-App nötig. Bei einem Link von login.dpd.co.uk leer lassen."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "DPD verlangt gerade ein Captcha. Melde dich einmal im Browser auf dpd.com an und versuche es dann erneut.",
       "invalid_auth": "Ungültige E-Mail-Adresse oder ungültiges Passwort.",
       "invalid_phone": "Gib eine gültige polnische Mobilnummer ein (neun Ziffern, optional mit +48 oder 0048).",
-      "invalid_sms_code": "Ungültiger oder abgelaufener SMS-Code."
+      "invalid_sms_code": "Ungültiger oder abgelaufener SMS-Code.",
+      "link_expired": "Der Anmeldelink ist abgelaufen oder wurde schon benutzt. Fordere einen neuen an und füge ihn sofort ein.",
+      "not_a_consumer": "Dieses Konto hat noch kein DPD-UK-Verbraucherprofil. Schließe die Kontoerstellung in der App oder auf der Website ab und versuche es erneut.",
+      "email_required": "Gib die E-Mail-Adresse ein, an die der Anmeldelink der App gesendet wurde.",
+      "unrecognised_link": "Das ist kein DPD-UK-Anmeldelink. Kopiere den vollständigen Link aus der Anmelde-E-Mail."
     },
     "abort": {
       "already_configured": "Dieses DPD-Konto ist bereits eingerichtet.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Slowakei",
         "dpd-si": "Slowenien",
         "dpd-ch": "Schweiz",
-        "dpd-uk": "Vereinigtes Königreich",
+        "dpd-uk": "Vereinigtes Königreich (Business)",
         "dpd-de": "Deutschland",
         "dpd-pl": "Polen",
-        "dpd-at": "Österreich"
+        "dpd-at": "Österreich",
+        "dpd-uk-app": "Vereinigtes Königreich (MyDPD)"
       }
     }
   },

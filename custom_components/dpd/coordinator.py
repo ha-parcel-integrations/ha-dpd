@@ -38,6 +38,8 @@ from .countries.de import async_get_all_parcels_de
 from .countries.de.session import DpdDeSession
 from .countries.pl import normalize_parcel_pl
 from .countries.pl.session import DpdPlSession
+from .countries.uk import normalize_parcel_uk
+from .countries.uk.session import DpdUkSession
 from .parcels import (
     _apply_delivered_filter,
     _apply_delivered_filter_canonical,
@@ -124,7 +126,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     """Coordinator that polls the DPD parcels API on a dynamic schedule.
 
     Dispatches the fetch to the general/NL+BU backend, DPD Germany's web
-    account, DPD Poland's OAuth backend or DPD Austria's mydpd.at portal,
+    account, DPD Poland's OAuth backend, DPD Austria's mydpd.at portal or
+    DPD UK's consumer-app backend,
     based on which session was passed
     — everything past that one dispatch point (sorting, filtering,
     event-firing, the polling recompute) is shared.
@@ -141,6 +144,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         de_session: DpdDeSession | None = None,
         pl_session: DpdPlSession | None = None,
         at_session: DpdAtSession | None = None,
+        uk_session: DpdUkSession | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -162,6 +166,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._de_session = de_session
         self._pl_session = pl_session
         self._at_session = at_session
+        self._uk_session = uk_session
         # barcode -> last seen ParcelStatus. ``None`` on the first refresh so
         # we can suppress events for parcels that already existed when the
         # integration started (we do not know their previous state).
@@ -255,6 +260,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             incoming_all, outgoing_all = await self._async_fetch_pl()
         elif self._at_session is not None:
             incoming_all, outgoing_all = await self._async_fetch_at()
+        elif self._uk_session is not None:
+            incoming_all, outgoing_all = await self._async_fetch_uk()
         else:
             incoming_all, outgoing_all = await self._async_fetch_general()
 
@@ -527,6 +534,37 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         incoming_delivered = sort_parcels_by_ts(
             _apply_delivered_filter_canonical(
                 [p for p in normalized if p["delivered"]], self.config_entry
+            ),
+            "delivered_at",
+            descending=True,
+        )
+        return incoming_active + incoming_delivered, []
+
+    async def _async_fetch_uk(self) -> tuple[list[dict], list[dict]]:
+        """Fetch DPD UK's consumer-app inbox (received parcels only)."""
+        assert self._uk_session is not None
+        try:
+            active, inactive = await self._uk_session.async_get_parcels()
+        except DpdAuthError as err:
+            _LOGGER.error("DPD UK authentication failed: %s", err)
+            raise ConfigEntryAuthFailed("DPD UK authentication failed") from err
+        except DpdApiError as err:
+            raise UpdateFailed(f"DPD UK error: {err}") from err
+
+        include_history = self._include_history
+        incoming_active = [
+            normalize_parcel_uk(p, inactive=False, include_history=include_history)
+            for p in active
+        ]
+        incoming_delivered = sort_parcels_by_ts(
+            _apply_delivered_filter_canonical(
+                [
+                    normalize_parcel_uk(
+                        p, inactive=True, include_history=include_history
+                    )
+                    for p in inactive
+                ],
+                self.config_entry,
             ),
             "delivered_at",
             descending=True,

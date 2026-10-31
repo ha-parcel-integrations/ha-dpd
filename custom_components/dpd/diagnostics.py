@@ -9,7 +9,16 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from . import DpdConfigEntry
-from .const import CONF_DE_HARDWARE_ID, CONF_PHONE, CONF_REFRESH_TOKEN, CONF_SMS_CODE
+from .const import (
+    CONF_COUNTRY,
+    CONF_DE_HARDWARE_ID,
+    CONF_DEVICE_ID,
+    CONF_MAGIC_LINK,
+    CONF_PHONE,
+    CONF_REFRESH_TOKEN,
+    CONF_SMS_CODE,
+    COUNTRY_UK,
+)
 
 TO_REDACT = {
     CONF_EMAIL,
@@ -18,6 +27,8 @@ TO_REDACT = {
     CONF_PHONE,
     CONF_SMS_CODE,
     CONF_REFRESH_TOKEN,
+    CONF_DEVICE_ID,
+    CONF_MAGIC_LINK,
     "email",
     "parcelNumber",
     "senderName",
@@ -33,6 +44,16 @@ TO_REDACT = {
     "waybill",
     "access_token",
     "refresh_token",
+    # DPD UK (consumer app): Firebase and session material, the account's
+    # identifiers and the tracking code embedded in the tracking url.
+    "refreshToken",
+    "idToken",
+    "customToken",
+    "dpdSession",
+    "consumerId",
+    "phone_number",
+    "deviceId",
+    "parcelCode",
     # DPD Polska's full carrier response is intentionally exposed in ``raw``.
     # Diagnostics must still be safe to attach to an issue.
     "sender",
@@ -107,9 +128,14 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for a DPD config entry."""
     coordinator = entry.runtime_data.coordinator
     data = coordinator.data or {}
+    redact = set(TO_REDACT)
+    if entry.data.get(CONF_COUNTRY) == COUNTRY_UK.upper():
+        # The UK parcel object is unseen, so its personal fields cannot be
+        # listed by name; the full record stays out of diagnostics instead.
+        redact |= {"raw", "barcode", "url"}
 
     return {
-        "entry_data": async_redact_data(dict(entry.data), TO_REDACT),
+        "entry_data": async_redact_data(dict(entry.data), redact),
         "entry_options": dict(entry.options),
         "last_update_success": coordinator.last_update_success,
         "counts": {
@@ -126,16 +152,12 @@ async def async_get_config_entry_diagnostics(
                 else None
             ),
         },
-        "incoming_active": async_redact_data(
-            data.get("incoming_active", []), TO_REDACT
-        ),
+        "incoming_active": async_redact_data(data.get("incoming_active", []), redact),
         "incoming_delivered": async_redact_data(
-            data.get("incoming_delivered", []), TO_REDACT
+            data.get("incoming_delivered", []), redact
         ),
-        "outgoing_active": async_redact_data(
-            data.get("outgoing_active", []), TO_REDACT
-        ),
+        "outgoing_active": async_redact_data(data.get("outgoing_active", []), redact),
         "outgoing_delivered": async_redact_data(
-            data.get("outgoing_delivered", []), TO_REDACT
+            data.get("outgoing_delivered", []), redact
         ),
     }

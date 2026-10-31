@@ -49,6 +49,17 @@
         "data": {
           "sms_code": "SMS-kód"
         }
+      },
+      "request": {
+        "title": "DPD Egyesült Királyság (MyDPD)",
+        "description": "A DPD UK alkalmazásban vagy a login.dpd.co.uk oldalon válassza az e-mailes bejelentkezést, és másolja ki a kapott e-mail teljes linkjét. Ne nyissa meg. Illessze be ide; a link csak egyszer használható, és gyorsan lejár.",
+        "data": {
+          "email": "E-mail",
+          "magic_link": "Bejelentkezési link"
+        },
+        "data_description": {
+          "email": "Csak a DPD UK alkalmazás linkjéhez kell. A login.dpd.co.uk linkhez hagyja üresen."
+        }
       }
     },
     "error": {
@@ -56,7 +67,11 @@
       "captcha": "A DPD jelenleg captchát kér. Jelentkezzen be egyszer a böngészőben a dpd.com oldalon, majd próbálja újra.",
       "invalid_auth": "Érvénytelen e-mail cím vagy jelszó.",
       "invalid_phone": "Adjon meg érvényes lengyel mobilszámot (kilenc számjegy, opcionálisan +48 vagy 0048 előtaggal).",
-      "invalid_sms_code": "Érvénytelen vagy lejárt SMS-kód."
+      "invalid_sms_code": "Érvénytelen vagy lejárt SMS-kód.",
+      "link_expired": "A bejelentkezési link lejárt vagy már felhasználták. Kérjen újat, és azonnal illessze be.",
+      "not_a_consumer": "Ennek a fióknak még nincs DPD UK fogyasztói profilja. Fejezze be a fiók létrehozását az alkalmazásban vagy a weboldalon, majd próbálja újra.",
+      "email_required": "Adja meg azt az e-mail-címet, amelyre az alkalmazás bejelentkezési linkjét küldték.",
+      "unrecognised_link": "Ez nem DPD UK bejelentkezési link. Másolja ki a teljes linket a bejelentkezési e-mailből."
     },
     "abort": {
       "already_configured": "Ez a DPD fiók már be van állítva.",
@@ -118,10 +133,11 @@
         "dpd-sk": "Szlovákia",
         "dpd-si": "Szlovénia",
         "dpd-ch": "Svájc",
-        "dpd-uk": "Egyesült Királyság",
+        "dpd-uk": "Egyesült Királyság (Business)",
         "dpd-de": "Németország",
         "dpd-pl": "Lengyelország",
-        "dpd-at": "Ausztria"
+        "dpd-at": "Ausztria",
+        "dpd-uk-app": "Egyesült Királyság (MyDPD)"
       }
     }
   },

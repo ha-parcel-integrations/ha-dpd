@@ -42,7 +42,7 @@ this integration answers to both names there.
 - Configurable delivered-parcels sensor (last N days, or N most recent)
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
-- Country (business unit) selection during setup — Netherlands plus 14 other countries on DPD's shared myDPD backend (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia), the UK (riding on the same NL backend), and Germany, Poland and Austria (each its own separate backend), more to come
+- Country (business unit) selection during setup — Netherlands plus 14 other countries on DPD's shared myDPD backend (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia), the UK (riding on the same NL backend), and Germany, Poland, Austria and the UK MyDPD app (each its own separate backend), more to come
 - UI translated into the language of every supported country (plus English), including the country dropdown itself
 
 ## Requirements
@@ -75,7 +75,7 @@ Or set it up by hand:
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **DPD**
-3. Pick your **country**, then enter its account credentials. Poland uses a mobile number and one SMS code; every other country, Austria included, uses email and password.
+3. Pick your **country**, then enter its account credentials. Poland uses a mobile number and one SMS code; **United Kingdom (MyDPD)** uses a sign-in link from your email; every other country, Austria included, uses email and password.
 4. Choose how you want the **delivered parcels** sensor to filter (last N days, or N most recent)
 5. Click **Submit**
 
@@ -89,6 +89,24 @@ For Poland, the phone field accepts the local nine-digit form as well as
 `+48`/`0048` prefixes (with spaces or dashes). It normalizes every accepted
 form to the nine digits expected by DPD Polska. The receiver inbox is read-only:
 outgoing parcels are not requested.
+
+**United Kingdom (MyDPD)** is for accounts that sign in to the DPD UK app
+with an emailed link (the accounts **United Kingdom (Business)**, which rides
+on the shared myDPD backend, cannot log in). In the app, or at
+`login.dpd.co.uk`, choose email sign-in, then copy
+the full link from the email without opening it and paste it into the setup form.
+The email address field is only needed for the link from the app; a
+`login.dpd.co.uk` link needs none. The link works once and expires quickly. The account
+needs a finished DPD UK consumer profile. Only parcels you receive are read.
+Home Assistant keeps the sign-in refresh token, a generated device id and which
+sign-in route was used, never the link. When the sign-in lapses, Home Assistant asks for a new link.
+
+> **The UK MyDPD app source is a pre-release.** Signing in and reading the
+> parcel list work, but no real parcel has been seen yet, so a parcel shows only
+> as in progress or delivered, with its tracking number and link when DPD sends
+> them. The integration logs a warning listing the field names (never values)
+> and status words it meets — please report them; they are what makes the
+> mapping precise.
 
 For Germany, the integration signs in to your myDPD account and reads its
 parcel list: the Empfang, Versand and Retoure tabs. It shows the status, the

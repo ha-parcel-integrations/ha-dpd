@@ -20,13 +20,17 @@ from .const import (
     CONF_BU,
     CONF_COUNTRY,
     CONF_DE_HARDWARE_ID,
+    CONF_DEVICE_ID,
     CONF_REFRESH_TOKEN,
+    CONF_UK_LINK_SOURCE,
     COUNTRY_AT,
     COUNTRY_DE,
     COUNTRY_GENERAL,
     COUNTRY_PL,
+    COUNTRY_UK,
     DEFAULT_BU,
     PLATFORMS,
+    UK_SOURCE_APP,
     DpdCaptchaError,
 )
 from .coordinator import DpdCoordinator
@@ -34,6 +38,7 @@ from .countries.at.session import DpdAtSession
 from .countries.de.page import DpdPageError
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
+from .countries.uk.session import DpdUkSession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +52,7 @@ class DpdData:
     de_session: DpdDeSession | None = None
     pl_session: DpdPlSession | None = None
     at_session: DpdAtSession | None = None
+    uk_session: DpdUkSession | None = None
 
 
 type DpdConfigEntry = ConfigEntry[DpdData]
@@ -71,6 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     de_session: DpdDeSession | None = None
     pl_session: DpdPlSession | None = None
     at_session: DpdAtSession | None = None
+    uk_session: DpdUkSession | None = None
 
     try:
         if country == COUNTRY_DE.upper():
@@ -100,6 +107,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
                 entry.data[CONF_PASSWORD],
             )
             await at_session.async_login()
+        elif country == COUNTRY_UK.upper():
+
+            def _store_uk_refresh_token(token: str) -> None:
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_REFRESH_TOKEN: token}
+                )
+
+            uk_session = DpdUkSession(
+                session,
+                entry.data.get(CONF_REFRESH_TOKEN),
+                entry.data[CONF_DEVICE_ID],
+                _store_uk_refresh_token,
+                entry.data.get(CONF_UK_LINK_SOURCE, UK_SOURCE_APP),
+            )
+            await uk_session.async_login()
         else:
             client = DpdApiClient(
                 entry.data[CONF_EMAIL],
@@ -147,6 +169,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
         de_session=de_session,
         pl_session=pl_session,
         at_session=at_session,
+        uk_session=uk_session,
     )
 
     # Fetch initial data here, before forwarding to platforms. Raising
@@ -167,6 +190,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
         de_session=de_session,
         pl_session=pl_session,
         at_session=at_session,
+        uk_session=uk_session,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
