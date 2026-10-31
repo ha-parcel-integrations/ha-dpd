@@ -40,8 +40,10 @@ entry. Runtime-only; the tests don't catch a regression here.
 - **Reauth** uses `async_update_reload_and_abort`; the confirm step guards with
   `async_set_unique_id` + `_abort_if_unique_id_mismatch` so a *different* account's
   credentials abort instead of rebinding.
-- **Options flow** has no `entry.add_update_listener` — `async_schedule_reload` on
-  submit. Two sections left, `delivered` and `history`; polling is not among
+- **Options flow** is an `OptionsFlowWithReload` and has no
+  `entry.add_update_listener` (the two may not be combined); never call
+  `async_schedule_reload` from the submit, it starts before the new options
+  are saved. Two sections left, `delivered` and `history`; polling is not among
   them (see below).
 - `aiohttp.ClientError` is not caught in the coordinator (wrapped automatically).
   Config: `ConfigEntry.runtime_data` (`DpdData`), `PARALLEL_UPDATES = 0`,

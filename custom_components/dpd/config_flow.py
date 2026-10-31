@@ -13,7 +13,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
@@ -531,7 +531,7 @@ class DpdConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
 
-class DpdOptionsFlowHandler(OptionsFlow):
+class DpdOptionsFlowHandler(OptionsFlowWithReload):
     """Handle DPD options — delivered-parcels filter plus status history.
 
     The form is rendered with collapsible sections (``delivered`` and
@@ -549,7 +549,8 @@ class DpdOptionsFlowHandler(OptionsFlow):
         if user_input is not None:
             delivered = user_input.get("delivered", {})
             history = user_input.get("history", {})
-            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+            # OptionsFlowWithReload reloads once the new options are saved; a
+            # reload scheduled here would start before that, on the old ones.
             return self.async_create_entry(
                 title="",
                 data={
