@@ -36,15 +36,53 @@ def test_missing_identifiers_leave_barcode_and_url_unset():
     assert parcel["url"] is None
 
 
-def test_each_distinct_key_set_warns_once_with_keys_only(caplog):
-    secret = {"parcelNumber": "15501234567890", "recipientName": "Jane Doe"}
+def test_each_distinct_shape_warns_once_with_names_and_types_only(caplog):
+    secret = {
+        "parcelNumber": "15501234567890",
+        "recipientName": "Jane Doe",
+        "deliveryDetails": {
+            "date": "2026-11-01",
+            "window": {"from": "09:00", "to": "12:00"},
+        },
+        "events": [{"code": "OFD", "town": "Leeds"}],
+        "weightKg": 1.5,
+    }
     with caplog.at_level(logging.WARNING):
         normalize_parcel_uk(dict(secret), inactive=False)
         normalize_parcel_uk(dict(secret), inactive=False)
+
     assert caplog.text.count("parcel shape not seen before") == 1
-    assert "recipientName" in caplog.text
-    assert "Jane Doe" not in caplog.text
-    assert "15501234567890" not in caplog.text
+    # The nested field names and their types are what finishes the normalizer.
+    assert '"recipientName": "str"' in caplog.text
+    assert '"weightKg": "float"' in caplog.text
+    assert '"window": {"from": "str", "to": "str"}' in caplog.text
+    assert '"events": [{"code": "str", "town": "str"}]' in caplog.text
+    for value in ("Jane Doe", "15501234567890", "2026-11-01", "Leeds", "1.5"):
+        assert value not in caplog.text
+
+
+def test_the_sketch_stops_descending_and_an_empty_list_stays_empty(caplog):
+    deep = {"a": {"b": {"c": {"d": {"e": "too far"}}}}, "events": []}
+    with caplog.at_level(logging.WARNING):
+        normalize_parcel_uk(deep, inactive=False)
+
+    assert '"c": "{...}"' in caplog.text
+    assert '"events": []' in caplog.text
+    assert "too far" not in caplog.text
+
+
+def test_a_differently_spelled_status_is_still_reported(caplog):
+    parcel = {**PARCEL, "parcelState": "OUT_FOR_DELIVERY"}
+    with caplog.at_level(logging.WARNING):
+        result = normalize_parcel_uk(dict(parcel), inactive=False)
+
+    assert result["raw_status"] == "OUT_FOR_DELIVERY"
+    assert "parcelState='OUT_FOR_DELIVERY'" in caplog.text
+
+
+def test_a_timestamp_beside_the_status_is_not_mistaken_for_it():
+    parcel = {**PARCEL, "statusDate": "2026-11-01T10:00:00Z"}
+    assert normalize_parcel_uk(dict(parcel), inactive=False)["raw_status"] is None
 
 
 def test_a_status_string_is_kept_and_warned_once(caplog):
