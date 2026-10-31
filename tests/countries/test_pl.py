@@ -56,6 +56,11 @@ def test_normalize_accepts_the_apk_create_time_timestamp_alias():
     assert parcel["history"][0]["timestamp"] == "2026-09-08T10:00:00+00:00"
 
 
+def test_status_map_covers_the_parcel_locker_variants():
+    assert map_parcel_status_pl("HANDED_OVER_FOR_DELIVERY_SP") is ParcelStatus.OUT_FOR_DELIVERY
+    assert map_parcel_status_pl("READY_TO_PICK_UP_SP") is ParcelStatus.AT_PICKUP_POINT
+
+
 def test_status_map_covers_terminal_and_unknown_values():
     assert map_parcel_status_pl("PICKED_UP") is ParcelStatus.DELIVERED
     assert map_parcel_status_pl("RETURNED_TO_SENDER") is ParcelStatus.RETURNING
