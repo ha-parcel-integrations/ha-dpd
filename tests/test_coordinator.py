@@ -2682,3 +2682,86 @@ async def test_failed_poll_drops_the_overnight_interval(hass):
     assert coordinator.update_interval <= timedelta(
         minutes=MID_INTERVAL_MINUTES + STAGGER_MINUTES
     )
+
+
+async def test_a_parcel_the_delivered_list_leaves_out_still_fires_delivered(hass):
+    """The retention option limits the delivered sensors, never the events."""
+    recent = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
+    client = MagicMock()
+    client.async_fmp_delivery_window = AsyncMock(return_value=None)
+    client.async_get_parcel_detail = AsyncMock(return_value=None)
+    client.async_get_parcels = AsyncMock(
+        side_effect=[
+            {
+                "incomingShipments": [
+                    shipment_sample("PARCEL_HANDED", parcel_number=code)
+                    for code in ("A", "B")
+                ],
+                "sendingShipments": [],
+            },
+            {
+                "incomingShipments": [
+                    shipment_sample(
+                        "DELIVERED",
+                        parcel_number=code,
+                        event_dt=None,
+                        tz_id=None,
+                        delivery_date=recent,
+                    )
+                    for code in ("A", "B")
+                ],
+                "sendingShipments": [],
+            },
+        ]
+    )
+
+    coordinator = DpdCoordinator(hass, client, _mock_entry("parcels", 1))
+    await coordinator._async_update_data()
+
+    delivered = _capture(hass, "dpd_parcel_delivered")
+    result = await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert sorted(event.data["barcode"] for event in delivered) == ["A", "B"]
+    assert len(result["incoming_delivered"]) == 1
+
+
+async def test_a_delivered_parcel_the_filter_trims_fires_for_every_transport(hass):
+    """The retention filter runs after the fetchers, so each transport shares it."""
+
+    def parcel(barcode, status, delivered_at=None):
+        return {
+            "barcode": barcode,
+            "status": status,
+            "delivered": status == ParcelStatus.DELIVERED,
+            "delivered_at": delivered_at,
+            "planned_from": None,
+            "planned_to": None,
+        }
+
+    coordinator = DpdCoordinator(hass, MagicMock(), _mock_entry("parcels", 1))
+    fetched = [
+        (
+            [
+                parcel("A", ParcelStatus.IN_TRANSIT),
+                parcel("B", ParcelStatus.IN_TRANSIT),
+            ],
+            [],
+        ),
+        (
+            [
+                parcel("A", ParcelStatus.DELIVERED, "2026-10-30T10:00:00+00:00"),
+                parcel("B", ParcelStatus.DELIVERED, "2026-10-29T10:00:00+00:00"),
+            ],
+            [],
+        ),
+    ]
+    coordinator._async_fetch_general = AsyncMock(side_effect=fetched)
+    await coordinator._async_update_data()
+
+    delivered = _capture(hass, "dpd_parcel_delivered")
+    result = await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert sorted(event.data["barcode"] for event in delivered) == ["A", "B"]
+    assert [p["barcode"] for p in result["incoming_delivered"]] == ["A"]

@@ -265,6 +265,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         else:
             incoming_all, outgoing_all = await self._async_fetch_general()
 
+        # Events and remembered state cover every parcel; the retention option
+        # only limits what the delivered sensors show.
         self._fire_change_events(incoming_all)
         self._fire_outgoing_change_events(outgoing_all)
 
@@ -295,18 +297,23 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
 
         return {
             "incoming_active": incoming_active,
-            "incoming_delivered": [p for p in incoming_all if p["delivered"]],
+            "incoming_delivered": _apply_delivered_filter_canonical(
+                [p for p in incoming_all if p["delivered"]], self.config_entry
+            ),
             "outgoing_active": outgoing_active,
-            "outgoing_delivered": [p for p in outgoing_all if p["delivered"]],
+            "outgoing_delivered": _apply_delivered_filter_canonical(
+                [p for p in outgoing_all if p["delivered"]], self.config_entry
+            ),
         }
 
     async def _async_fetch_general(self) -> tuple[list[dict], list[dict]]:
         """Fetch + normalize the general/NL+BU backend, split active/delivered.
 
         Returns each bucket already sorted (active ascending on
-        ``planned_from``, delivered descending on ``delivered_at``) and with
-        the delivered-retention filter applied, matching what
-        ``_async_update_data`` expects from both fetch paths.
+        ``planned_from``, delivered descending on ``delivered_at``). Delivered
+        parcels are not trimmed here: ``_async_poll`` applies the retention
+        filter after the events fire. The raw filter below only decides which
+        delivered parcels are worth the detail/history enrichment requests.
         """
         assert self._client is not None
         try:
@@ -335,13 +342,11 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             await dt_util.async_get_time_zone(zone_name)
 
         incoming_active = filter_active_shipments(incoming)
-        incoming_delivered = self._apply_delivered_filter(
-            filter_delivered_shipments(incoming)
-        )
+        all_incoming_delivered = filter_delivered_shipments(incoming)
+        incoming_delivered = self._apply_delivered_filter(all_incoming_delivered)
         outgoing_active = filter_active_shipments(outgoing)
-        outgoing_delivered = self._apply_delivered_filter(
-            filter_delivered_shipments(outgoing)
-        )
+        all_outgoing_delivered = filter_delivered_shipments(outgoing)
+        outgoing_delivered = self._apply_delivered_filter(all_outgoing_delivered)
 
         await self._enrich_with_fmp(incoming_active)
         await self._enrich_detail_cache(
@@ -401,7 +406,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             "planned_from",
         )
         normalized_delivered = sort_parcels_by_ts(
-            [_normalize(p) for p in incoming_delivered],
+            [_normalize(p) for p in all_incoming_delivered],
             "delivered_at",
             descending=True,
         )
@@ -410,7 +415,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             "planned_from",
         )
         normalized_outgoing_delivered = sort_parcels_by_ts(
-            [_normalize(p) for p in outgoing_delivered],
+            [_normalize(p) for p in all_outgoing_delivered],
             "delivered_at",
             descending=True,
         )
@@ -445,17 +450,13 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             raise UpdateFailed(f"DPD Germany error: {err}") from err
 
         incoming_active = [p for p in incoming if not p["delivered"]]
-        incoming_delivered = _apply_delivered_filter_canonical(
-            [p for p in incoming if p["delivered"]], self.config_entry
-        )
+        incoming_delivered = [p for p in incoming if p["delivered"]]
         outgoing_active = [p for p in outgoing if not p["delivered"]]
-        outgoing_delivered = _apply_delivered_filter_canonical(
-            [p for p in outgoing if p["delivered"]], self.config_entry
-        )
+        outgoing_delivered = [p for p in outgoing if p["delivered"]]
 
         _LOGGER.debug(
-            "DPD Germany shipments fetched: %d incoming (%d active, %d delivered "
-            "shown), %d outgoing (%d active, %d delivered shown)",
+            "DPD Germany shipments fetched: %d incoming (%d active, %d delivered), "
+            "%d outgoing (%d active, %d delivered)",
             len(incoming),
             len(incoming_active),
             len(incoming_delivered),
@@ -532,9 +533,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             [p for p in normalized if not p["delivered"]], "planned_from"
         )
         incoming_delivered = sort_parcels_by_ts(
-            _apply_delivered_filter_canonical(
-                [p for p in normalized if p["delivered"]], self.config_entry
-            ),
+            [p for p in normalized if p["delivered"]],
             "delivered_at",
             descending=True,
         )
@@ -557,15 +556,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             for p in active
         ]
         incoming_delivered = sort_parcels_by_ts(
-            _apply_delivered_filter_canonical(
-                [
-                    normalize_parcel_uk(
-                        p, inactive=True, include_history=include_history
-                    )
-                    for p in inactive
-                ],
-                self.config_entry,
-            ),
+            [
+                normalize_parcel_uk(p, inactive=True, include_history=include_history)
+                for p in inactive
+            ],
             "delivered_at",
             descending=True,
         )
@@ -605,9 +599,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             [p for p in incoming if not p["delivered"]], "planned_from"
         )
         incoming_delivered = sort_parcels_by_ts(
-            _apply_delivered_filter_canonical(
-                [p for p in incoming if p["delivered"]], self.config_entry
-            ),
+            [p for p in incoming if p["delivered"]],
             "delivered_at",
             descending=True,
         )
@@ -615,9 +607,7 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             [p for p in outgoing if not p["delivered"]], "planned_from"
         )
         outgoing_delivered = sort_parcels_by_ts(
-            _apply_delivered_filter_canonical(
-                [p for p in outgoing if p["delivered"]], self.config_entry
-            ),
+            [p for p in outgoing if p["delivered"]],
             "delivered_at",
             descending=True,
         )
