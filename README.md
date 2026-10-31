@@ -202,6 +202,7 @@ their entity_ids carry the same account suffix:
 | `DPD (account) Delivered parcels` | Recently delivered incoming parcels (configurable window) |
 | `DPD (account) Outgoing parcels` | Number of active outgoing parcels |
 | `DPD (account) Outgoing delivered parcels` | Recently delivered outgoing parcels (same configurable window) |
+| `DPD (account) Deliveries` | Read-only calendar of expected deliveries, no extra API calls |
 | `DPD (account) Last update` | Diagnostic timestamp of the last successful poll — alert on this if the integration goes silently stale |
 
 A **`DPD (account) Deliveries`** calendar entity is also created, showing
