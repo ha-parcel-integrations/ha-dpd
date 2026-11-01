@@ -227,6 +227,18 @@ def test_the_window_uses_the_day_and_its_times():
     assert result["planned_to"] == "2026-07-01T10:30:00+01:00"
 
 
+def test_the_window_reads_a_day_month_year_date():
+    parcel = _active(
+        parcelStatusType=8,
+        estimatedDeliveryDate="01/07/2026",
+        estimatedDeliveryStartTime="07:00:00",
+        estimatedDeliveryEndTime="22:00:59",
+    )
+    result = normalize_parcel_uk(parcel, inactive=False)
+    assert result["planned_from"] == "2026-07-01T07:00:00+01:00"
+    assert result["planned_to"] == "2026-07-01T22:00:00+01:00"
+
+
 @pytest.mark.parametrize(
     ("start", "end"),
     [(None, None), ("00:00", "00:00"), ("10:00", "09:00"), ("25:00", "26:00"), (1, 2)],

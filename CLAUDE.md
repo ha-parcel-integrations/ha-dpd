@@ -193,9 +193,8 @@ Only the Firebase
 refresh token and a generated device id are stored, never the id token or the
 `dpdSession`. Tripwires: the claims upgrade (`consumerId`) is mandatory and a
 missing claim is its own reauth message; only a Firebase-confirmed rejection
-reaches reauth. Field names are confirmed on delivered parcels (2026-11-01), but
-no value has been seen, nor an active parcel, so it ships as a pre-release
-(`bN`). **The record's values reach us only through two routes, keep both
+reaches reauth. The delivered path is confirmed on real parcels (2026-11-01), but
+no active parcel has been seen, so it ships as a pre-release (`bN`). **The record's values reach us only through two routes, keep both
 open and free of PII:** diagnostics carry an allowlist of `raw`, never a
 redaction list, because most fields have only ever been null; and a field
 outside `countries/uk/fields.py` logs its name and type once, never a value.

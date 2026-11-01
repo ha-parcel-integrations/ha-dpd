@@ -90,7 +90,7 @@ CAPABILITIES_BY_VARIANT = {
     "Germany": frozenset({"weight", "url", "history"}),
     "Poland": frozenset({"delivery_window", "history"}),
     "Austria": frozenset({"history"}),
-    "United Kingdom (app)": frozenset(),
+    "United Kingdom (app)": frozenset({"weight"}),
     "Other": frozenset(
         {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
     ),
@@ -105,11 +105,11 @@ PENDING_CAPABILITIES_BY_VARIANT = {
     # populated at the out-for-delivery stage, and the pickup point comes
     # from a ParcelShop scan. Move them above once a parcel shows either.
     "Austria": frozenset({"delivery_window", "pickup_point"}),
-    # Field names are confirmed on delivered parcels, but no value has been
-    # seen, nor any active parcel. The window, weight and timeline are read
-    # from those names; no name for a pickup point is known yet.
+    # Delivered parcels confirm the status, delivery time and weight. The url's
+    # value stays out of diagnostics, the timeline has not been read yet, an
+    # active parcel has not been seen, and no name for a pickup point is known.
     "United Kingdom (app)": frozenset(
-        {"url", "history", "delivery_window", "pickup_point", "weight"}
+        {"url", "history", "delivery_window", "pickup_point"}
     ),
 }
 

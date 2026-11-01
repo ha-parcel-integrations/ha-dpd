@@ -105,8 +105,8 @@ sign-in route was used, never the link. When the sign-in lapses, Home Assistant 
 > parcels work on a real account, but a parcel on its way has not been seen yet.
 > The integration shows the status, the sender, the tracking link, the weight of a
 > single-parcel shipment, the expected delivery day and, with the history option
-> on, the timeline. The status of a parcel on its way and every date format still
-> await a real parcel. Please attach the integration's diagnostics to an issue, and
+> on, the timeline. Delivered parcels are confirmed; the status of a parcel on its
+> way and the timeline still await a real parcel. Please attach the integration's diagnostics to an issue, and
 > report any warning it logs: it lists field names and codes, never values. The
 > diagnostics keep the fields that describe the delivery and leave out everything
 > about you, including the address, the tracking number and DPD's status sentence.

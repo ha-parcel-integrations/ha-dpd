@@ -131,14 +131,25 @@ def _clock(value: Any) -> time | None:
         return None
 
 
+def _day(text: str) -> date | None:
+    """Read a day; DPD writes its dates both ISO and as day/month/year."""
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(text[:10], "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
 def _window(parcel: dict[str, Any]) -> tuple[str | None, str | None]:
     """The estimated day, narrowed by its times when they make a real range."""
     value = parcel.get("estimatedDeliveryDate")
     if not isinstance(value, str) or not value.strip():
         return None, None
-    try:
-        day = date.fromisoformat(value.strip()[:10])
-    except ValueError:
+    day = _day(value.strip())
+    if day is None:
         _warn_bad_date(value)
         return None, None
     start = _clock(parcel.get("estimatedDeliveryStartTime"))

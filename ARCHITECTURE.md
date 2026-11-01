@@ -347,8 +347,7 @@ Firebase refresh token and a generated device id are stored; the id token and
   `undelivered` → status type → sentence → newest mappable event → bucket. A
   pickup pass is checked before the delivered flag because the app excludes it
   from finished parcels: the flag can mean handed to the shop. The type table
-  comes from the app; a real parcel has only confirmed the field names, not the
-  numbers.
+  comes from the app; real parcels have only confirmed `2`, delivered.
 - **The bucket no longer files a parcel.** `active`/`inactive` only settles a
   type that says nothing. The coordinator splits on `delivered`, so a finished
   parcel with `undelivered` stays out of the delivered list.
@@ -367,8 +366,10 @@ Firebase refresh token and a generated device id are stored; the id token and
   filling in is what this surfaces, and a null or an int that turns into a float
   no longer counts as a new shape.
 
-The field names came from a tester's delivered parcels on 2026-11-01. No value
-has been seen and no active parcel, so it still ships as a pre-release.
+Three delivered parcels confirmed the delivered path on 2026-11-01: the status
+type, the delivery time and the weight. Dates come both ISO and as day/month/year,
+so the estimated day accepts either. No active parcel has been seen, so it still
+ships as a pre-release.
 
 ### Capabilities are per variant, not flat
 
@@ -382,7 +383,7 @@ because the transports genuinely populate different fields:
 | `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
-| `United Kingdom (app)` | `dimensions` | `url`, `history`, `delivery_window` and `weight` are implemented but pending a real value; `pickup_point` is pending a known field |
+| `United Kingdom (app)` | `dimensions` | `weight`; `url`, `history` and `delivery_window` are implemented but pending a real value; `pickup_point` is pending a known field |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so
