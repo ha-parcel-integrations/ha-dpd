@@ -193,12 +193,17 @@ Only the Firebase
 refresh token and a generated device id are stored, never the id token or the
 `dpdSession`. Tripwires: the claims upgrade (`consumerId`) is mandatory and a
 missing claim is its own reauth message; only a Firebase-confirmed rejection
-reaches reauth; no parcel object has been seen, so the normalizer is coarse
-(`ASSUMED` fields), diagnostics withhold `raw`/barcode/url, and it ships as a
-pre-release (`bN`) until a real parcel lands. **Diagnostics being closed makes
-the one-shot shape WARNING the only capture route**, so it logs nested field
-names and types — never a value, because the record carries the recipient —
-and must stay able to finish the normalizer from a single report.
+reaches reauth. Field names are confirmed on delivered parcels (2026-11-01), but
+no value has been seen, nor an active parcel, so it ships as a pre-release
+(`bN`). **The record's values reach us only through two routes, keep both
+open and free of PII:** diagnostics carry an allowlist of `raw`, never a
+redaction list, because most fields have only ever been null; and a field
+outside `countries/uk/fields.py` logs its name and type once, never a value.
+Status order is deliberate, see `map_parcel_status_uk`: a pickup pass beats
+`deliveredToConsumer`, which can mean handed to the shop. Status sentences and
+event texts can name a person or place, so neither is logged nor in
+diagnostics; history's `raw_status` is the event code. The pickup-pass codes
+never enter `raw`.
 
 **`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — five keys,
 `Germany` / `Poland` / `Austria` / `United Kingdom (app)` / `Other`, because the transports populate

@@ -31,7 +31,7 @@ custom_components/dpd/
     ├── de/              Germany: web-account session + page reader + status derivation + normalize
     ├── pl/              Poland: OAuth session + status derivation + normalize
     ├── at/              Austria: portal JWT session + stage derivation + normalize
-    └── uk/              UK MyDPD app: Firebase magic-link session + coarse normalize
+    └── uk/              UK MyDPD app: Firebase magic-link session + normalize
 ```
 
 Each `countries/` package owns a `normalize_parcel*` and a status mapper.
@@ -63,7 +63,7 @@ fetch path, and adding one does not change the shared code.
 | Germany | `DpdDeSession` (`countries/de/session.py`) | myDPD web account, cookie session | `map_parcel_status_de` | `normalize_parcel_de` |
 | Poland | `DpdPlSession` (`countries/pl/session.py`) | public-client OAuth + JSON | `map_parcel_status_pl` | `normalize_parcel_pl` |
 | Austria | `DpdAtSession` (`countries/at/session.py`) | portal JSON-RPC + Bearer JWT | `map_parcel_status_at` | `normalize_parcel_at` |
-| UK MyDPD app | `DpdUkSession` (`countries/uk/session.py`) | Firebase magic link + Bearer id token + `dpdSession` header | none yet (active/inactive bucket only) | `normalize_parcel_uk` |
+| UK MyDPD app | `DpdUkSession` (`countries/uk/session.py`) | Firebase magic link + Bearer id token + `dpdSession` header | `parcelStatusType` + flags, sentence and bucket as fallback | `normalize_parcel_uk` |
 
 ## Key design decisions
 
@@ -324,7 +324,7 @@ identifier the research had concluded did not exist. What is still unseen is a
 set of *cases* rather than a shape (stage 1, an active parcel, a pickup point,
 a failure, a return), so Austria ships as a pre-release.
 
-### UK MyDPD app: a Firebase account stack, payload still unseen
+### UK MyDPD app: a Firebase account stack, field names confirmed
 
 `countries/uk/` is routed like Germany and Austria (`_UK_APP_VALUE` in
 `config_flow.py`), not a `BUSINESS_UNITS` entry; the shared-backend `DPD-UK`
@@ -342,11 +342,33 @@ Firebase refresh token and a generated device id are stored; the id token and
   call is refused, so a missing claim ends in reauth with its own message.
 - **A refresh failure is reauth only when Firebase confirms a rejected token.**
   Anything else is a plain API error, never a push into reauth.
-- **The parcel object is unseen.** Only the active/inactive bucket sets the
-  status; unseen field names are marked `ASSUMED` and each new key set and
-  status word is logged once (names only). Diagnostics withhold `raw`, the
-  barcode and the url for this stack because its personal fields cannot be
-  listed by name yet. Ship it as a pre-release until a real parcel lands.
+- **Delivered and pickup come before the status type.** `map_parcel_status_uk`
+  resolves collected from the shop → pickup pass → `deliveredToConsumer` without
+  `undelivered` → status type → sentence → newest mappable event → bucket. A
+  pickup pass is checked before the delivered flag because the app excludes it
+  from finished parcels: the flag can mean handed to the shop. The type table
+  comes from the app; a real parcel has only confirmed the field names, not the
+  numbers.
+- **The bucket no longer files a parcel.** `active`/`inactive` only settles a
+  type that says nothing. The coordinator splits on `delivered`, so a finished
+  parcel with `undelivered` stays out of the delivered list.
+- **Timeline per parcel, on the history option.** The app's events route, read
+  once per `parcelCode` until the status moves, and best-effort: a failed read
+  is an empty timeline, only a credential rejection surfaces. The sentence sets
+  the event's `status`; `raw_status` is the event code, because the sentence
+  can name a person or a place.
+- **Diagnostics keep an allowlist of the record** (`_UK_RAW_ALLOWED`), not a
+  redaction list, because many fields have only ever been null and cannot be
+  judged by name. The barcode, url, sender and status sentence stay out too.
+- **The pickup-pass codes never enter `raw`** (`_PASS_FIELDS`), the contract's
+  exception for a code that opens something.
+- **Reports stay short.** `countries/uk/fields.py` holds every confirmed field
+  path; only a path outside it is logged, once, with its type. A null field
+  filling in is what this surfaces, and a null or an int that turns into a float
+  no longer counts as a new shape.
+
+The field names came from a tester's delivered parcels on 2026-11-01. No value
+has been seen and no active parcel, so it still ships as a pre-release.
 
 ### Capabilities are per variant, not flat
 
@@ -360,7 +382,7 @@ because the transports genuinely populate different fields:
 | `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
-| `United Kingdom (app)` | everything | nothing is confirmed; `url` is implemented but pending a real parcel |
+| `United Kingdom (app)` | `dimensions` | `url`, `history`, `delivery_window` and `weight` are implemented but pending a real value; `pickup_point` is pending a known field |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so

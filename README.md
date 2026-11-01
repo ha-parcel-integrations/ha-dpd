@@ -101,12 +101,15 @@ needs a finished DPD UK consumer profile. Only parcels you receive are read.
 Home Assistant keeps the sign-in refresh token, a generated device id and which
 sign-in route was used, never the link. When the sign-in lapses, Home Assistant asks for a new link.
 
-> **The UK MyDPD app source is a pre-release.** Signing in and reading the
-> parcel list work, but no real parcel has been seen yet, so a parcel shows only
-> as in progress or delivered, with its tracking number and link when DPD sends
-> them. The integration logs a warning listing the field names (never values)
-> and status words it meets — please report them; they are what makes the
-> mapping precise.
+> **The UK MyDPD app source is a pre-release.** Signing in and reading delivered
+> parcels work on a real account, but a parcel on its way has not been seen yet.
+> The integration shows the status, the sender, the tracking link, the weight of a
+> single-parcel shipment, the expected delivery day and, with the history option
+> on, the timeline. The status of a parcel on its way and every date format still
+> await a real parcel. Please attach the integration's diagnostics to an issue, and
+> report any warning it logs: it lists field names and codes, never values. The
+> diagnostics keep the fields that describe the delivery and leave out everything
+> about you, including the address, the tracking number and DPD's status sentence.
 
 For Germany, the integration signs in to your myDPD account and reads its
 parcel list: the Empfang, Versand and Retoure tabs. It shows the status, the

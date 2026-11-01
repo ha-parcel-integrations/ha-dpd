@@ -18,6 +18,7 @@ from custom_components.dpd.const import (
     CONF_DELIVERED_FILTER_AMOUNT,
     CONF_DELIVERED_FILTER_TYPE,
     CONF_DEVICE_ID,
+    CONF_INCLUDE_HISTORY,
     CONF_MAGIC_LINK,
     CONF_REFRESH_TOKEN,
     CONF_UK_LINK_SOURCE,
@@ -251,13 +252,123 @@ async def test_coordinator_failures(hass, error, expected):
         await _coordinator(hass, uk)._async_update_data()
 
 
-async def test_diagnostics_redacts_every_identifier_and_withholds_raw():
+async def test_coordinator_files_a_parcel_by_its_status_not_its_bucket(hass):
+    uk = MagicMock()
+    uk.async_get_parcels = AsyncMock(
+        return_value=(
+            [{"parcelNumber": "A", "deliveredToConsumer": True}],
+            [{"parcelNumber": "P", "parcelStatusType": 5}],
+        )
+    )
+    result = await _coordinator(hass, uk)._async_update_data()
+    assert [p["barcode"] for p in result["incoming_active"]] == ["P"]
+    assert [p["barcode"] for p in result["incoming_delivered"]] == ["A"]
+
+
+def _history_coordinator(hass, uk):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=ENTRY_DATA,
+        options={**DELIVERED, CONF_INCLUDE_HISTORY: True},
+    )
+    entry.add_to_hass(hass)
+    return DpdCoordinator(hass, None, entry, uk_session=uk)
+
+
+async def test_history_is_read_once_until_the_status_moves(hass):
+    parcel = {
+        "parcelNumber": "A",
+        "parcelCode": "A*1",
+        "parcelStatusType": 8,
+        "trackingStatusCurrent": "Your parcel is at our depot",
+    }
+    uk = MagicMock()
+    uk.async_get_parcels = AsyncMock(return_value=([parcel, {"parcelNumber": "B"}], []))
+    uk.async_get_parcel_events = AsyncMock(
+        return_value=[
+            {
+                "eventCode": "DPT",
+                "eventDate": "2026-07-01 08:00:00",
+                "eventText": "Your parcel is at our depot",
+            }
+        ]
+    )
+    coordinator = _history_coordinator(hass, uk)
+
+    result = await coordinator._async_update_data()
+    await coordinator._async_update_data()
+
+    uk.async_get_parcel_events.assert_awaited_once_with("A*1")
+    by_barcode = {p["barcode"]: p for p in result["incoming_active"]}
+    assert by_barcode["A"]["history"][0]["raw_status"] == "DPT"
+    assert by_barcode["B"]["history"] == []
+
+    uk.async_get_parcels.return_value = (
+        [{**parcel, "parcelStatusType": 6}, {"parcelNumber": "B"}],
+        [],
+    )
+    await coordinator._async_update_data()
+    assert uk.async_get_parcel_events.await_count == 2
+
+
+async def test_a_failed_history_read_leaves_an_empty_timeline(hass):
+    uk = MagicMock()
+    uk.async_get_parcels = AsyncMock(
+        return_value=([{"parcelCode": "A*1", "parcelNumber": "A"}], [])
+    )
+    uk.async_get_parcel_events = AsyncMock(return_value=None)
+    result = await _history_coordinator(hass, uk)._async_update_data()
+    assert result["incoming_active"][0]["history"] == []
+
+
+async def test_history_off_never_asks_for_events(hass):
+    uk = MagicMock()
+    uk.async_get_parcels = AsyncMock(
+        return_value=([{"parcelCode": "A*1", "parcelNumber": "A"}], [])
+    )
+    uk.async_get_parcel_events = AsyncMock()
+    result = await _coordinator(hass, uk)._async_update_data()
+    uk.async_get_parcel_events.assert_not_awaited()
+    assert result["incoming_active"][0]["history"] is None
+
+
+async def test_a_rejected_history_read_needs_reauth(hass):
+    uk = MagicMock()
+    uk.async_get_parcels = AsyncMock(
+        return_value=([{"parcelCode": "A*1", "parcelNumber": "A"}], [])
+    )
+    uk.async_get_parcel_events = AsyncMock(side_effect=DpdAuthError("x"))
+    with pytest.raises(ConfigEntryAuthFailed):
+        await _history_coordinator(hass, uk)._async_update_data()
+
+
+async def test_diagnostics_keeps_only_the_allowlisted_fields_of_the_record():
     coordinator = MagicMock()
     parcel = {
         "barcode": "P1",
+        "sender": "Sender Shop",
         "url": "https://track.dpd.co.uk/parcels/P1*001",
         "status": "in_transit",
-        "raw": {"recipientName": "Jane Doe", "anything": "private"},
+        "raw_status": "Left with your neighbour at 3 Example Road",
+        "planned_from": "2026-07-01T09:30:00+01:00",
+        "history": [{"timestamp": "2026-07-01T08:00:00+01:00", "raw_status": "OFD"}],
+        "raw": {
+            "parcelStatusType": 6,
+            "undelivered": False,
+            "estimatedDeliveryStartTime": "09:30",
+            "outForDeliveryDetails": {"outForDeliveryDate": ["2026-07-01"]},
+            "deliveryDetails": {
+                "totalWeight": 2,
+                "podDetails": {"podDate": "2026-07-01 08:15:00", "podName": "J DOE"},
+                "address": {"street": "1 Example Road", "postcode": "AB1 2CD"},
+                "notificationDetails": {"email": "jane@example.invalid"},
+            },
+            "issueDetails": {"issueCode": "I1", "note": "Call Jane"},
+            "pickupType": {"unexpected": "object"},
+            "shipperDetails": {"accountNumber": "ACC1", "customerDisplayName": "S"},
+            "recipientName": "Jane Doe",
+            "somethingNew": "private",
+        },
     }
     coordinator.data = {"incoming_active": [parcel]}
     coordinator.update_interval = None
@@ -280,11 +391,33 @@ async def test_diagnostics_redacts_every_identifier_and_withholds_raw():
         "dev-1",
         "c-1",
         "Jane Doe",
+        "J DOE",
+        "Call Jane",
+        "jane@example.invalid",
+        "Example Road",
+        "AB1 2CD",
+        "ACC1",
         "private",
+        "unexpected",
+        "Sender Shop",
         "P1",
     ):
         assert secret not in text
-    assert result["incoming_active"][0]["status"] == "in_transit"
+    shown = result["incoming_active"][0]
+    assert shown["status"] == "in_transit"
+    assert shown["planned_from"] == "2026-07-01T09:30:00+01:00"
+    assert shown["history"][0]["raw_status"] == "OFD"
+    assert shown["raw"] == {
+        "parcelStatusType": 6,
+        "undelivered": False,
+        "estimatedDeliveryStartTime": "09:30",
+        "outForDeliveryDetails": {"outForDeliveryDate": ["2026-07-01"]},
+        "deliveryDetails": {
+            "totalWeight": 2,
+            "podDetails": {"podDate": "2026-07-01 08:15:00"},
+        },
+        "issueDetails": {"issueCode": "I1"},
+    }
 
 
 async def test_flow_website_link_needs_no_email_and_stores_its_source(hass):

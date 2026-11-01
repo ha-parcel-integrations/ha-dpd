@@ -334,7 +334,12 @@ class DpdUkSession:
             await self._ensure_id_token()
             await self._mint_dpd_session()
 
-    async def _async_get(self, bucket: str) -> list[dict[str, Any]]:
+    async def _async_get(
+        self,
+        path: str,
+        label: str,
+        params: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         async with self._lock:
             await self._ensure_id_token()
             if self._dpd_session is None:
@@ -342,12 +347,12 @@ class DpdUkSession:
             for attempt in range(2):
                 url = (
                     f"{DPD_UK_API_HOST}{DPD_UK_DATA_PREFIX}/consumers/"
-                    f"{self.consumer_id}/parcels/{bucket}"
+                    f"{self.consumer_id}/parcels/{path}"
                 )
                 status, body = await self._json(
                     "GET",
                     url,
-                    params={"userType": "R"},
+                    params=params,
                     headers={
                         "Authorization": f"Bearer {self._id_token}",
                         "dpdSession": self._dpd_session or "",
@@ -367,13 +372,13 @@ class DpdUkSession:
                 if status == 401:
                     raise DpdAuthError("DPD UK rejected the refreshed credentials")
                 if status == 403:
-                    self._warn_refused(bucket)
+                    self._warn_refused(label)
                     raise DpdApiError(status)
                 if status >= 300:
                     raise DpdApiError(status)
                 data = body.get("data") if isinstance(body, dict) else None
                 if not isinstance(data, list):
-                    self._warn_refused(f"{bucket}-shape")
+                    self._warn_refused(f"{label}-shape")
                     raise DpdApiError(status)
                 return [item for item in data if isinstance(item, dict)]
         raise DpdApiError(403)  # pragma: no cover - the loop always returns/raises
@@ -393,6 +398,19 @@ class DpdUkSession:
         self,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Return the received parcels as ``(active, inactive)``."""
-        active = await self._async_get("active")
-        inactive = await self._async_get("inactive")
+        active = await self._async_get("active", "active", {"userType": "R"})
+        inactive = await self._async_get("inactive", "inactive", {"userType": "R"})
         return active, inactive
+
+    async def async_get_parcel_events(
+        self, parcel_code: str
+    ) -> list[dict[str, Any]] | None:
+        """Return one parcel's events, or ``None`` when they cannot be read.
+
+        Best-effort: a missing timeline never fails the poll, only a confirmed
+        credential rejection still surfaces.
+        """
+        try:
+            return await self._async_get(f"{parcel_code}/events", "events")
+        except (DpdApiError, aiohttp.ClientError, TimeoutError):
+            return None

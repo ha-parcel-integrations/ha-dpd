@@ -38,7 +38,7 @@ from .countries.de import async_get_all_parcels_de
 from .countries.de.session import DpdDeSession
 from .countries.pl import normalize_parcel_pl
 from .countries.pl.session import DpdPlSession
-from .countries.uk import normalize_parcel_uk
+from .countries.uk import build_history_uk, normalize_parcel_uk
 from .countries.uk.session import DpdUkSession
 from .parcels import (
     _apply_delivered_filter,
@@ -197,6 +197,8 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # successful (or failed) lookup per barcode is cached for the
         # integration's lifetime, never refetched.
         self._uk_tracking_cache: dict[str, str | None] = {}
+        # parcelCode -> (what the status last read, its timeline). UK app only.
+        self._uk_history_cache: dict[str, tuple[tuple, list[dict]]] = {}
         # Cached device id for this account, attached to every fired event so
         # device-trigger automations can filter to a specific DPD account.
         # ``None`` until the device exists (i.e. the sensors are set up).
@@ -544,26 +546,52 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         assert self._uk_session is not None
         try:
             active, inactive = await self._uk_session.async_get_parcels()
+            normalized = [
+                normalize_parcel_uk(
+                    parcel,
+                    inactive=is_inactive,
+                    history=await self._uk_history(parcel),
+                )
+                for parcels, is_inactive in ((active, False), (inactive, True))
+                for parcel in parcels
+            ]
         except DpdAuthError as err:
             _LOGGER.error("DPD UK authentication failed: %s", err)
             raise ConfigEntryAuthFailed("DPD UK authentication failed") from err
         except DpdApiError as err:
             raise UpdateFailed(f"DPD UK error: {err}") from err
 
-        include_history = self._include_history
-        incoming_active = [
-            normalize_parcel_uk(p, inactive=False, include_history=include_history)
-            for p in active
-        ]
+        incoming_active = sort_parcels_by_ts(
+            [p for p in normalized if not p["delivered"]], "planned_from"
+        )
         incoming_delivered = sort_parcels_by_ts(
-            [
-                normalize_parcel_uk(p, inactive=True, include_history=include_history)
-                for p in inactive
-            ],
+            [p for p in normalized if p["delivered"]],
             "delivered_at",
             descending=True,
         )
         return incoming_active + incoming_delivered, []
+
+    async def _uk_history(self, parcel: dict) -> list[dict] | None:
+        """Read a UK parcel's timeline when the history option is on.
+
+        One request per parcel, repeated only once its status has moved, the
+        same rule as the general backend's detail cache. A failed read is kept
+        as an empty timeline until then.
+        """
+        assert self._uk_session is not None
+        if not self._include_history:
+            return None
+        code = parcel.get("parcelCode")
+        if not isinstance(code, str) or not code:
+            return []
+        moved = (parcel.get("parcelStatusType"), parcel.get("trackingStatusCurrent"))
+        cached = self._uk_history_cache.get(code)
+        if cached is not None and cached[0] == moved:
+            return cached[1]
+        events = await self._uk_session.async_get_parcel_events(code)
+        history = build_history_uk(events or [])
+        self._uk_history_cache[code] = (moved, history)
+        return history
 
     async def _async_fetch_at(self) -> tuple[list[dict], list[dict]]:
         """Fetch + normalize DPD Austria's mydpd.at inbox.

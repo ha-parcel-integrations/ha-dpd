@@ -608,3 +608,53 @@ async def test_a_website_entry_refreshes_with_the_web_key_and_never_upgrades():
     assert fake.calls[0][2]["params"] == {"key": DPD_UK_WEB_FIREBASE_API_KEY}
     assert fake.calls[0][2]["headers"] == {}
     assert fake.count("refreshUserClaims") == 0
+
+
+async def test_parcel_events_use_the_parcel_code_without_a_user_type():
+    events = [{"eventDate": "2026-07-01 08:00:00"}, "not-a-record"]
+    fake = Fake(
+        logged_in_routes(**{"parcels/P*1/events": [resp(200, {"data": events})]})
+    )
+    uk = DpdUkSession(fake, "rt", "dev")
+
+    assert await uk.async_get_parcel_events("P*1") == events[:1]
+
+    _, url, kwargs = fake.calls[-1]
+    assert url.endswith("/v1.5/consumers/c-1/parcels/P*1/events")
+    assert kwargs["params"] is None
+    assert kwargs["headers"]["dpdSession"] == "ds1"
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [resp(500), resp(404, {"error": "x"}), resp(200, {"data": None}), resp(403, {})],
+)
+async def test_unreadable_parcel_events_never_fail_the_poll(answer):
+    fake = Fake(logged_in_routes(**{"parcels/P*1/events": [answer]}))
+    uk = DpdUkSession(fake, "rt", "dev")
+    assert await uk.async_get_parcel_events("P*1") is None
+
+
+async def test_a_transport_error_on_parcel_events_never_fails_the_poll():
+    uk = DpdUkSession(Fake(logged_in_routes()), "rt", "dev")
+    uk._ensure_id_token = AsyncMock()
+    uk._dpd_session = "s"
+    uk._json = AsyncMock(side_effect=aiohttp.ClientError())
+    assert await uk.async_get_parcel_events("P*1") is None
+
+
+async def test_rejected_credentials_on_parcel_events_still_surface():
+    fake = Fake(
+        logged_in_routes(
+            **{
+                "securetoken": [
+                    resp(200, firebase(WITH_CLAIM, "rt-new")),
+                    resp(200, firebase(WITH_CLAIM, "rt-new")),
+                ],
+                "parcels/P*1/events": [resp(401, {}), resp(401, {})],
+            }
+        )
+    )
+    uk = DpdUkSession(fake, "rt", "dev")
+    with pytest.raises(DpdAuthError):
+        await uk.async_get_parcel_events("P*1")

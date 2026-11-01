@@ -105,8 +105,9 @@ PENDING_CAPABILITIES_BY_VARIANT = {
     # populated at the out-for-delivery stage, and the pickup point comes
     # from a ParcelShop scan. Move them above once a parcel shows either.
     "Austria": frozenset({"delivery_window", "pickup_point"}),
-    # Nothing but the coarse active/inactive state is mapped: no parcel
-    # object has been seen yet, so every field below awaits a real parcel.
+    # Field names are confirmed on delivered parcels, but no value has been
+    # seen, nor any active parcel. The window, weight and timeline are read
+    # from those names; no name for a pickup point is known yet.
     "United Kingdom (app)": frozenset(
         {"url", "history", "delivery_window", "pickup_point", "weight"}
     ),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
@@ -122,20 +122,104 @@ TO_REDACT = {
 }
 
 
+# The fields of a UK record that say how DPD reports a parcel and nothing about
+# who it is for. An allowlist, because a field that has only ever been null
+# cannot be judged by its name, and the record carries the recipient.
+_UK_RAW_ALLOWED = (
+    "businessUnit",
+    "canCollectParcel",
+    "collectedFromShop",
+    "collectionDate",
+    "customerTargetDate",
+    "deliveredToConsumer",
+    "deliveryAttempts",
+    "deliveryBusinessUnit",
+    "deliveryDetails.numberOfParcels",
+    "deliveryDetails.podDetails.podDate",
+    "deliveryDetails.podDetails.podSafePlaceCode",
+    "deliveryDetails.totalWeight",
+    "deliveryDetails.verifiedWeight",
+    "depotTargetDate",
+    "estimatedDeliveryActionCode",
+    "estimatedDeliveryDate",
+    "estimatedDeliveryEndTime",
+    "estimatedDeliveryStartTime",
+    "etaEtaTime",
+    "invoiceDate",
+    "issueDetails.issueCode",
+    "issueDetails.issueDelayDays",
+    "ivrStatusCode",
+    "labelSentMethod",
+    "lastConfirmDate",
+    "lastInstructionDate",
+    "messageActionCode",
+    "messageResponseCode",
+    "nextSteps.code",
+    "outForDeliveryDetails.mapAvailable",
+    "outForDeliveryDetails.outForDeliveryDate",
+    "outOfHomeType",
+    "parcelStatusType",
+    "parcelTypeName",
+    "pickupAvailable",
+    "pickupStatus",
+    "pickupType",
+    "product.productCode",
+    "product.productDescription",
+    "service.serviceCode",
+    "service.serviceDescription",
+    "serviceEndTime",
+    "shipmentDate",
+    "transferToAgent",
+    "undelivered",
+)
+
+
+def _uk_safe_raw(raw: Any) -> dict[str, Any]:
+    """Copy only the allowlisted fields of a UK record."""
+    safe: dict[str, Any] = {}
+    for path in _UK_RAW_ALLOWED:
+        parts = path.split(".")
+        node = raw
+        for part in parts:
+            if not isinstance(node, dict) or part not in node:
+                break
+            node = node[part]
+        else:
+            # An allowlisted name holding an object is no longer the field
+            # that was judged.
+            if not isinstance(node, dict):
+                target = safe
+                for part in parts[:-1]:
+                    target = target.setdefault(part, {})
+                target[parts[-1]] = node
+    return safe
+
+
+def _uk_parcel(parcel: dict[str, Any]) -> dict[str, Any]:
+    """Make one UK parcel safe; its status sentence can name a place or person."""
+    return {
+        **parcel,
+        "barcode": REDACTED,
+        "url": REDACTED,
+        "raw_status": REDACTED,
+        "raw": _uk_safe_raw(parcel.get("raw")),
+    }
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: DpdConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a DPD config entry."""
     coordinator = entry.runtime_data.coordinator
     data = coordinator.data or {}
-    redact = set(TO_REDACT)
     if entry.data.get(CONF_COUNTRY) == COUNTRY_UK.upper():
-        # The UK parcel object is unseen, so its personal fields cannot be
-        # listed by name; the full record stays out of diagnostics instead.
-        redact |= {"raw", "barcode", "url"}
+        data = {
+            key: [_uk_parcel(parcel) for parcel in parcels]
+            for key, parcels in data.items()
+        }
 
     return {
-        "entry_data": async_redact_data(dict(entry.data), redact),
+        "entry_data": async_redact_data(dict(entry.data), TO_REDACT),
         "entry_options": dict(entry.options),
         "last_update_success": coordinator.last_update_success,
         "counts": {
@@ -152,12 +236,16 @@ async def async_get_config_entry_diagnostics(
                 else None
             ),
         },
-        "incoming_active": async_redact_data(data.get("incoming_active", []), redact),
-        "incoming_delivered": async_redact_data(
-            data.get("incoming_delivered", []), redact
+        "incoming_active": async_redact_data(
+            data.get("incoming_active", []), TO_REDACT
         ),
-        "outgoing_active": async_redact_data(data.get("outgoing_active", []), redact),
+        "incoming_delivered": async_redact_data(
+            data.get("incoming_delivered", []), TO_REDACT
+        ),
+        "outgoing_active": async_redact_data(
+            data.get("outgoing_active", []), TO_REDACT
+        ),
         "outgoing_delivered": async_redact_data(
-            data.get("outgoing_delivered", []), redact
+            data.get("outgoing_delivered", []), TO_REDACT
         ),
     }

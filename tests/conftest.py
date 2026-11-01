@@ -44,7 +44,9 @@ def reset_one_shot_warnings():
     at._SEEN_REASONS.clear()
     at._BAD_TIMESTAMPS.clear()
     at._UNEXPECTED_SHAPES.clear()
-    uk_normalize._SEEN_SHAPES.clear()
+    uk_normalize._SEEN_FIELDS.clear()
+    uk_normalize._UNMAPPED_EVENTS.clear()
+    uk_normalize._BAD_DATES.clear()
     uk_normalize._UNMAPPED_STATUSES.clear()
     uk_session._REFUSALS_LOGGED.clear()
 
