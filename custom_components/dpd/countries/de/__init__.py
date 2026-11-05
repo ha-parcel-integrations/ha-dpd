@@ -74,6 +74,7 @@ _KNOWN_SLOT_TEXTS = frozenset(
 )
 _DAY_MONTH = re.compile(r"^(\d{1,2})\.(\d{1,2})\.$")
 _DAY_MONTH_IN_TEXT = re.compile(r"\d{1,2}\.\d{1,2}\.")
+_SENTENCE_DAY = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})?")
 _TIME_OF_DAY = re.compile(r"\d{1,2}:\d{2}")
 _WEIGHT = re.compile(r"^\d+(?:[.,]\d+)?$")
 
@@ -212,6 +213,19 @@ def _infer_dates(slots: list[dict[str, str]], today: date) -> list[date | None]:
     return inferred
 
 
+def _sentence_day(sentence: str, today: date) -> date | None:
+    """The day a list sentence names: ``Geliefert am: 09.10.`` or ``- 29.10.2026``."""
+    match = _SENTENCE_DAY.search(sentence)
+    if match is None:
+        return None
+    if match.group(3) is None:
+        return _infer_dates([{"date": f"{match.group(1)}.{match.group(2)}."}], today)[0]
+    try:
+        return date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+    except ValueError:
+        return None
+
+
 def _midnight(day: date | None) -> str | None:
     if day is None:
         return None
@@ -342,8 +356,17 @@ def normalize_parcel_de(
     )
     _collect(parcel, status)
 
-    days = dict(zip(SLOTS, _infer_dates(slots, today) if slots else [], strict=False))
+    days = dict(
+        zip(
+            SLOTS,
+            _infer_dates(history_slots, today) if history_slots else [],
+            strict=False,
+        )
+    )
     delivered = status is ParcelStatus.DELIVERED
+    delivered_day = days.get("Delivered")
+    if delivered and delivered_day is None:
+        delivered_day = _sentence_day(parcel["status_sentence"], today)
     out_for_delivery = status is ParcelStatus.OUT_FOR_DELIVERY
     barcode = parcel["barcode"]
     weight_text = detail["weight_text"] if detail else ""
@@ -356,7 +379,7 @@ def normalize_parcel_de(
         "status": status,
         "raw_status": parcel["status_sentence"],
         "delivered": delivered,
-        "delivered_at": _midnight(days.get("Delivered")) if delivered else None,
+        "delivered_at": _midnight(delivered_day) if delivered else None,
         "planned_from": _midnight(days.get("CarLoad")) if out_for_delivery else None,
         "planned_to": _end_of_day(days.get("CarLoad")) if out_for_delivery else None,
         "pickup": status is ParcelStatus.AT_PICKUP_POINT,

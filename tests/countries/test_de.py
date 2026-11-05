@@ -350,6 +350,36 @@ def test_delivered_by_icon_has_no_delivery_day():
     assert result["delivered_at"] is None
 
 
+def test_delivered_at_from_the_sentence_when_no_panel_was_read():
+    result = normalize_parcel_de(
+        _parcel("Paket zugestellt - Geliefert am: 18.10.", 6), today=TODAY
+    )
+    assert result["delivered"] is True
+    assert result["delivered_at"] == "2026-10-18T00:00:00+02:00"
+
+
+def test_delivered_at_from_a_sentence_with_a_full_year():
+    slots = _slots(("", ""), ("", ""), ("", ""), ("", ""), ("", ""))
+    result = normalize_parcel_de(
+        _parcel("Paket zugestellt - 29.10.2026", 6, slots), today=TODAY
+    )
+    assert result["delivered_at"] == "2026-10-29T00:00:00+01:00"
+
+
+def test_delivered_at_from_the_stale_panel_when_no_fresh_one():
+    stale = {
+        "slots": _slots(
+            (_START, "15.10."),
+            (_ROAD, "16.10."),
+            (_DEPOT, "17.10."),
+            (_CAR, "18.10."),
+            (_DONE, "19.10."),
+        )
+    }
+    result = normalize_parcel_de(_parcel("Geliefert", 6, stale=stale), today=TODAY)
+    assert result["delivered_at"] == "2026-10-19T00:00:00+02:00"
+
+
 def test_the_contract_fields():
     slots = _slots((_START, "18.10."))
     result = normalize_parcel_de(
