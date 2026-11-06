@@ -5,6 +5,15 @@ labels: ["enhancement"]
 assignees:
   - peter-mdf
 body:
+  - type: input
+    id: country
+    attributes:
+      label: Which country is this about?
+      description: The country you picked during setup. Leave blank if this applies to every country.
+      placeholder: "e.g. Germany"
+    validations:
+      required: false
+
   - type: textarea
     id: feature
     attributes:

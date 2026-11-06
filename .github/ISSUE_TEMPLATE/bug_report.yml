@@ -28,6 +28,15 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: country
+    attributes:
+      label: Which country did you pick during setup?
+      description: The country you picked during setup, shown on the integration's entry under Settings → Devices & services → DPD & BRT Italy.
+      placeholder: "e.g. Germany"
+    validations:
+      required: true
+
   - type: textarea
     id: what-happened
     attributes:
