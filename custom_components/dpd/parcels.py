@@ -42,6 +42,7 @@ from .countries.general import (
     map_parcel_status,
     normalize_parcel,
     shipment_delivery_dt,
+    shipment_from_detail,
     shipment_planned_dt,
     shipment_planned_window,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "planned_for_status",
     "planned_window",
     "shipment_delivery_dt",
+    "shipment_from_detail",
     "shipment_planned_dt",
     "shipment_planned_window",
     "sort_parcels_by_ts",
