@@ -37,7 +37,8 @@ this integration answers to both names there.
 ## Features
 
 - Incoming and outgoing active-parcel count sensors
-- Per-parcel sensor per active incoming shipment, with full status details as attributes
+- Per-parcel sensor per active incoming parcel, with full status details as attributes
+- Each box of a multi-box incoming shipment gets its own sensor, not only the one DPD's parcel list shows (countries on DPD's shared myDPD backend)
 - Optional per-parcel status history timeline (opt-in; off by default)
 - Configurable delivered-parcels sensor (last N days, or N most recent)
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
@@ -198,7 +199,7 @@ their entity_ids carry the same account suffix:
 | Friendly name pattern | Description |
 |---|---|
 | `DPD (account) Incoming parcels` | Number of active incoming parcels |
-| `DPD (account) Parcel <barcode>` | Canonical status of a single incoming shipment |
+| `DPD (account) Parcel <barcode>` | Canonical status of a single incoming parcel |
 | `DPD (account) Next delivery` | Earliest expected delivery datetime |
 | `DPD (account) En route to ParcelShop` | Active incoming parcels still in transit to a DPD ParcelShop |
 | `DPD (account) Awaiting pickup` | Parcels that have arrived at a ParcelShop and are ready to collect |
@@ -234,7 +235,7 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `weight` | float \| null | Parcel weight in kilograms |
 | `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` where `text` is a pre-formatted `"L x W x H cm"` string |
 | `history` | list \| null | Ordered status timeline (oldest → newest), each entry `{timestamp, status, raw_status}`, capped to the most recent 20. `null` unless the **Parcel history** option is enabled — see [Options](#options). |
-| `raw` | dict | The original DPD API payload |
+| `raw` | dict | The original DPD API payload (for the other boxes of a multi-box shipment: the parcel-list fields, taken from their own detail) |
 
 ## Parcel status reference
 

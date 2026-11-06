@@ -220,6 +220,15 @@ cleanup is scoped to `domain == "sensor"` (else it deletes the refresh button)
 and every non-parcel `{entry_id}_*` sensor **must** be listed in
 `non_parcel_unique_ids`.
 
+**Multi-parcel shipments** (general path, incoming) — the parcels list has
+one entry per shipment; the other parcels come from the detail call's parcel
+list (`_async_get_siblings`, see *Multi-parcel shipments* in
+[`ARCHITECTURE.md`](ARCHITECTURE.md)). Two tripwires: siblings join the raw
+list **before** normalization, never as a separate path downstream, or they
+miss events, retention and the delivered list; and a sibling's record is built
+from the list's own keys only (`shipment_from_detail`), never the whole detail
+answer, which carries both parties' addresses and phone numbers.
+
 ## Planned / skipped
 
 - **Planned (next major)**: exception translations (`UpdateFailed` f-strings →
