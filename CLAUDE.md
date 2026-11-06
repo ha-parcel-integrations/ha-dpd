@@ -202,7 +202,9 @@ Status order is deliberate, see `map_parcel_status_uk`: a pickup pass beats
 `deliveredToConsumer`, which can mean handed to the shop. Status sentences and
 event texts can name a person or place, so neither is logged nor in
 diagnostics; history's `raw_status` is the event code. The pickup-pass codes
-never enter `raw`.
+and the tracking short code never enter `raw`. The barcode is the 14 digits
+before the `*` of `parcelCode`, not the spaced `parcelNumber`, so it matches the
+shared `DPD-UK` route and the aggregator's deduplication.
 
 **`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — five keys,
 `Germany` / `Poland` / `Austria` / `United Kingdom (app)` / `Other`, because the transports populate

@@ -50,8 +50,11 @@ _WORDING = (
     ("sortation facility", ParcelStatus.IN_TRANSIT),
     ("in transit", ParcelStatus.IN_TRANSIT),
 )
-# These open a pickup-point locker or counter, so they never reach ``raw``.
-_PASS_FIELDS = frozenset({"collectionCode", "collectionCodeDisplay"})
+# These open something -- a pickup-point counter, or the parcel's tracking
+# without a sign-in -- so they never reach ``raw``.
+_PASS_FIELDS = frozenset(
+    {"collectionCode", "collectionCodeDisplay", "consumerTrackingShortCode"}
+)
 
 
 def _field_types(value: Any, prefix: str = "", depth: int = 0) -> dict[str, str]:
@@ -281,6 +284,23 @@ def _delivered_at(parcel: dict[str, Any]) -> str | None:
     return _timestamp(pod_date or parcel.get("lastConfirmDate"))
 
 
+def _barcode(parcel: dict[str, Any]) -> str | None:
+    """The 14-digit parcel number, as the shared DPD UK route reports it.
+
+    This backend spaces the number out and appends a check character, so the
+    same parcel would otherwise not match itself across the two UK routes.
+    """
+    code = parcel.get("parcelCode")
+    head = code.split("*", 1)[0] if isinstance(code, str) else ""
+    if len(head) == 14 and head.isdigit():
+        return head
+    number = parcel.get("parcelNumber")
+    compact = "".join(number.split()) if isinstance(number, str) else ""
+    if len(compact) == 15 and compact[:14].isdigit():
+        return compact[:14]
+    return compact or None
+
+
 def normalize_parcel_uk(
     parcel: dict[str, Any],
     *,
@@ -289,7 +309,6 @@ def normalize_parcel_uk(
 ) -> dict[str, Any]:
     """Normalize one received-parcel record from the UK app backend."""
     _warn_new_fields(parcel)
-    barcode = parcel.get("parcelNumber")
     code = parcel.get("parcelCode")
     status = map_parcel_status_uk(parcel, inactive=inactive, history=history)
     delivered = status is ParcelStatus.DELIVERED
@@ -297,7 +316,7 @@ def normalize_parcel_uk(
     text = parcel.get("trackingStatusCurrent")
     return {
         "carrier": "DPD",
-        "barcode": barcode if isinstance(barcode, str) and barcode else None,
+        "barcode": _barcode(parcel),
         "sender": _sender(parcel),
         "receiver": None,
         "status": status,

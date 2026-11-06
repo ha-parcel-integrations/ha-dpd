@@ -13,8 +13,9 @@ from custom_components.dpd.countries.uk import (
 
 # Synthetic: the names and types of a real delivered record, no real value.
 DELIVERED = {
-    "parcelNumber": "15501234567890",
+    "parcelNumber": "1550 1234 567 890 P",
     "parcelCode": "15501234567890*001",
+    "consumerTrackingShortCode": "abc123XYZ",
     "consignmentNumber": "1234567890",
     "parcelStatusType": 2,
     "ivrStatusCode": "1",
@@ -69,12 +70,14 @@ def test_a_delivered_record_fills_the_canonical_fields():
     assert parcel["history"] is None
 
 
-def test_raw_keeps_the_record_but_never_a_pickup_pass_code():
+def test_raw_keeps_the_record_but_never_a_code_that_opens_something():
     parcel = {**DELIVERED, "collectionCode": "123456", "collectionCodeDisplay": "12 34"}
     raw = normalize_parcel_uk(parcel, inactive=True)["raw"]
 
     assert "collectionCode" not in raw
     assert "collectionCodeDisplay" not in raw
+    assert "consumerTrackingShortCode" not in raw
+    assert raw["parcelNumber"] == "1550 1234 567 890 P"
     assert raw["deliveryDetails"] == DELIVERED["deliveryDetails"]
 
 
@@ -282,6 +285,22 @@ def test_weight_is_only_read_for_a_single_parcel(details, expected):
 )
 def test_a_pickup_parcel_is_flagged(over):
     assert normalize_parcel_uk(_active(**over), inactive=False)["pickup"] is True
+
+
+@pytest.mark.parametrize(
+    ("number", "code", "barcode"),
+    [
+        ("1550 1234 567 890 P", "15501234567890*001", "15501234567890"),
+        ("1550 1234 567 890 P", None, "15501234567890"),
+        ("1550 1234 567 890 7", "garbled", "15501234567890"),
+        ("15501234567890", None, "15501234567890"),
+        ("AB 12", None, "AB12"),
+        ("   ", None, None),
+    ],
+)
+def test_the_barcode_is_the_bare_parcel_number(number, code, barcode):
+    parcel = {"parcelNumber": number, "parcelCode": code, "parcelStatusType": 0}
+    assert normalize_parcel_uk(parcel, inactive=False)["barcode"] == barcode
 
 
 def test_missing_identifiers_leave_barcode_url_and_sender_unset():

@@ -359,7 +359,13 @@ Firebase refresh token and a generated device id are stored; the id token and
 - **Diagnostics keep an allowlist of the record** (`_UK_RAW_ALLOWED`), not a
   redaction list, because many fields have only ever been null and cannot be
   judged by name. The barcode, url, sender and status sentence stay out too.
-- **The pickup-pass codes never enter `raw`** (`_PASS_FIELDS`), the contract's
+- **The barcode is the 14-digit parcel number.** This backend's `parcelNumber` is
+  spaced out with a check character; `_barcode` takes the digits before the `*`
+  of `parcelCode` instead, so a parcel matches the shared `DPD-UK` route's
+  barcode and the aggregator, which deduplicates on it, sees one parcel.
+- **The pickup-pass codes and the tracking short code never enter `raw`**
+  (`_PASS_FIELDS`): the short code is assumed to open the parcel's tracking
+  without a sign-in. Both fall under the contract's
   exception for a code that opens something.
 - **Reports stay short.** `countries/uk/fields.py` holds every confirmed field
   path; only a path outside it is logged, once, with its type. A null field
@@ -383,7 +389,7 @@ because the transports genuinely populate different fields:
 | `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
 | `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
-| `United Kingdom (app)` | `dimensions` | `weight`; `url`, `history` and `delivery_window` are implemented but pending a real value; `pickup_point` is pending a known field |
+| `United Kingdom (app)` | `dimensions` | `weight` and `url`; `history` and `delivery_window` are implemented but pending a real value; `pickup_point` is pending a known field |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so
