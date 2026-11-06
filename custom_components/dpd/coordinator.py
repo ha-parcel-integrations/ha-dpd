@@ -20,6 +20,7 @@ from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
     CONF_INCLUDE_HISTORY,
     DEFAULT_INCLUDE_HISTORY,
+    DELIVERED_DESCRIPTION,
     DOMAIN,
     DPD_AT_DIR_INCOMING,
     DPD_AT_DIR_RETURNS,
@@ -51,10 +52,16 @@ from .parcels import (
     fmp_hashcode,
     log_unknown_descriptions,
     normalize_parcel,
+    shipment_from_detail,
     sort_parcels_by_ts,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# A failed detail call is retried once its parcel's status moves, or after
+# this long: a delivered parcel's status never moves, and its detail is the
+# only place the other parcels of its shipment are named.
+_DETAIL_RETRY = timedelta(hours=1)
 
 
 def _stagger_minutes(entry_id: str) -> int:
@@ -189,8 +196,15 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         # known parcel, so we fetch the detail once per barcode and reuse
         # the result for the integration's lifetime. A failed detail call is
         # cached as ``{"_failed": True, ...}`` so we don't hammer DPD when
-        # their endpoint is flaky — retried once the parcel's status moves.
+        # their endpoint is flaky — retried once the parcel's status moves,
+        # or after ``_DETAIL_RETRY``.
         self._detail_cache: dict[str, dict[str, Any]] = {}
+        # barcode -> the other parcel numbers of its shipment, from the same
+        # detail call (see _async_get_siblings).
+        self._sibling_numbers: dict[str, list[str]] = {}
+        # barcode -> a sibling's list-shaped record, kept once it reads
+        # delivered.
+        self._sibling_cache: dict[str, dict[str, Any]] = {}
         # barcode -> track.dpd.co.uk parcelCode, or ``None`` on a failed
         # lookup. UK-only (see _enrich_uk_tracking_cache); the code never
         # changes for a given parcel, so — like the detail cache above — one
@@ -355,6 +369,19 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             incoming_active + incoming_delivered,
             outgoing_active + outgoing_delivered,
         )
+
+        # The parcels the list leaves out join before anything is normalized,
+        # so from here on they are parcels like any other.
+        if siblings := await self._async_get_siblings(incoming):
+            log_unknown_descriptions(siblings)
+            for sibling in siblings:
+                if zone := (sibling.get("status") or {}).get("eventDateAndTimeZoneId"):
+                    await dt_util.async_get_time_zone(zone)
+            incoming = incoming + siblings
+            incoming_active = filter_active_shipments(incoming)
+            all_incoming_delivered = filter_delivered_shipments(incoming)
+            incoming_delivered = self._apply_delivered_filter(all_incoming_delivered)
+
         bu = self._client.bu
         if bu == "DPD-UK":
             await self._enrich_uk_tracking_cache(
@@ -825,10 +852,13 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 cached = self._detail_cache.get(barcode) or {}
                 if cached.get("_failed"):
                     # The last detail fetch failed. Don't hammer DPD on every
-                    # poll, but do try again once the parcel's status moves —
-                    # otherwise one hiccup means no receiver/weight/dimensions
-                    # until an HA restart.
-                    if cached.get("_status_description") == _description(shipment):
+                    # poll, but do try again once the parcel's status moves or
+                    # the failure is old — otherwise one hiccup means no
+                    # receiver/weight/dimensions until an HA restart.
+                    if (
+                        cached.get("_status_description") == _description(shipment)
+                        and dt_util.utcnow() < cached["_failed_at"] + _DETAIL_RETRY
+                    ):
                         continue
                 elif not include_history:
                     # Successfully fetched and history is off: the cached
@@ -847,21 +877,72 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
                 self._detail_cache[barcode] = {
                     "_failed": True,
                     "_status_description": _description(shipment),
+                    "_failed_at": dt_util.utcnow(),
                 }
                 continue
-            self._detail_cache[barcode] = {
-                "receiver_name": ((detail.get("receiver") or {}).get("name")),
-                "weight": detail.get("weight"),
-                "dimensions": _augment_dimensions(detail.get("dimensions")),
-                "history": (
-                    build_history(detail.get("parcelEvents"))
-                    if include_history
-                    else None
-                ),
-                # Remembered so we can detect a status change and refetch the
-                # growing history timeline (see above).
-                "_status_description": _description(shipment),
-            }
+            self._remember_detail(barcode, shipment, detail)
+
+    def _remember_detail(self, barcode: str, shipment: dict, detail: dict) -> None:
+        """Store a successful detail answer and the other parcels it names."""
+        self._detail_cache[barcode] = {
+            "receiver_name": ((detail.get("receiver") or {}).get("name")),
+            "weight": detail.get("weight"),
+            "dimensions": _augment_dimensions(detail.get("dimensions")),
+            "history": (
+                build_history(detail.get("parcelEvents"))
+                if self._include_history
+                else None
+            ),
+            # Remembered so we can detect a status change and refetch the
+            # growing history timeline (see _enrich_detail_cache).
+            "_status_description": _description(shipment),
+        }
+        # The detail lists every parcel of the shipment, this one included.
+        if others := [
+            number
+            for number in detail.get("parcels") or ()
+            if isinstance(number, str) and number and number != barcode
+        ]:
+            self._sibling_numbers[barcode] = others
+
+    async def _async_get_siblings(self, listed: list[dict]) -> list[dict]:
+        """Return the parcels of listed multi-parcel shipments the list leaves out.
+
+        DPD's parcels list carries one entry per shipment, so each other parcel
+        is fetched from the detail endpoint and shaped like a list entry. Only
+        shipments whose listed parcel ``_enrich_detail_cache`` has covered are
+        expanded. A sibling is refetched every poll until it reads delivered,
+        then kept; a failed call keeps the last record, or leaves the sibling
+        out until the next poll.
+        """
+        assert self._client is not None
+        listed_numbers = {s.get("parcelNumber") for s in listed}
+        found: list[dict] = []
+        for shipment in listed:
+            for number in self._sibling_numbers.get(
+                shipment.get("parcelNumber") or "", []
+            ):
+                if number in listed_numbers:
+                    continue
+                listed_numbers.add(number)
+                record = self._sibling_cache.get(number)
+                if record is None or _description(record) != DELIVERED_DESCRIPTION:
+                    detail = await self._client.async_get_parcel_detail(
+                        number,
+                        shipment_bu_code=shipment.get("shipmentBUCode"),
+                        parcel_type="INCOMING",
+                    )
+                    # An answer about another parcel counts as a failed call.
+                    if detail is not None and detail.get("parcelNumber") == number:
+                        record = shipment_from_detail(detail)
+                        # One shipment, one sender: the list's name for it.
+                        if sender := shipment.get("senderName"):
+                            record["senderName"] = sender
+                        self._sibling_cache[number] = record
+                        self._remember_detail(number, record, detail)
+                if record is not None:
+                    found.append(dict(record))
+        return found
 
     async def _enrich_uk_tracking_cache(self, shipments: list[dict]) -> None:
         """Populate ``self._uk_tracking_cache`` for any UK barcode not yet seen.

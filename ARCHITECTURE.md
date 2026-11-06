@@ -424,13 +424,47 @@ delivery**, unlike the general path.
 ### Detail cache and FMP (cost control)
 
 `_detail_cache` (barcode-keyed, integration-lifetime) lazily fills `receiver`,
-`weight` and `dimensions` — at most one detail call per parcel. A **failed**
-call is cached rather than retried every poll, and is retried once the parcel's
-status moves: one hiccup must not mean missing data until restart.
+`weight` and `dimensions` — at most one detail call per listed parcel (a
+sibling of a multi-parcel shipment costs more, see below). A **failed** call is
+cached rather than retried every poll, and is retried once the parcel's status
+moves or after an hour (`_DETAIL_RETRY`; a delivered parcel's status never
+moves): one hiccup must not mean missing data until restart.
 
 The FMP delivery-window fetch is best-effort — any failure yields `None` and
 the poll continues. `planned_from` / `planned_to` reflect the FMP hour window
 when present, else the calendar-day window in the parcel's local timezone.
+
+### Multi-parcel shipments (general path, incoming)
+
+The parcels list carries **one entry per shipment**, so the other parcels of
+a multi-parcel shipment never appear in it, and once the listed parcel is
+delivered a sibling still on its way is invisible (seen on a real two-parcel
+NL shipment, 2026-11-06). The listed parcel's detail names every parcel of
+the shipment, and each of them answers on the account's own login.
+
+So `_remember_detail` keeps those numbers in `_sibling_numbers`, and
+`_async_get_siblings` fetches each one the list leaves out and shapes it like
+a list entry (`shipment_from_detail`), **before** normalization: from there on
+a sibling is a parcel like any other (own sensor, events, retention).
+`shipment_from_detail` copies only list keys; the detail's address blocks,
+phone numbers and coordinates never reach `raw`. The detail carries no Follow
+My Parcel action, so a sibling has no FMP hour window, only DPD's date once
+there is one.
+
+Cost: one detail call per undelivered sibling per poll, since its status is
+only visible there; a delivered sibling is kept (`_sibling_cache`) and not
+fetched again. A failed call keeps the last record, or leaves a sibling not
+yet seen out until the next poll. Only listed parcels whose detail has been
+fetched are expanded (active, and delivered within the retention option), and
+both maps live in memory: after a restart, a sibling whose listed parcel has
+already left the delivered retention is not found again. On DPD-UK with the
+"N most recent" retention, the track.dpd.co.uk lookup covers the first N
+delivered parcels in list order, and siblings sit at the end of that list:
+a delivered sibling can be shown without its UK link.
+
+Outgoing shipments are not expanded: no outgoing multi-parcel shipment has
+been seen. Germany, Poland, Austria and the UK app have their own transports
+and are untouched.
 
 ### Dynamic polling is unconditional
 

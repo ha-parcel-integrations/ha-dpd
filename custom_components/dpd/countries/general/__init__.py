@@ -78,6 +78,7 @@ __all__ = [
     "map_parcel_status",
     "normalize_parcel",
     "shipment_delivery_dt",
+    "shipment_from_detail",
     "shipment_planned_dt",
     "shipment_planned_window",
 ]
@@ -631,6 +632,33 @@ def filter_active_shipments(shipments: list[dict]) -> list[dict]:
 def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     """Return shipments in the DELIVERED state."""
     return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
+
+
+# The list-entry keys a sibling needs, where the detail answer has them under
+# the same names (``deliveryDate`` only once DPD has a date).
+_LIST_ENTRY_KEYS = (
+    "parcelNumber",
+    "shipmentId",
+    "status",
+    "deliveryDate",
+    "deliveryTimeFrom",
+    "deliveryTimeTo",
+    "fmpRedirectionPossibility",
+    "refused",
+    "shipmentBUCode",
+    "shipmentType",
+)
+
+
+def shipment_from_detail(detail: dict) -> dict:
+    """Shape a per-parcel detail answer like an entry of the parcels list.
+
+    Used for the other parcels of a multi-parcel shipment, which the list
+    never carries (see ``DpdCoordinator._async_get_siblings``). Only the
+    list's own keys are kept: the detail also holds both parties' addresses,
+    phone numbers and coordinates, which must not reach a sensor's ``raw``.
+    """
+    return {key: detail[key] for key in _LIST_ENTRY_KEYS if key in detail}
 
 
 def _tracking_url(parcel: dict, bu: str = DEFAULT_BU) -> str | None:
