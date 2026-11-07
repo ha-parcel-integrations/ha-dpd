@@ -1,7 +1,7 @@
 """Tests for the DPD coordinator filter functions, data shape and error handling."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
@@ -46,12 +46,13 @@ from custom_components.dpd.parcels import (
     map_parcel_status,
     normalize_parcel,
     shipment_delivery_dt,
+    shipment_from_detail,
     shipment_planned_dt,
     shipment_planned_window,
     sort_parcels_by_ts,
 )
 
-from .payloads import envelope, shipment_sample
+from .payloads import detail_sample, envelope, shipment_sample
 
 
 def _mock_entry(
@@ -832,7 +833,11 @@ async def test_enrich_detail_cache_caches_failure_and_skips_same_status(hass):
     shipment = shipment_sample("PARCEL_HANDED", parcel_number="01ABC")
     await coordinator._enrich_detail_cache([shipment], [])
     assert coordinator._detail_cache == {
-        "01ABC": {"_failed": True, "_status_description": "PARCEL_HANDED"}
+        "01ABC": {
+            "_failed": True,
+            "_status_description": "PARCEL_HANDED",
+            "_failed_at": ANY,
+        }
     }
 
     # Same status again → no new call.
@@ -882,6 +887,186 @@ async def test_enrich_detail_cache_skips_already_cached_barcodes(hass):
 
     client.async_get_parcel_detail.assert_not_called()
     assert coordinator._detail_cache["01ABC"]["receiver_name"] == "Cached Person"
+
+
+# ---------------------------------------------------------------------------
+# Multi-parcel shipments — the siblings the parcels list leaves out
+# ---------------------------------------------------------------------------
+
+MASTER = "01MASTER000001"
+CHILD = "01MASTER000002"
+
+
+def _master_listed(description: str = "DELIVERED") -> dict:
+    """The one entry the parcels list carries for a two-parcel shipment."""
+    shipment = shipment_sample(
+        description, parcel_number=MASTER, event_dt="2026-11-04T12:00:00"
+    )
+    shipment["senderName"] = "Example Shop"
+    shipment["shipmentBUCode"] = "010"
+    return shipment
+
+
+def _detail_client(child_details: list[dict | None], master_fails: int = 0):
+    """A client whose detail call answers for the master, then the child.
+
+    The master's detail lists both parcels, after ``master_fails`` failed
+    calls; each child call takes the next answer from ``child_details``
+    (``None`` = a failed call).
+    """
+    answers = iter(child_details)
+    failures = iter([None] * master_fails)
+
+    async def detail(number, **_kwargs):
+        if number == MASTER:
+            # Plus the junk a schema change could bring, which is skipped.
+            master = detail_sample(MASTER, "DELIVERED", parcels=[MASTER, CHILD])
+            master["parcels"] += ["", None]
+            return next(failures, master)
+        return next(answers)
+
+    client = MagicMock()
+    client.async_get_parcels = AsyncMock(return_value=envelope([_master_listed()]))
+    client.async_get_parcel_detail = AsyncMock(side_effect=detail)
+    return client
+
+
+def _child_calls(client: MagicMock) -> list:
+    return [
+        call
+        for call in client.async_get_parcel_detail.await_args_list
+        if call.args[0] == CHILD
+    ]
+
+
+def test_shipment_from_detail_keeps_only_list_keys():
+    detail = detail_sample(CHILD, parcels=[MASTER, CHILD])
+
+    assert shipment_from_detail(detail) == {
+        "parcelNumber": CHILD,
+        "shipmentId": MASTER,
+        "status": detail["status"],
+        "refused": False,
+        "shipmentBUCode": "010",
+        "shipmentType": "SHIPMENT",
+    }
+
+
+async def test_coordinator_adds_sibling_the_parcels_list_leaves_out(hass):
+    """A delivered master no longer hides a sibling still on its way."""
+    client = _detail_client(
+        [detail_sample(CHILD, "IN_TRANSIT", parcels=[MASTER, CHILD], weight=4.9)]
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry("parcels", 10))
+
+    result = await coordinator._async_update_data()
+
+    assert [p["barcode"] for p in result["incoming_active"]] == [CHILD]
+    assert [p["barcode"] for p in result["incoming_delivered"]] == [MASTER]
+    child = result["incoming_active"][0]
+    assert child["status"] == ParcelStatus.IN_TRANSIT
+    # The list's name for the shipment's sender, not the detail's.
+    assert child["sender"] == "Example Shop"
+    assert child["receiver"] == "Jane Doe"
+    assert child["weight"] == 4.9
+    assert child["raw"]["shipmentId"] == MASTER
+    assert "receiver" not in child["raw"]
+    assert "geoPosition" not in child["raw"]
+    # Asked on the master's business unit, as an incoming parcel.
+    assert _child_calls(client)[0].kwargs == {
+        "shipment_bu_code": "010",
+        "parcel_type": "INCOMING",
+    }
+
+
+async def test_coordinator_refetches_sibling_until_delivered(hass):
+    client = _detail_client(
+        [
+            detail_sample(CHILD, "IN_TRANSIT", parcels=[MASTER, CHILD]),
+            detail_sample(
+                CHILD,
+                "DELIVERED",
+                parcels=[MASTER, CHILD],
+                event_dt="2026-11-07T11:02:00",
+            ),
+        ]
+    )
+    # Retention keeps only the newest delivered parcel: a sibling goes through
+    # it like any listed parcel.
+    coordinator = DpdCoordinator(hass, client, _mock_entry("parcels", 1))
+
+    await coordinator._async_update_data()
+    result = await coordinator._async_update_data()
+
+    assert result["incoming_active"] == []
+    assert [p["barcode"] for p in result["incoming_delivered"]] == [CHILD]
+    assert len(_child_calls(client)) == 2
+
+    # Delivered is final: kept as it was, never fetched again.
+    result = await coordinator._async_update_data()
+    assert [p["barcode"] for p in result["incoming_delivered"]] == [CHILD]
+    assert len(_child_calls(client)) == 2
+
+
+async def test_coordinator_does_not_fetch_sibling_the_list_carries(hass):
+    master = _master_listed("IN_TRANSIT")
+    child = shipment_sample("IN_TRANSIT", parcel_number=CHILD)
+    client = MagicMock()
+    client.async_get_parcels = AsyncMock(return_value=envelope([master, child]))
+    client.async_get_parcel_detail = AsyncMock(
+        side_effect=lambda number, **_kwargs: detail_sample(
+            number, "IN_TRANSIT", parcels=[MASTER, CHILD]
+        )
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry())
+
+    result = await coordinator._async_update_data()
+
+    assert sorted(p["barcode"] for p in result["incoming_active"]) == [MASTER, CHILD]
+    # One enrichment call each, nothing more.
+    assert client.async_get_parcel_detail.await_count == 2
+
+
+async def test_coordinator_failed_sibling_detail_keeps_last_record(hass):
+    client = _detail_client(
+        [
+            None,
+            detail_sample(CHILD, "IN_TRANSIT", parcels=[MASTER, CHILD]),
+            # An answer about another parcel counts as a failed call.
+            detail_sample(MASTER, "DELIVERED", parcels=[MASTER, CHILD]),
+        ]
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry("parcels", 10))
+
+    # No record yet: left out, and asked again on the next poll.
+    result = await coordinator._async_update_data()
+    assert result["incoming_active"] == []
+
+    result = await coordinator._async_update_data()
+    assert [p["barcode"] for p in result["incoming_active"]] == [CHILD]
+
+    # A failed refetch keeps what the last good one said.
+    result = await coordinator._async_update_data()
+    assert [p["barcode"] for p in result["incoming_active"]] == [CHILD]
+    assert len(_child_calls(client)) == 3
+
+
+async def test_coordinator_retries_failed_master_detail_after_an_hour(hass):
+    """A delivered master's status never moves, so its failure has to age out."""
+    client = _detail_client(
+        [detail_sample(CHILD, "IN_TRANSIT", parcels=[MASTER, CHILD])],
+        master_fails=1,
+    )
+    coordinator = DpdCoordinator(hass, client, _mock_entry("parcels", 10))
+
+    await coordinator._async_update_data()
+    result = await coordinator._async_update_data()
+    assert result["incoming_active"] == []
+    assert client.async_get_parcel_detail.await_count == 1
+
+    coordinator._detail_cache[MASTER]["_failed_at"] -= timedelta(hours=1)
+    result = await coordinator._async_update_data()
+    assert [p["barcode"] for p in result["incoming_active"]] == [CHILD]
 
 
 # ---------------------------------------------------------------------------
