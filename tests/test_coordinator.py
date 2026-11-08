@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
@@ -2537,6 +2538,13 @@ async def test_device_id_none_when_no_device(hass):
 # ---------------------------------------------------------------------------
 
 
+# Austria stamps its scans in bare Vienna local time, and a delivered parcel has
+# to stay inside the delivered window or these tests age out of it.
+_AT_SCAN = (datetime.now(ZoneInfo("Europe/Vienna")) - timedelta(days=1)).replace(
+    microsecond=0
+)
+
+
 def _at_parcel(parcelno: str, stage: int = 2, direction: str = "inc") -> dict:
     return {
         "parcelno": parcelno,
@@ -2547,7 +2555,7 @@ def _at_parcel(parcelno: str, stage: int = 2, direction: str = "inc") -> dict:
             "state_info": "Paket ist unterwegs",
             "entries": [
                 {
-                    "datetime": "20261009140500",
+                    "datetime": _AT_SCAN.strftime("%Y%m%d%H%M%S"),
                     "state": {"name": "ON_THE_WAY", "text": "Paket unterwegs"},
                 }
             ],
@@ -2627,7 +2635,7 @@ async def test_coordinator_at_includes_history_when_the_option_is_on(hass):
 
     assert result["incoming_active"][0]["history"] == [
         {
-            "timestamp": "2026-10-09T14:05:00+02:00",
+            "timestamp": _AT_SCAN.isoformat(),
             "status": ParcelStatus.IN_TRANSIT,
             "raw_status": "ON_THE_WAY",
         }
