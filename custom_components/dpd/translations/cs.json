@@ -197,5 +197,47 @@
         "name": "Poslední úspěšná aktualizace"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sledovat balík",
+      "description": "Přidá balík podle čísla do tvého účtu myDPD, aby ho integrace sledovala jako ostatní balíky na účtu. Funguje pro účty aplikace myDPD, ne pro DPD Německo, Rakousko, Polsko nebo Spojené království.",
+      "fields": {
+        "tracking_code": {
+          "name": "Číslo balíku",
+          "description": "Čtrnáctimístné číslo balíku DPD. Mezery se ignorují."
+        },
+        "config_entry_id": {
+          "name": "Účet",
+          "description": "Účet DPD, do kterého ho přidat. Potřeba jen tehdy, když je nastaveno více účtů."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "„{number}“ není číslo balíku DPD (14 číslic)."
+    },
+    "no_entry_loaded": {
+      "message": "Není načten žádný účet DPD."
+    },
+    "entry_not_loaded": {
+      "message": "Účet DPD {entry_id} není načten."
+    },
+    "pick_an_account": {
+      "message": "Je nastaveno více účtů DPD; vyber jeden pomocí config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "Přidání balíku podle čísla není pro tuto zemi DPD dostupné."
+    },
+    "parcel_not_found": {
+      "message": "DPD nezná balík {number}."
+    },
+    "parcel_not_added": {
+      "message": "DPD balík {number} vyhledalo, ale nepřidalo ho do účtu."
+    },
+    "dpd_unreachable": {
+      "message": "DPD není dostupné: {error}"
+    }
   }
 }

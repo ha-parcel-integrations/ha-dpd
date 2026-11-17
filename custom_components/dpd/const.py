@@ -24,6 +24,14 @@ class DpdApiError(Exception):
         self.status_code = status_code
 
 
+class DpdParcelNotFoundError(DpdApiError):
+    """Raised when DPD does not know a parcel number it was asked to add."""
+
+    def __init__(self) -> None:
+        """Report it as the HTTP 400 DPD answers an unknown number with."""
+        super().__init__(400)
+
+
 class DpdCaptchaError(DpdApiError):
     """Raised when DPD Germany asks for a captcha at login.
 

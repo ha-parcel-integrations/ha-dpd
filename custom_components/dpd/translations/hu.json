@@ -197,5 +197,47 @@
         "name": "Utolsó sikeres frissítés"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Csomag követése",
+      "description": "Szám alapján hozzáad egy csomagot a myDPD-fiókodhoz, így az integráció úgy követi, mint a fiók többi csomagját. A myDPD-alkalmazás fiókjaival működik, a német, osztrák, lengyel és egyesült királyságbeli DPD-vel nem.",
+      "fields": {
+        "tracking_code": {
+          "name": "Csomagszám",
+          "description": "A 14 jegyű DPD-csomagszám. A szóközöket figyelmen kívül hagyja."
+        },
+        "config_entry_id": {
+          "name": "Fiók",
+          "description": "A DPD-fiók, amelyhez hozzáadja. Csak akkor kell, ha több is be van állítva."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "A(z) „{number}” nem DPD-csomagszám (14 számjegy)."
+    },
+    "no_entry_loaded": {
+      "message": "Nincs betöltött DPD-fiók."
+    },
+    "entry_not_loaded": {
+      "message": "A(z) {entry_id} DPD-fiók nincs betöltve."
+    },
+    "pick_an_account": {
+      "message": "Több DPD-fiók van beállítva; válassz egyet a config_entry_id segítségével."
+    },
+    "track_not_supported": {
+      "message": "Csomag szám szerinti hozzáadása ebben a DPD-országban nem érhető el."
+    },
+    "parcel_not_found": {
+      "message": "A DPD nem ismeri a(z) {number} csomagot."
+    },
+    "parcel_not_added": {
+      "message": "A DPD lekérdezte a(z) {number} csomagot, de nem adta hozzá a fiókhoz."
+    },
+    "dpd_unreachable": {
+      "message": "A DPD nem érhető el: {error}"
+    }
   }
 }

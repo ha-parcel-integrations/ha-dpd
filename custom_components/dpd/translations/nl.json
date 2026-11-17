@@ -197,5 +197,47 @@
         "name": "Laatste succesvolle update"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Pakket volgen",
+      "description": "Voeg een pakket op nummer toe aan je myDPD-account, zodat de integratie het volgt zoals de andere pakketten op het account. Werkt voor myDPD-app-accounts, niet voor DPD Duitsland, Oostenrijk, Polen of het Verenigd Koninkrijk.",
+      "fields": {
+        "tracking_code": {
+          "name": "Pakketnummer",
+          "description": "Het DPD-pakketnummer van 14 cijfers. Spaties worden genegeerd."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Het DPD-account waaraan het wordt toegevoegd. Alleen nodig als er meer dan één is ingesteld."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "'{number}' is geen DPD-pakketnummer (14 cijfers)."
+    },
+    "no_entry_loaded": {
+      "message": "Er is geen DPD-account geladen."
+    },
+    "entry_not_loaded": {
+      "message": "DPD-account {entry_id} is niet geladen."
+    },
+    "pick_an_account": {
+      "message": "Er is meer dan één DPD-account ingesteld; kies er een met config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "Een pakket op nummer toevoegen kan niet voor dit DPD-land."
+    },
+    "parcel_not_found": {
+      "message": "DPD kent pakket {number} niet."
+    },
+    "parcel_not_added": {
+      "message": "DPD heeft pakket {number} opgezocht, maar niet aan het account toegevoegd."
+    },
+    "dpd_unreachable": {
+      "message": "DPD is niet bereikbaar: {error}"
+    }
   }
 }

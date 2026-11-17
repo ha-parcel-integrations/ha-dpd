@@ -197,5 +197,47 @@
         "name": "Pēdējā veiksmīgā atjaunināšana"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sekot sūtījumam",
+      "description": "Pievieno sūtījumu tavam myDPD kontam pēc numura, lai integrācija tam sekotu kā citiem konta sūtījumiem. Darbojas ar myDPD lietotnes kontiem, nevis ar DPD Vāciju, Austriju, Poliju vai Apvienoto Karalisti.",
+      "fields": {
+        "tracking_code": {
+          "name": "Sūtījuma numurs",
+          "description": "14 ciparu DPD sūtījuma numurs. Atstarpes tiek ignorētas."
+        },
+        "config_entry_id": {
+          "name": "Konts",
+          "description": "DPD konts, kuram to pievienot. Nepieciešams tikai tad, ja iestatīts vairāk nekā viens."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "“{number}” nav DPD sūtījuma numurs (14 cipari)."
+    },
+    "no_entry_loaded": {
+      "message": "Nav ielādēts neviens DPD konts."
+    },
+    "entry_not_loaded": {
+      "message": "DPD konts {entry_id} nav ielādēts."
+    },
+    "pick_an_account": {
+      "message": "Iestatīts vairāk nekā viens DPD konts; izvēlies vienu ar config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "Sūtījuma pievienošana pēc numura šai DPD valstij nav pieejama."
+    },
+    "parcel_not_found": {
+      "message": "DPD nezina sūtījumu {number}."
+    },
+    "parcel_not_added": {
+      "message": "DPD atrada sūtījumu {number}, bet nepievienoja to kontam."
+    },
+    "dpd_unreachable": {
+      "message": "Neizdevās sazināties ar DPD: {error}"
+    }
   }
 }

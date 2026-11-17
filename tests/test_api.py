@@ -12,6 +12,7 @@ import aiohttp
 import pytest
 
 from custom_components.dpd.api import DpdApiClient, DpdApiError, DpdAuthError
+from custom_components.dpd.const import DpdParcelNotFoundError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -319,3 +320,61 @@ async def test_get_parcel_detail_returns_none_on_network_error():
     client = _client(session)
     client._token = "main-token"
     assert await client.async_get_parcel_detail("01XXX") is None
+
+
+# ---------------------------------------------------------------------------
+# async_add_parcel — the app's "add parcel"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_add_parcel_looks_the_number_up_without_verification():
+    session = _mock_session(_mock_response(200, {"parcelNumber": "01234567890123"}))
+    client = DpdApiClient(
+        email="user@example.com", password="secret", session=session, bu="DPD-UK"
+    )
+    client._token = "main-token"
+    await client.async_add_parcel("01234567890123")
+    args, kwargs = session.post.call_args
+    assert args[0].endswith("/v10/parcels/details/01234567890123")
+    assert kwargs["params"] == {
+        "parcelType": "INCOMING",
+        "businessUnit": "DPD-NL",
+        "lang": "en",
+        "continueWithoutVerification": "true",
+    }
+    assert kwargs["headers"]["Authorization"] == "Bearer main-token"
+
+
+@pytest.mark.asyncio
+async def test_add_parcel_unknown_number_is_its_own_error():
+    session = _mock_session(
+        _mock_response(400, {"exceptionType": "NO_PARCEL_FOUD", "message": "x"})
+    )
+    client = _client(session)
+    client._token = "main-token"
+    with pytest.raises(DpdParcelNotFoundError):
+        await client.async_add_parcel("00000000000000")
+
+
+@pytest.mark.asyncio
+async def test_add_parcel_other_failures_are_api_errors():
+    for response in (
+        _mock_response(400, {"exceptionType": "PROVIDE_ZIP_CODE"}),
+        _mock_response(400, ["not", "a", "dict"]),
+        _mock_response(502, None),
+    ):
+        client = _client(_mock_session(response))
+        client._token = "main-token"
+        with pytest.raises(DpdApiError) as exc:
+            await client.async_add_parcel("01234567890123")
+        assert not isinstance(exc.value, DpdParcelNotFoundError)
+
+
+@pytest.mark.asyncio
+async def test_add_parcel_signs_in_again_once_on_an_expired_session():
+    client = _client(_mock_session(_mock_response(401, None), _mock_response(200, {})))
+    client._token = "stale"
+    client.async_login = AsyncMock()
+    await client.async_add_parcel("01234567890123")
+    client.async_login.assert_awaited_once()

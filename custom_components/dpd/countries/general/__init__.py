@@ -57,6 +57,7 @@ from ...const import (
     USER_AGENT,
     DpdApiError,
     DpdAuthError,
+    DpdParcelNotFoundError,
     ParcelStatus,
 )
 
@@ -202,6 +203,44 @@ class GeneralApiClient:
             return data
 
         return await self._async_call_with_reauth(_fetch)
+
+    async def async_add_parcel(self, parcel_number: str) -> None:
+        """Put a parcel on the account by its number, the app's "add parcel".
+
+        Looking a parcel up by number while signed in is what attaches it to
+        the account: seen on a live DPD-NL parcel that was absent from the
+        parcels list before the lookup and listed right after it. Without
+        ``continueWithoutVerification`` DPD asks for the recipient's postcode,
+        e-mail or phone (``PROVIDE_ZIP_CODE``) and looks nothing up. An
+        unknown number is a 400 with ``exceptionType`` ``NO_PARCEL_FOUD``
+        (sic), raised as ``DpdParcelNotFoundError``.
+        """
+
+        async def _lookup() -> None:
+            async with self._session.post(
+                f"{DPD_PARCEL_DETAIL_URL}/{parcel_number}",
+                params={
+                    "parcelType": "INCOMING",
+                    "businessUnit": self._request_bu,
+                    "lang": "en",
+                    "continueWithoutVerification": "true",
+                },
+                headers={
+                    "Authorization": f"Bearer {self._token}",
+                    "Content-Type": "application/json",
+                    "User-Agent": USER_AGENT,
+                },
+            ) as response:
+                if response.status == 200:
+                    return
+                if response.status == 400:
+                    body = await response.json(content_type=None)
+                    kind = body.get("exceptionType") if isinstance(body, dict) else None
+                    if kind == "NO_PARCEL_FOUD":
+                        raise DpdParcelNotFoundError
+                raise DpdApiError(response.status)
+
+        await self._async_call_with_reauth(_lookup)
 
     async def async_get_parcel_detail(
         self,

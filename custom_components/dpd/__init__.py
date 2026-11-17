@@ -10,10 +10,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import (
     async_create_clientsession,
     async_get_clientsession,
 )
+from homeassistant.helpers.typing import ConfigType
 
 from .api import DpdApiClient, DpdApiError, DpdAuthError
 from .const import (
@@ -29,6 +31,7 @@ from .const import (
     COUNTRY_PL,
     COUNTRY_UK,
     DEFAULT_BU,
+    DOMAIN,
     PLATFORMS,
     UK_SOURCE_APP,
     DpdCaptchaError,
@@ -39,6 +42,7 @@ from .countries.de.page import DpdPageError
 from .countries.de.session import DpdDeSession
 from .countries.pl.session import DpdPlSession
 from .countries.uk.session import DpdUkSession
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +60,15 @@ class DpdData:
 
 
 type DpdConfigEntry = ConfigEntry[DpdData]
+
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's actions, once, independent of any entry."""
+    async_setup_services(hass)
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:

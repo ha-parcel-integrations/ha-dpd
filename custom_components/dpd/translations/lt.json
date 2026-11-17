@@ -197,5 +197,47 @@
         "name": "Paskutinis sėkmingas atnaujinimas"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sekti siuntą",
+      "description": "Prideda siuntą prie tavo myDPD paskyros pagal numerį, kad integracija ją sektų kaip kitas paskyros siuntas. Veikia su myDPD programėlės paskyromis, bet ne su DPD Vokietija, Austrija, Lenkija ar Jungtine Karalyste.",
+      "fields": {
+        "tracking_code": {
+          "name": "Siuntos numeris",
+          "description": "14 skaitmenų DPD siuntos numeris. Tarpai ignoruojami."
+        },
+        "config_entry_id": {
+          "name": "Paskyra",
+          "description": "DPD paskyra, prie kurios pridėti. Reikia tik tada, kai nustatyta daugiau nei viena."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "„{number}“ nėra DPD siuntos numeris (14 skaitmenų)."
+    },
+    "no_entry_loaded": {
+      "message": "Neįkelta jokia DPD paskyra."
+    },
+    "entry_not_loaded": {
+      "message": "DPD paskyra {entry_id} neįkelta."
+    },
+    "pick_an_account": {
+      "message": "Nustatyta daugiau nei viena DPD paskyra; pasirink vieną su config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "Siuntos pridėjimas pagal numerį šiai DPD šaliai negalimas."
+    },
+    "parcel_not_found": {
+      "message": "DPD nežino siuntos {number}."
+    },
+    "parcel_not_added": {
+      "message": "DPD surado siuntą {number}, bet nepridėjo jos prie paskyros."
+    },
+    "dpd_unreachable": {
+      "message": "Nepavyko susisiekti su DPD: {error}"
+    }
   }
 }

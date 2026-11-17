@@ -26,6 +26,7 @@ this integration answers to both names there.
 - [Sensors](#sensors)
 - [Parcel status reference](#parcel-status-reference)
 - [Events](#events)
+- [Actions](#actions)
 - [Examples](#examples)
 - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
@@ -42,6 +43,7 @@ this integration answers to both names there.
 - Configurable delivered-parcels sensor (last N days, or N most recent)
 - Automatic lifecycle management — per-parcel sensors are created and removed as parcels move through delivery
 - Re-authentication support
+- A `dpd.track_parcel` action that adds a parcel to your myDPD account by its number
 - Country (business unit) selection during setup — Netherlands plus 14 other countries on DPD's shared myDPD backend (Argentina, Belgium, Croatia, Czech Republic, Estonia, France, Hungary, Italy, Latvia, Lithuania, Luxembourg, Portugal, Slovakia, Slovenia), the UK (riding on the same NL backend), and Germany, Poland, Austria and the UK MyDPD app (each its own separate backend), more to come
 - UI translated into the language of every supported country (plus English), including the country dropdown itself
 
@@ -291,6 +293,38 @@ event-driven automations, or the
 for a carrier-agnostic re-emit layer that fires
 `parcel_aggregator_parcel_*` events covering every installed carrier
 in one go.
+
+## Actions
+
+### `dpd.track_parcel`
+
+Adds a parcel to your myDPD account by its 14-digit parcel number, the same as
+adding it in the myDPD app. The integration then refreshes and follows it like
+every other parcel on the account. Handy for a parcel the account did not pick
+up by itself, from a dashboard button or from an automation that reads the
+number out of a shipping e-mail.
+
+| Field | Required | Description |
+|---|---|---|
+| `tracking_code` | yes | The DPD parcel number. Spaces are ignored. |
+| `config_entry_id` | no | The DPD account to add it to. Only needed when more than one is set up. |
+
+```yaml
+action: dpd.track_parcel
+data:
+  tracking_code: "0123 4567 8901 23"
+```
+
+The action waits for the refresh and fails with a clear message when DPD does
+not know the number, or answers without the parcel turning up on the account.
+A parcel that is already on the account is left alone.
+
+It works for accounts that sign in with the myDPD app login (the Netherlands
+and the other countries on DPD's shared myDPD backend). Confirmed on a DPD
+Netherlands parcel; the other countries on that backend use the same call but
+have not been seen doing it yet. DPD Germany, Austria, Poland and the UK
+MyDPD app have no way to add a parcel by number that this integration knows
+of, so the action refuses them.
 
 ## Examples
 

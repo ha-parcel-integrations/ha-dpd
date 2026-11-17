@@ -197,5 +197,47 @@
         "name": "Ostatnia udana aktualizacja"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Śledź paczkę",
+      "description": "Dodaje paczkę do konta myDPD po jej numerze, aby integracja śledziła ją jak pozostałe paczki na koncie. Działa dla kont aplikacji myDPD, nie dla DPD Niemcy, Austria, Polska ani Wielka Brytania.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numer paczki",
+          "description": "14-cyfrowy numer paczki DPD. Spacje są pomijane."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto DPD, do którego ją dodać. Potrzebne tylko, gdy skonfigurowano więcej niż jedno."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "„{number}” nie jest numerem paczki DPD (14 cyfr)."
+    },
+    "no_entry_loaded": {
+      "message": "Nie załadowano żadnego konta DPD."
+    },
+    "entry_not_loaded": {
+      "message": "Konto DPD {entry_id} nie jest załadowane."
+    },
+    "pick_an_account": {
+      "message": "Skonfigurowano więcej niż jedno konto DPD; wybierz jedno za pomocą config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "Dodawanie paczki po numerze nie jest dostępne dla tego kraju DPD."
+    },
+    "parcel_not_found": {
+      "message": "DPD nie zna paczki {number}."
+    },
+    "parcel_not_added": {
+      "message": "DPD wyszukało paczkę {number}, ale nie dodało jej do konta."
+    },
+    "dpd_unreachable": {
+      "message": "Nie można połączyć się z DPD: {error}"
+    }
   }
 }

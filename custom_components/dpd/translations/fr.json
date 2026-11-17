@@ -197,5 +197,47 @@
         "name": "Dernière mise à jour réussie"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Suivre un colis",
+      "description": "Ajoute un colis à ton compte myDPD par son numéro, pour que l'intégration le suive comme les autres colis du compte. Fonctionne pour les comptes de l'application myDPD, pas pour DPD Allemagne, Autriche, Pologne ou Royaume-Uni.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numéro de colis",
+          "description": "Le numéro de colis DPD à 14 chiffres. Les espaces sont ignorés."
+        },
+        "config_entry_id": {
+          "name": "Compte",
+          "description": "Le compte DPD auquel l'ajouter. Nécessaire seulement si plusieurs sont configurés."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_parcel_number": {
+      "message": "« {number} » n'est pas un numéro de colis DPD (14 chiffres)."
+    },
+    "no_entry_loaded": {
+      "message": "Aucun compte DPD n'est chargé."
+    },
+    "entry_not_loaded": {
+      "message": "Le compte DPD {entry_id} n'est pas chargé."
+    },
+    "pick_an_account": {
+      "message": "Plusieurs comptes DPD sont configurés ; choisis-en un avec config_entry_id."
+    },
+    "track_not_supported": {
+      "message": "L'ajout d'un colis par numéro n'est pas disponible pour ce pays DPD."
+    },
+    "parcel_not_found": {
+      "message": "DPD ne connaît pas le colis {number}."
+    },
+    "parcel_not_added": {
+      "message": "DPD a consulté le colis {number} mais ne l'a pas ajouté au compte."
+    },
+    "dpd_unreachable": {
+      "message": "Impossible de joindre DPD : {error}"
+    }
   }
 }
