@@ -2,13 +2,10 @@
 
 ``dpd.track_parcel`` puts a parcel on the myDPD account by its number, the
 same as adding it in the myDPD app, so the integration then follows it like
-every other parcel on the account. It saves opening the app for a parcel the
-account did not pick up by itself, and lets an automation do it: a dashboard
-button, or a script that reads the number from a shipping e-mail.
+every other parcel on the account.
 
 Only the general transport (the myDPD app account, ``countries/general``) can
-add a parcel. The other transports have no equivalent that has been seen, so
-the action refuses them with a clear message rather than pretending.
+add a parcel; the others are refused rather than pretended.
 """
 
 from __future__ import annotations
@@ -32,8 +29,7 @@ SERVICE_TRACK_PARCEL = "track_parcel"
 ATTR_TRACKING_CODE = "tracking_code"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
-# A DPD parcel number is 14 digits. Spaces are dropped first, because that is
-# how the number is printed in DPD's e-mails and on labels.
+# 14 digits, once the spaces DPD prints it with are dropped.
 _PARCEL_NUMBER = re.compile(r"^\d{14}$")
 
 _TRACK_SCHEMA = vol.Schema(
@@ -50,25 +46,11 @@ def _entry(hass: HomeAssistant, entry_id: str | None) -> DpdConfigEntry:
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.state is ConfigEntryState.LOADED
+        and (entry_id is None or entry.entry_id == entry_id)
     ]
-    if entry_id:
-        for entry in loaded:
-            if entry.entry_id == entry_id:
-                return entry
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="entry_not_loaded",
-            translation_placeholders={"entry_id": entry_id},
-        )
-    if len(loaded) == 1:
-        return loaded[0]
-    if not loaded:
-        raise ServiceValidationError(
-            translation_domain=DOMAIN, translation_key="no_entry_loaded"
-        )
-    raise ServiceValidationError(
-        translation_domain=DOMAIN, translation_key="pick_an_account"
-    )
+    if len(loaded) != 1:
+        raise ServiceValidationError("Pass the config_entry_id of a loaded DPD account")
+    return loaded[0]
 
 
 def _on_account(entry: DpdConfigEntry, number: str) -> bool:
@@ -88,47 +70,32 @@ def async_setup_services(hass: HomeAssistant) -> None:
         number = re.sub(r"\s+", "", call.data[ATTR_TRACKING_CODE])
         if not _PARCEL_NUMBER.match(number):
             raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="invalid_parcel_number",
-                translation_placeholders={"number": number},
+                f"{number} is not a DPD parcel number (14 digits)"
             )
         entry = _entry(hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
         client = entry.runtime_data.client
         if client is None:
             raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="track_not_supported"
+                "Adding a parcel by number only works for myDPD app accounts"
             )
         if _on_account(entry, number):
-            return  # already followed: nothing to do
+            return
 
         try:
             await client.async_add_parcel(number)
         except DpdParcelNotFoundError as err:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="parcel_not_found",
-                translation_placeholders={"number": number},
-            ) from err
+            raise ServiceValidationError(f"DPD does not know parcel {number}") from err
         except (DpdAuthError, DpdApiError, aiohttp.ClientError) as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="dpd_unreachable",
-                translation_placeholders={"error": str(err)},
-            ) from err
+            raise HomeAssistantError(f"Could not reach DPD: {err}") from err
 
+        # DPD answering is not proof: only the account's own list is.
         coordinator = entry.runtime_data.coordinator
         await coordinator.async_refresh()
         if not coordinator.last_update_success:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="dpd_unreachable",
-                translation_placeholders={"error": "refresh failed"},
-            )
+            raise HomeAssistantError("Could not reach DPD to confirm the parcel")
         if not _on_account(entry, number):
             raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="parcel_not_added",
-                translation_placeholders={"number": number},
+                f"DPD looked up parcel {number} but did not add it to the account"
             )
 
     hass.services.async_register(

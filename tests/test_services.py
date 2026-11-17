@@ -103,9 +103,8 @@ async def _setup(hass, *entries):
 async def test_the_action_exists_without_any_entry(hass):
     assert await async_setup_component(hass, DOMAIN, {})
     assert hass.services.has_service(DOMAIN, SERVICE_TRACK_PARCEL)
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="loaded DPD account"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "no_entry_loaded"
 
 
 @pytest.mark.asyncio
@@ -131,9 +130,8 @@ async def test_a_parcel_already_on_the_account_is_left_alone(hass, dpd):
 @pytest.mark.parametrize("code", ["123", "0123456789012A", "012345678901234"])
 async def test_not_a_parcel_number(hass, dpd, code):
     await _setup(hass, _add_entry(hass))
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="not a DPD parcel number"):
         await _call(hass, tracking_code=code)
-    assert err.value.translation_key == "invalid_parcel_number"
     dpd["add"].assert_not_awaited()
 
 
@@ -141,27 +139,24 @@ async def test_not_a_parcel_number(hass, dpd, code):
 async def test_unknown_to_dpd(hass, dpd):
     await _setup(hass, _add_entry(hass))
     dpd["add_error"] = DpdParcelNotFoundError()
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="does not know parcel"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "parcel_not_found"
 
 
 @pytest.mark.asyncio
 async def test_dpd_answers_but_the_parcel_does_not_appear(hass, dpd):
     await _setup(hass, _add_entry(hass))
     dpd["adds_it"] = False
-    with pytest.raises(HomeAssistantError) as err:
+    with pytest.raises(HomeAssistantError, match="did not add it"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "parcel_not_added"
 
 
 @pytest.mark.asyncio
 async def test_dpd_unreachable(hass, dpd):
     await _setup(hass, _add_entry(hass))
     dpd["add_error"] = DpdApiError(502)
-    with pytest.raises(HomeAssistantError) as err:
+    with pytest.raises(HomeAssistantError, match="Could not reach DPD"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "dpd_unreachable"
 
 
 @pytest.mark.asyncio
@@ -169,9 +164,8 @@ async def test_only_the_mydpd_app_account_can_add(hass, dpd):
     entry = _add_entry(hass)
     await _setup(hass, entry)
     entry.runtime_data.client = None  # what every other transport has
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="myDPD app accounts"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "track_not_supported"
     dpd["add"].assert_not_awaited()
 
 
@@ -180,16 +174,14 @@ async def test_two_accounts_need_a_choice(hass, dpd):
     first = _add_entry(hass, "one@example.com")
     second = _add_entry(hass, "two@example.com")
     await _setup(hass, first, second)
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="loaded DPD account"):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "pick_an_account"
 
     await _call(hass, tracking_code=NEW, config_entry_id=second.entry_id)
     dpd["add"].assert_awaited_once_with(NEW)
 
-    with pytest.raises(ServiceValidationError) as err:
+    with pytest.raises(ServiceValidationError, match="loaded DPD account"):
         await _call(hass, tracking_code=NEW, config_entry_id="nope")
-    assert err.value.translation_key == "entry_not_loaded"
 
 
 @pytest.mark.asyncio
@@ -212,7 +204,6 @@ async def test_the_refresh_after_adding_fails(hass, dpd):
             "custom_components.dpd.DpdApiClient.async_get_parcels",
             new=AsyncMock(side_effect=DpdApiError(503)),
         ),
-        pytest.raises(HomeAssistantError) as err,
+        pytest.raises(HomeAssistantError, match="confirm the parcel"),
     ):
         await _call(hass, tracking_code=NEW)
-    assert err.value.translation_key == "dpd_unreachable"

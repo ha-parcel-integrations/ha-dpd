@@ -213,31 +213,5 @@
         }
       }
     }
-  },
-  "exceptions": {
-    "invalid_parcel_number": {
-      "message": "{number} ni številka paketa DPD (14 števk)."
-    },
-    "no_entry_loaded": {
-      "message": "Noben račun DPD ni naložen."
-    },
-    "entry_not_loaded": {
-      "message": "Račun DPD {entry_id} ni naložen."
-    },
-    "pick_an_account": {
-      "message": "Nastavljenih je več računov DPD; izberi enega s config_entry_id."
-    },
-    "track_not_supported": {
-      "message": "Dodajanje paketa po številki za to državo DPD ni na voljo."
-    },
-    "parcel_not_found": {
-      "message": "DPD ne pozna paketa {number}."
-    },
-    "parcel_not_added": {
-      "message": "DPD je poiskal paket {number}, a ga ni dodal v račun."
-    },
-    "dpd_unreachable": {
-      "message": "DPD ni dosegljiv: {error}"
-    }
   }
 }

@@ -213,31 +213,5 @@
         }
       }
     }
-  },
-  "exceptions": {
-    "invalid_parcel_number": {
-      "message": "{number} is not a DPD parcel number (14 digits)."
-    },
-    "no_entry_loaded": {
-      "message": "No DPD account is loaded."
-    },
-    "entry_not_loaded": {
-      "message": "DPD account {entry_id} is not loaded."
-    },
-    "pick_an_account": {
-      "message": "More than one DPD account is set up; choose one with config_entry_id."
-    },
-    "track_not_supported": {
-      "message": "Adding a parcel by number is not available for this DPD country."
-    },
-    "parcel_not_found": {
-      "message": "DPD does not know parcel {number}."
-    },
-    "parcel_not_added": {
-      "message": "DPD looked up parcel {number} but did not add it to the account."
-    },
-    "dpd_unreachable": {
-      "message": "Could not reach DPD: {error}"
-    }
   }
 }

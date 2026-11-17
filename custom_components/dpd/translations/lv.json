@@ -213,31 +213,5 @@
         }
       }
     }
-  },
-  "exceptions": {
-    "invalid_parcel_number": {
-      "message": "{number} nav DPD sūtījuma numurs (14 cipari)."
-    },
-    "no_entry_loaded": {
-      "message": "Nav ielādēts neviens DPD konts."
-    },
-    "entry_not_loaded": {
-      "message": "DPD konts {entry_id} nav ielādēts."
-    },
-    "pick_an_account": {
-      "message": "Iestatīts vairāk nekā viens DPD konts; izvēlies vienu ar config_entry_id."
-    },
-    "track_not_supported": {
-      "message": "Sūtījuma pievienošana pēc numura šai DPD valstij nav pieejama."
-    },
-    "parcel_not_found": {
-      "message": "DPD nezina sūtījumu {number}."
-    },
-    "parcel_not_added": {
-      "message": "DPD atrada sūtījumu {number}, bet nepievienoja to kontam."
-    },
-    "dpd_unreachable": {
-      "message": "Neizdevās sazināties ar DPD: {error}"
-    }
   }
 }

@@ -213,31 +213,5 @@
         }
       }
     }
-  },
-  "exceptions": {
-    "invalid_parcel_number": {
-      "message": "{number} non è un numero di pacco DPD (14 cifre)."
-    },
-    "no_entry_loaded": {
-      "message": "Nessun account DPD è caricato."
-    },
-    "entry_not_loaded": {
-      "message": "L'account DPD {entry_id} non è caricato."
-    },
-    "pick_an_account": {
-      "message": "È configurato più di un account DPD; scegline uno con config_entry_id."
-    },
-    "track_not_supported": {
-      "message": "L'aggiunta di un pacco tramite numero non è disponibile per questo paese DPD."
-    },
-    "parcel_not_found": {
-      "message": "DPD non conosce il pacco {number}."
-    },
-    "parcel_not_added": {
-      "message": "DPD ha cercato il pacco {number} ma non l'ha aggiunto all'account."
-    },
-    "dpd_unreachable": {
-      "message": "Impossibile raggiungere DPD: {error}"
-    }
   }
 }
