@@ -216,7 +216,7 @@
   },
   "exceptions": {
     "invalid_parcel_number": {
-      "message": "'{number}' ist keine DPD-Paketnummer (14 Ziffern)."
+      "message": "{number} ist keine DPD-Paketnummer (14 Ziffern)."
     },
     "no_entry_loaded": {
       "message": "Es ist kein DPD-Konto geladen."
