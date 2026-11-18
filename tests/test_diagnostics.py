@@ -261,7 +261,7 @@ def test_no_german_account_data_survives_the_reader_or_the_redaction():
             "status_sentence": listed["status_sentence"],
             "status_icon": listed["status_icon"],
             "tab": "incoming",
-            "detail": detail(page),
+            "detail": detail(page, "incoming"),
             "stale_detail": None,
         },
         include_history=True,

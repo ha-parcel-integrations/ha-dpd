@@ -120,7 +120,10 @@ are in `carrier-research/dpd/`, not here. The tripwires:
   `placeholder` is deliberately not read — a pristine form carries a hint
   there, which would reauth every unexplained re-render.
 - **Dated milestones decide the status, the icon number is a DPD code and never
-  overrides them, and `retour` beats delivered.**
+  overrides them, and `retour` beats delivered.** A panel with *no* milestone
+  control at all is a different panel — warn once per tab, don't warn five
+  times per field (`#35`). Direction (`hidParcelFlowTypeID`) is a closed set of
+  three and nothing branches on it, so only a fourth value is worth a warning.
 - **The recipient-postcode check is never submitted and no address data is
   read.** `sender` and `receiver` stay `None`.
 - Existing German entries keep working without a new login:

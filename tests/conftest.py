@@ -32,6 +32,7 @@ def reset_one_shot_warnings():
     de._WARNED.clear()
     de_page._MISSING_LOGGED.clear()
     de_page._PAGER_LOGGED.clear()
+    de_page._PANEL_LOGGED.clear()
     de_session._WARNED.clear()
     de_session._CAPTCHA_UNTIL.clear()
     de_session._UNOPENED_UNTIL.clear()

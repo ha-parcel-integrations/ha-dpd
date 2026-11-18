@@ -212,7 +212,10 @@ stays "cannot connect".
 concurrently. A poll reads the Empfang tab, then Versand and Retoure only when
 their counters are non-zero; per row it fetches the milestone panel unless the
 row is unchanged since the last poll (cached per tab and barcode). A failed or
-mismatched panel gives a row-only parcel, never a failed poll.
+mismatched panel gives a row-only parcel, never a failed poll. A panel that
+carries none of the five milestones is a different panel, not a page DPD broke:
+it is reported once per tab, and the parcel keeps the status its row sentence
+and icon give it.
 
 **The recipient-postcode check is never submitted and no address data is
 read**; sender and recipient stay `None`.

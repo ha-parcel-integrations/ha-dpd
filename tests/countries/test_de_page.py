@@ -254,7 +254,7 @@ def test_detail_reads_the_panel_and_never_the_postcode():
             },
         )
     )
-    panel = detail(page)
+    panel = detail(page, "incoming")
     assert panel["identity"] == DE_BARCODE
     assert panel["weight_text"] == "10,95"
     assert panel["flow_type"] == "0"
@@ -271,18 +271,48 @@ def test_detail_reads_the_panel_and_never_the_postcode():
 
 def test_no_panel_is_none_and_warns_once(caplog):
     with caplog.at_level(logging.WARNING):
-        assert detail(Page(de_inbox_page([_ROW]))) is None
-        assert detail(Page(de_inbox_page([_ROW]))) is None
+        assert detail(Page(de_inbox_page([_ROW])), "incoming") is None
+        assert detail(Page(de_inbox_page([_ROW])), "incoming") is None
     assert len(caplog.records) == 1
 
 
-def test_a_panel_missing_a_milestone_control_warns(caplog):
+def test_a_panel_without_any_milestone_warns_once_for_its_tab(caplog):
     page = Page('<input id="ContentPlaceHolder1_hidParcelNo" value="x" />')
     with caplog.at_level(logging.WARNING):
-        panel = detail(page)
+        panel = detail(page, "sending")
+        detail(page, "sending")
     assert panel["slots"][0] == {"slot": "Start", "text": "", "date": ""}
     assert panel["weight_text"] == ""
-    assert any("labStatusStart" in r.getMessage() for r in caplog.records)
+    assert len(caplog.records) == 1
+    assert "sending" in caplog.records[0].getMessage()
+    assert not any("labStatus" in r.getMessage() for r in caplog.records)
+
+
+def test_each_tab_without_milestones_is_reported_on_its_own(caplog):
+    page = Page('<input id="ContentPlaceHolder1_hidParcelNo" value="x" />')
+    with caplog.at_level(logging.WARNING):
+        detail(page, "sending")
+        detail(page, "returning")
+    assert len(caplog.records) == 2
+
+
+def test_a_panel_missing_one_milestone_date_names_the_date_control(caplog):
+    html = de_inbox_page(
+        [_ROW],
+        detail={
+            "barcode": DE_BARCODE,
+            "slots": de_slots(("Paketinfo an DPD übergeben", "01.10.")),
+            "weight": "10,95",
+            "flow_type": "0",
+            "icon": 2,
+        },
+    ).replace('id="ContentPlaceHolder1_labStatusStartDate"', 'id="renamed"')
+    with caplog.at_level(logging.WARNING):
+        panel = detail(Page(html), "incoming")
+    assert panel["slots"][0]["date"] == ""
+    messages = [r.getMessage() for r in caplog.records]
+    assert len(messages) == 1
+    assert "labStatusStartDate" in messages[0]
 
 
 # -- pager ------------------------------------------------------------------

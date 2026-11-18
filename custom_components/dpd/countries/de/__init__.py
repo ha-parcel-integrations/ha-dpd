@@ -50,6 +50,10 @@ _KNOWN_ICON_PAIRS = frozenset(
     {(6, ParcelStatus.DELIVERED), (3, ParcelStatus.RETURNING)}
 )
 
+# DPD numbers a parcel's direction with a closed set: 0 receiving, 1 sending,
+# 2 returning. The field is read for reporting only; nothing branches on it.
+_KNOWN_FLOW_TYPES = frozenset({"", "0", "1", "2"})
+
 _RETURN_WORD = "retour"
 _PICKUP_WORDS = ("paketshop", "pickup", "abhol", "packstation")
 _PROBLEM_WORDS = (
@@ -285,7 +289,7 @@ def _collect(parcel: dict[str, Any], status: ParcelStatus) -> None:
                 text,
             )
     flow_type = detail.get("flow_type", "")
-    if flow_type not in ("", "0"):
+    if flow_type not in _KNOWN_FLOW_TYPES:
         _warn_once(
             ("flow", flow_type),
             "DPD Germany parcel flow type %r not seen before — report it at %s",

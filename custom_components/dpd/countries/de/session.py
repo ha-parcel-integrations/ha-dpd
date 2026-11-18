@@ -350,7 +350,7 @@ class DpdDeSession:
         except DpdApiError as err:
             _LOGGER.debug("DPD Germany parcel detail unavailable (%s)", err)
             return html, parcel
-        panel = detail(Page(fresh))
+        panel = detail(Page(fresh), tab)
         if panel is None or panel["identity"] != barcode:
             _LOGGER.debug("DPD Germany parcel detail did not match its row")
             return fresh, parcel

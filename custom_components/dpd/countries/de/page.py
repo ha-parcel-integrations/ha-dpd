@@ -236,6 +236,7 @@ _ROW_PREFIX = f"{_PREFIX}repParcelList_"
 SLOTS = ("Start", "OnTheRoad", "DeliveryDepot", "CarLoad", "Delivered")
 _ICON = re.compile(r"status_(\d+)\.svg")
 _MISSING_LOGGED: set[str] = set()
+_PANEL_LOGGED: set[str] = set()
 _PAGER_LIKE = re.compile(
     r"pager|_(?:btn|lnk)(?:next|more|loadmore|showmore)\w*$", re.IGNORECASE
 )
@@ -250,6 +251,22 @@ def _warn_missing(control_id: str) -> None:
     _LOGGER.warning(
         "A DPD Germany parcel page is missing an expected field (%s) — report it at %s",
         control_id,
+        _ISSUE_URL,
+    )
+
+
+def _warn_no_milestones(tab: str) -> None:
+    """One-shot per tab: the panel carries no milestone controls at all.
+
+    Absent as a group it is a different panel, not a field DPD dropped, so it
+    is reported once for the tab instead of five times for the fields.
+    """
+    if tab in _PANEL_LOGGED:
+        return
+    _PANEL_LOGGED.add(tab)
+    _LOGGER.warning(
+        "A DPD Germany parcel on the %s tab shows no milestones — report it at %s",
+        tab,
         _ISSUE_URL,
     )
 
@@ -305,7 +322,7 @@ def list_rows(page: Page) -> list[dict[str, Any]]:
     return rows
 
 
-def detail(page: Page) -> dict[str, Any] | None:
+def detail(page: Page, tab: str) -> dict[str, Any] | None:
     """Return the selected parcel's detail panel, or ``None`` without one.
 
     ``hidZipCode`` is not read: it holds the recipient postcode.
@@ -314,12 +331,22 @@ def detail(page: Page) -> dict[str, Any] | None:
     if identity is None:
         _warn_missing(f"{_PREFIX}hidParcelNo")
         return None
+    milestones = any(
+        page.control(f"{_PREFIX}labStatus{slot}") is not None for slot in SLOTS
+    )
+    if not milestones:
+        _warn_no_milestones(tab)
     slots = []
     for slot in SLOTS:
         text = page.text(f"{_PREFIX}labStatus{slot}")
         date = page.text(f"{_PREFIX}labStatus{slot}Date")
-        if text is None or date is None:
-            _warn_missing(f"{_PREFIX}labStatus{slot}")
+        if milestones:
+            for control_id, value in (
+                (f"{_PREFIX}labStatus{slot}", text),
+                (f"{_PREFIX}labStatus{slot}Date", date),
+            ):
+                if value is None:
+                    _warn_missing(control_id)
         slots.append({"slot": slot, "text": text or "", "date": date or ""})
     return {
         "identity": identity,

@@ -547,10 +547,18 @@ def test_known_slot_texts_do_not_warn(caplog):
 def test_a_new_flow_type_warns_once(caplog):
     slots = _slots((_START, "15.10."))
     with caplog.at_level(logging.WARNING):
-        normalize_parcel_de(_parcel("U", 2, slots, flow="2"), today=TODAY)
-        normalize_parcel_de(_parcel("U", 2, slots, flow="2"), today=TODAY)
+        normalize_parcel_de(_parcel("U", 2, slots, flow="9"), today=TODAY)
+        normalize_parcel_de(_parcel("U", 2, slots, flow="9"), today=TODAY)
         normalize_parcel_de(_parcel("U", 2, slots, flow="0"), today=TODAY)
     assert len([m for m in _warnings(caplog) if "flow type" in m]) == 1
+
+
+@pytest.mark.parametrize("flow", ["0", "1", "2", ""])
+def test_a_direction_dpd_documents_does_not_warn(caplog, flow):
+    slots = _slots((_START, "15.10."))
+    with caplog.at_level(logging.WARNING):
+        normalize_parcel_de(_parcel("U", 2, slots, flow=flow), today=TODAY)
+    assert not [m for m in _warnings(caplog) if "flow type" in m]
 
 
 def test_a_time_of_day_in_the_sentence_warns_once(caplog):
