@@ -1,0 +1,12 @@
+track_parcel:
+  fields:
+    tracking_code:
+      required: true
+      example: "01234567890123"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: dpd

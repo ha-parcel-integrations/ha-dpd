@@ -39,5 +39,10 @@
         "default": "mdi:clock-check-outline"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "service": "mdi:package-variant-plus"
+    }
   }
 }

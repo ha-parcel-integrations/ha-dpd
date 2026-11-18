@@ -197,5 +197,21 @@
         "name": "Letzte erfolgreiche Aktualisierung"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Paket verfolgen",
+      "description": "Fügt ein Paket anhand seiner Nummer zu deinem myDPD-Konto hinzu, damit die Integration es wie die anderen Pakete des Kontos verfolgt. Funktioniert für myDPD-App-Konten, nicht für DPD Deutschland, Österreich, Polen oder das Vereinigte Königreich.",
+      "fields": {
+        "tracking_code": {
+          "name": "Paketnummer",
+          "description": "Die 14-stellige DPD-Paketnummer. Leerzeichen werden ignoriert."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Das DPD-Konto, dem es hinzugefügt wird. Nur nötig, wenn mehr als eines eingerichtet ist."
+        }
+      }
+    }
   }
 }

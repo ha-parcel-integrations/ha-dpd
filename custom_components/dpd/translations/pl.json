@@ -197,5 +197,21 @@
         "name": "Ostatnia udana aktualizacja"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Śledź paczkę",
+      "description": "Dodaje paczkę do konta myDPD po jej numerze, aby integracja śledziła ją jak pozostałe paczki na koncie. Działa dla kont aplikacji myDPD, nie dla DPD Niemcy, Austria, Polska ani Wielka Brytania.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numer paczki",
+          "description": "14-cyfrowy numer paczki DPD. Spacje są pomijane."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto DPD, do którego ją dodać. Potrzebne tylko, gdy skonfigurowano więcej niż jedno."
+        }
+      }
+    }
   }
 }

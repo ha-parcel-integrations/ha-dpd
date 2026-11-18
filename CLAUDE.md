@@ -73,6 +73,14 @@ that branch — sorting, filtering, event firing, the polling recompute — is
 shared. **Never add a branch downstream of it.** Full model, per-transport detail and the evidence trail:
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+**`dpd.track_parcel`** (`services.py`) — registered in `async_setup`, never per
+entry, so unloading one account leaves it for the others. It adds a parcel by
+looking it up on the account (`GeneralApiClient.async_add_parcel`,
+`continueWithoutVerification=true`), then refreshes and **checks the parcel is
+on the account** before it reports success: DPD answering 200 is not proof.
+General transport only; every other transport has `runtime_data.client is None`
+and is refused. Confirmed on one live DPD-NL parcel.
+
 **Business unit** — `DPD-DE` and `DPD-AT` are deliberately **not** in
 `BUSINESS_UNITS`; each runs its own stack, routed via `_DE_BU_VALUE` /
 `_AT_BU_VALUE` in `config_flow.py`.

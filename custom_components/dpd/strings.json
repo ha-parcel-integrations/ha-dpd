@@ -197,5 +197,21 @@
         "name": "Last successful update"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Track parcel",
+      "description": "Add a parcel to your myDPD account by its number, so the integration follows it like the other parcels on the account. Works for myDPD app accounts, not for DPD Germany, Austria, Poland or the United Kingdom.",
+      "fields": {
+        "tracking_code": {
+          "name": "Parcel number",
+          "description": "The 14-digit DPD parcel number. Spaces are ignored."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "The DPD account to add it to. Only needed when more than one is set up."
+        }
+      }
+    }
   }
 }

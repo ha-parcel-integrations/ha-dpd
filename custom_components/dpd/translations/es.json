@@ -197,5 +197,21 @@
         "name": "Última actualización correcta"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Seguir paquete",
+      "description": "Añade un paquete a tu cuenta myDPD por su número, para que la integración lo siga como los demás paquetes de la cuenta. Funciona con cuentas de la app myDPD, no con DPD Alemania, Austria, Polonia o Reino Unido.",
+      "fields": {
+        "tracking_code": {
+          "name": "Número de paquete",
+          "description": "El número de paquete DPD de 14 dígitos. Se ignoran los espacios."
+        },
+        "config_entry_id": {
+          "name": "Cuenta",
+          "description": "La cuenta DPD a la que añadirlo. Solo es necesaria si hay más de una configurada."
+        }
+      }
+    }
   }
 }

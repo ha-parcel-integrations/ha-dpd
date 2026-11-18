@@ -197,5 +197,21 @@
         "name": "Dernière mise à jour réussie"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Suivre un colis",
+      "description": "Ajoute un colis à ton compte myDPD par son numéro, pour que l'intégration le suive comme les autres colis du compte. Fonctionne pour les comptes de l'application myDPD, pas pour DPD Allemagne, Autriche, Pologne ou Royaume-Uni.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numéro de colis",
+          "description": "Le numéro de colis DPD à 14 chiffres. Les espaces sont ignorés."
+        },
+        "config_entry_id": {
+          "name": "Compte",
+          "description": "Le compte DPD auquel l'ajouter. Nécessaire seulement si plusieurs sont configurés."
+        }
+      }
+    }
   }
 }

@@ -197,5 +197,21 @@
         "name": "Última atualização com sucesso"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Seguir encomenda",
+      "description": "Adiciona uma encomenda à tua conta myDPD pelo número, para que a integração a siga como as outras encomendas da conta. Funciona com contas da app myDPD, não com DPD Alemanha, Áustria, Polónia ou Reino Unido.",
+      "fields": {
+        "tracking_code": {
+          "name": "Número da encomenda",
+          "description": "O número de encomenda DPD com 14 dígitos. Os espaços são ignorados."
+        },
+        "config_entry_id": {
+          "name": "Conta",
+          "description": "A conta DPD à qual adicionar. Só é necessária se houver mais de uma configurada."
+        }
+      }
+    }
   }
 }

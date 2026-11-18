@@ -197,5 +197,21 @@
         "name": "Pēdējā veiksmīgā atjaunināšana"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sekot sūtījumam",
+      "description": "Pievieno sūtījumu tavam myDPD kontam pēc numura, lai integrācija tam sekotu kā citiem konta sūtījumiem. Darbojas ar myDPD lietotnes kontiem, nevis ar DPD Vāciju, Austriju, Poliju vai Apvienoto Karalisti.",
+      "fields": {
+        "tracking_code": {
+          "name": "Sūtījuma numurs",
+          "description": "14 ciparu DPD sūtījuma numurs. Atstarpes tiek ignorētas."
+        },
+        "config_entry_id": {
+          "name": "Konts",
+          "description": "DPD konts, kuram to pievienot. Nepieciešams tikai tad, ja iestatīts vairāk nekā viens."
+        }
+      }
+    }
   }
 }

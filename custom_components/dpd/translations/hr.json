@@ -197,5 +197,21 @@
         "name": "Zadnje uspješno ažuriranje"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Prati paket",
+      "description": "Dodaje paket po broju na tvoj myDPD račun, tako da ga integracija prati kao ostale pakete na računu. Radi za račune aplikacije myDPD, ne za DPD Njemačku, Austriju, Poljsku ili Ujedinjeno Kraljevstvo.",
+      "fields": {
+        "tracking_code": {
+          "name": "Broj paketa",
+          "description": "DPD broj paketa od 14 znamenki. Razmaci se zanemaruju."
+        },
+        "config_entry_id": {
+          "name": "Račun",
+          "description": "DPD račun kojem se dodaje. Potrebno samo ako je postavljeno više računa."
+        }
+      }
+    }
   }
 }

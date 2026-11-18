@@ -197,5 +197,21 @@
         "name": "Viimane õnnestunud värskendus"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Jälgi pakki",
+      "description": "Lisab paki numbri järgi sinu myDPD kontole, et integratsioon jälgiks seda nagu konto teisi pakke. Töötab myDPD rakenduse kontodega, mitte DPD Saksamaa, Austria, Poola ega Ühendkuningriigiga.",
+      "fields": {
+        "tracking_code": {
+          "name": "Paki number",
+          "description": "14-kohaline DPD paki number. Tühikuid eiratakse."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "DPD konto, kuhu see lisada. Vajalik ainult siis, kui seadistatud on mitu kontot."
+        }
+      }
+    }
   }
 }

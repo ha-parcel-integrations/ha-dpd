@@ -197,5 +197,21 @@
         "name": "Paskutinis sėkmingas atnaujinimas"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sekti siuntą",
+      "description": "Prideda siuntą prie tavo myDPD paskyros pagal numerį, kad integracija ją sektų kaip kitas paskyros siuntas. Veikia su myDPD programėlės paskyromis, bet ne su DPD Vokietija, Austrija, Lenkija ar Jungtine Karalyste.",
+      "fields": {
+        "tracking_code": {
+          "name": "Siuntos numeris",
+          "description": "14 skaitmenų DPD siuntos numeris. Tarpai ignoruojami."
+        },
+        "config_entry_id": {
+          "name": "Paskyra",
+          "description": "DPD paskyra, prie kurios pridėti. Reikia tik tada, kai nustatyta daugiau nei viena."
+        }
+      }
+    }
   }
 }

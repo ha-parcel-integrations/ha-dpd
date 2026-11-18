@@ -197,5 +197,21 @@
         "name": "Utolsó sikeres frissítés"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Csomag követése",
+      "description": "Szám alapján hozzáad egy csomagot a myDPD-fiókodhoz, így az integráció úgy követi, mint a fiók többi csomagját. A myDPD-alkalmazás fiókjaival működik, a német, osztrák, lengyel és egyesült királyságbeli DPD-vel nem.",
+      "fields": {
+        "tracking_code": {
+          "name": "Csomagszám",
+          "description": "A 14 jegyű DPD-csomagszám. A szóközöket figyelmen kívül hagyja."
+        },
+        "config_entry_id": {
+          "name": "Fiók",
+          "description": "A DPD-fiók, amelyhez hozzáadja. Csak akkor kell, ha több is be van állítva."
+        }
+      }
+    }
   }
 }

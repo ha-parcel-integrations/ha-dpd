@@ -197,5 +197,21 @@
         "name": "Posledná úspešná aktualizácia"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Sledovať balík",
+      "description": "Pridá balík podľa čísla do tvojho účtu myDPD, aby ho integrácia sledovala ako ostatné balíky na účte. Funguje pre účty aplikácie myDPD, nie pre DPD Nemecko, Rakúsko, Poľsko alebo Spojené kráľovstvo.",
+      "fields": {
+        "tracking_code": {
+          "name": "Číslo balíka",
+          "description": "Štrnásťmiestne číslo balíka DPD. Medzery sa ignorujú."
+        },
+        "config_entry_id": {
+          "name": "Účet",
+          "description": "Účet DPD, do ktorého ho pridať. Potrebné len vtedy, keď je nastavených viac účtov."
+        }
+      }
+    }
   }
 }

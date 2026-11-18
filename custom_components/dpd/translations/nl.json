@@ -197,5 +197,21 @@
         "name": "Laatste succesvolle update"
       }
     }
+  },
+  "services": {
+    "track_parcel": {
+      "name": "Pakket volgen",
+      "description": "Voeg een pakket op nummer toe aan je myDPD-account, zodat de integratie het volgt zoals de andere pakketten op het account. Werkt voor myDPD-app-accounts, niet voor DPD Duitsland, Oostenrijk, Polen of het Verenigd Koninkrijk.",
+      "fields": {
+        "tracking_code": {
+          "name": "Pakketnummer",
+          "description": "Het DPD-pakketnummer van 14 cijfers. Spaties worden genegeerd."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Het DPD-account waaraan het wordt toegevoegd. Alleen nodig als er meer dan één is ingesteld."
+        }
+      }
+    }
   }
 }
