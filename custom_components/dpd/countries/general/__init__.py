@@ -234,7 +234,10 @@ class GeneralApiClient:
                 if response.status == 200:
                     return
                 if response.status == 400:
-                    body = await response.json(content_type=None)
+                    try:
+                        body = await response.json(content_type=None)
+                    except ValueError:  # an HTML error page, not DPD's JSON
+                        body = None
                     kind = body.get("exceptionType") if isinstance(body, dict) else None
                     if kind == "NO_PARCEL_FOUD":
                         raise DpdParcelNotFoundError

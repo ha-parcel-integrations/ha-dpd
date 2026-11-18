@@ -216,6 +216,17 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         """Tier minutes computed on the last refresh (diagnostics only)."""
         return self._current_tier_minutes
 
+    def knows_parcel(self, barcode: str) -> bool:
+        """Whether the last poll saw this parcel on the account.
+
+        Reads the remembered state, which covers every parcel, so a delivered
+        parcel cut from ``data`` by the delivered-parcels option still counts.
+        """
+        return any(
+            barcode in (known or {})
+            for known in (self._known_state, self._known_outgoing_state)
+        )
+
     def _device_id(self) -> str | None:
         """Resolve (and cache) this account's device id for event payloads.
 

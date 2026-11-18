@@ -372,6 +372,18 @@ async def test_add_parcel_other_failures_are_api_errors():
 
 
 @pytest.mark.asyncio
+async def test_add_parcel_400_that_is_not_json_is_an_api_error():
+    response = _mock_response(400, None)
+    response.json = AsyncMock(side_effect=ValueError("Expecting value"))
+    client = _client(_mock_session(response))
+    client._token = "main-token"
+    with pytest.raises(DpdApiError) as exc:
+        await client.async_add_parcel("01234567890123")
+    assert exc.value.status_code == 400
+    assert not isinstance(exc.value, DpdParcelNotFoundError)
+
+
+@pytest.mark.asyncio
 async def test_add_parcel_signs_in_again_once_on_an_expired_session():
     client = _client(_mock_session(_mock_response(401, None), _mock_response(200, {})))
     client._token = "stale"

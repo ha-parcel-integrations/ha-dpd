@@ -24,6 +24,8 @@ from .payloads import envelope, shipment_sample
 
 NEW = "01234567890123"
 OLD = "01234567890999"
+# Delivered well before the 7-day delivered-parcels window of _add_entry.
+LONG_AGO = "2020-01-06T12:00:00"
 
 
 def _add_entry(hass, email="user@example.com"):
@@ -40,12 +42,15 @@ def _add_entry(hass, email="user@example.com"):
     return entry
 
 
-def _on_account(*numbers):
+def _on_account(state):
+    def parcel(number):
+        if number in state["delivered"]:
+            return shipment_sample(parcel_number=number, event_dt=LONG_AGO)
+        return shipment_sample(description="ORDER_CREATED", parcel_number=number)
+
     return envelope(
-        incoming=[
-            shipment_sample(description="ORDER_CREATED", parcel_number=n)
-            for n in numbers
-        ]
+        incoming=[parcel(n) for n in state["listed"]],
+        sending=[parcel(n) for n in state["sent"]],
     )
 
 
@@ -56,10 +61,16 @@ async def _call(hass, **data):
 @pytest.fixture
 def dpd():
     """The account, faked: parcels on it, and what adding does."""
-    state = {"listed": [OLD], "add_error": None, "adds_it": True}
+    state = {
+        "listed": [OLD],
+        "sent": [],
+        "delivered": set(),
+        "add_error": None,
+        "adds_it": True,
+    }
 
     async def get_parcels():
-        return _on_account(*state["listed"])
+        return _on_account(state)
 
     async def add_parcel(number):
         if state["add_error"]:
@@ -103,7 +114,7 @@ async def _setup(hass, *entries):
 async def test_the_action_exists_without_any_entry(hass):
     assert await async_setup_component(hass, DOMAIN, {})
     assert hass.services.has_service(DOMAIN, SERVICE_TRACK_PARCEL)
-    with pytest.raises(ServiceValidationError, match="loaded DPD account"):
+    with pytest.raises(ServiceValidationError, match="No DPD account is loaded"):
         await _call(hass, tracking_code=NEW)
 
 
@@ -124,6 +135,30 @@ async def test_a_parcel_already_on_the_account_is_left_alone(hass, dpd):
     await _setup(hass, _add_entry(hass))
     await _call(hass, tracking_code=OLD)
     dpd["add"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_parcels_the_sensors_leave_out_are_still_on_the_account(hass, dpd):
+    # Delivered before the delivered-parcels window, or sent rather than
+    # received: on the account all the same, so nothing to add.
+    dpd["delivered"].add(OLD)
+    dpd["sent"].append(NEW)
+    entry = _add_entry(hass)
+    await _setup(hass, entry)
+    assert not entry.runtime_data.coordinator.data["incoming_delivered"]
+    await _call(hass, tracking_code=OLD)
+    await _call(hass, tracking_code=NEW)
+    dpd["add"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_adds_a_parcel_delivered_before_the_window(hass, dpd):
+    entry = _add_entry(hass)
+    await _setup(hass, entry)
+    dpd["delivered"].add(NEW)
+    await _call(hass, tracking_code=NEW)
+    dpd["add"].assert_awaited_once_with(NEW)
+    assert not entry.runtime_data.coordinator.data["incoming_delivered"]
 
 
 @pytest.mark.asyncio

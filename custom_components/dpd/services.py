@@ -46,20 +46,14 @@ def _entry(hass: HomeAssistant, entry_id: str | None) -> DpdConfigEntry:
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.state is ConfigEntryState.LOADED
-        and (entry_id is None or entry.entry_id == entry_id)
     ]
+    if not loaded:
+        raise ServiceValidationError("No DPD account is loaded")
+    if entry_id is not None:
+        loaded = [entry for entry in loaded if entry.entry_id == entry_id]
     if len(loaded) != 1:
         raise ServiceValidationError("Pass the config_entry_id of a loaded DPD account")
     return loaded[0]
-
-
-def _on_account(entry: DpdConfigEntry, number: str) -> bool:
-    data = entry.runtime_data.coordinator.data or {}
-    return any(
-        parcel.get("barcode") == number
-        for parcels in data.values()
-        for parcel in parcels
-    )
 
 
 @callback
@@ -78,7 +72,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 "Adding a parcel by number only works for myDPD app accounts"
             )
-        if _on_account(entry, number):
+        coordinator = entry.runtime_data.coordinator
+        if coordinator.knows_parcel(number):
             return
 
         try:
@@ -89,11 +84,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Could not reach DPD: {err}") from err
 
         # DPD answering is not proof: only the account's own list is.
-        coordinator = entry.runtime_data.coordinator
         await coordinator.async_refresh()
         if not coordinator.last_update_success:
             raise HomeAssistantError("Could not reach DPD to confirm the parcel")
-        if not _on_account(entry, number):
+        if not coordinator.knows_parcel(number):
             raise HomeAssistantError(
                 f"DPD looked up parcel {number} but did not add it to the account"
             )
