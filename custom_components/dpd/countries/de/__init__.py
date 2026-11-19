@@ -19,6 +19,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ...const import DPD_DE_TRACKING_URL, HISTORY_MAX_EVENTS, ParcelStatus
+from ..contract import is_pickup
 from .page import SLOTS
 from .session import DpdDeSession
 
@@ -111,6 +112,12 @@ def _furthest(slots: list[dict[str, str]] | None) -> dict[str, str] | None:
     """Return the last slot, in order, that carries a date."""
     dated = [slot for slot in slots or [] if _is_dated(slot)]
     return dated[-1] if dated else None
+
+
+def _mentions_pickup(sentence: str, slots: list[dict[str, str]] | None) -> bool:
+    """Whether the sentence or any reached milestone speaks of a pickup point."""
+    texts = [sentence, *(slot["text"] for slot in slots or [] if _is_reached(slot))]
+    return any(word in text.casefold() for text in texts for word in _PICKUP_WORDS)
 
 
 def map_parcel_status_de(fields: dict[str, Any]) -> ParcelStatus:
@@ -236,7 +243,7 @@ def _midnight(day: date | None) -> str | None:
     return datetime(day.year, day.month, day.day, tzinfo=_DE_TZ).isoformat()
 
 
-def _end_of_day(day: date | None) -> str | None:
+def _day_end(day: date | None) -> str | None:
     if day is None:
         return None
     return datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=_DE_TZ).isoformat()
@@ -385,13 +392,17 @@ def normalize_parcel_de(
         "delivered": delivered,
         "delivered_at": _midnight(delivered_day) if delivered else None,
         "planned_from": _midnight(days.get("CarLoad")) if out_for_delivery else None,
-        "planned_to": _end_of_day(days.get("CarLoad")) if out_for_delivery else None,
-        "pickup": status is ParcelStatus.AT_PICKUP_POINT,
+        "planned_to": _day_end(days.get("CarLoad")) if out_for_delivery else None,
+        "pickup": is_pickup(
+            _mentions_pickup(parcel["status_sentence"], history_slots),
+            status,
+            (entry["status"] for entry in history),
+        ),
         "pickup_point": None,
         "url": DPD_DE_TRACKING_URL.format(barcode=barcode),
         "weight": _weight(weight_text),
         "dimensions": None,
-        "history": (history or None) if include_history else None,
+        "history": history if include_history else None,
         "raw": {
             "barcode": barcode,
             "label": parcel["label"],

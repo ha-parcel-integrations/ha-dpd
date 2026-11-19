@@ -16,7 +16,8 @@ import logging
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ...const import HISTORY_MAX_EVENTS, ParcelStatus
+from ...const import DPD_AT_DIR_INCOMING, HISTORY_MAX_EVENTS, ParcelStatus
+from ..contract import is_pickup, planned_for_status, planned_window
 
 _LOGGER = logging.getLogger(__name__)
 _ISSUE_URL = "https://github.com/ha-parcel-integrations/ha-dpd/issues/new?template=unrecognised_status.yml"
@@ -415,15 +416,37 @@ def normalize_parcel_at(
     stage = _stage(lifecycle)
     entries = _entries(lifecycle)
     newest = _newest_entry(entries)
-    info_type, info_data = _info(newest)
+    info_type, _ = _info(newest)
 
     status = map_parcel_status_at(parcel)
     delivered = status is ParcelStatus.DELIVERED
 
-    planned_from, planned_to = _delivery_window(lifecycle, stage, today)
+    planned_from, planned_to = planned_for_status(
+        status, *_delivery_window(lifecycle, stage, today)
+    )
     delivered_at = _delivered_at(lifecycle) if delivered else None
 
-    is_pickup = info_type == _INFO_PICKUP_POINT
+    # A shop entry on a parcel the account sends, or sends back, can be the
+    # sender's own drop-off, so only an incoming parcel's entries mean pickup.
+    incoming = parcel.get("type") == DPD_AT_DIR_INCOMING and not _is_return(
+        parcel, lifecycle
+    )
+    shop_entries = [
+        entry
+        for entry in entries
+        if incoming
+        and _info(entry)[0] == _INFO_PICKUP_POINT
+        and _timestamp(entry.get("datetime"))
+    ]
+    shop_entry = _newest_entry(shop_entries)
+    pickup = is_pickup(
+        incoming and (info_type == _INFO_PICKUP_POINT or bool(shop_entries)),
+        status,
+        (
+            _STATE_NAME_MAP.get(name) if (name := _entry_status_name(entry)) else None
+            for entry in entries
+        ),
+    )
     state_info = lifecycle.get("state_info")
 
     return {
@@ -436,16 +459,20 @@ def normalize_parcel_at(
         "status": status,
         "raw_status": state_info if isinstance(state_info, str) else None,
         "delivered": delivered,
+        "delivered_at": delivered_at,
         "planned_from": planned_from,
         "planned_to": planned_to,
-        "delivered_at": delivered_at,
-        "pickup": is_pickup,
-        "pickup_point": _pickup_point_name(info_data) if is_pickup else None,
+        "pickup": pickup,
+        "pickup_point": (
+            _pickup_point_name(_info(shop_entry)[1])
+            if pickup and shop_entry is not None
+            else None
+        ),
+        "url": _TRACKING_URL,
         # Austria's inbox carries neither.
         "weight": None,
         "dimensions": None,
         "history": build_history_at(entries) if include_history else None,
-        "url": _TRACKING_URL,
         "raw": parcel,
     }
 
@@ -472,13 +499,10 @@ def _delivery_window(
         _warn_unexpected_shape("lifecycle.predict[]", predict[0])
         return None, None
     day = today or datetime.now(_VIENNA).date()
-    return (
-        datetime.fromisoformat(f"{day.isoformat()}T{start}")
-        .replace(tzinfo=_VIENNA)
-        .isoformat(),
-        datetime.fromisoformat(f"{day.isoformat()}T{end}")
-        .replace(tzinfo=_VIENNA)
-        .isoformat(),
+    return planned_window(
+        datetime.fromisoformat(f"{day.isoformat()}T{start}"),
+        datetime.fromisoformat(f"{day.isoformat()}T{end}"),
+        zone=_VIENNA,
     )
 
 

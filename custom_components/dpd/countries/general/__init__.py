@@ -30,7 +30,6 @@ from ...const import (
     BU_TRACKING_URL_OVERRIDES,
     BUSINESS_UNITS,
     DEFAULT_BU,
-    DELIVERED_DESCRIPTION,
     DPD_BASIC_TOKEN,
     DPD_CONSIGNEE_SSO_URL,
     DPD_FMP_AUTHENTICATE_URL,
@@ -60,6 +59,7 @@ from ...const import (
     DpdParcelNotFoundError,
     ParcelStatus,
 )
+from ..contract import is_pickup, planned_for_status, planned_window
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -667,12 +667,12 @@ def build_history(
 
 def filter_active_shipments(shipments: list[dict]) -> list[dict]:
     """Return shipments that have not yet reached the DELIVERED state."""
-    return [s for s in shipments if _description(s) != DELIVERED_DESCRIPTION]
+    return [s for s in shipments if map_parcel_status(s) is not ParcelStatus.DELIVERED]
 
 
 def filter_delivered_shipments(shipments: list[dict]) -> list[dict]:
     """Return shipments in the DELIVERED state."""
-    return [s for s in shipments if _description(s) == DELIVERED_DESCRIPTION]
+    return [s for s in shipments if map_parcel_status(s) is ParcelStatus.DELIVERED]
 
 
 def _tracking_url(parcel: dict, bu: str = DEFAULT_BU) -> str | None:
@@ -745,31 +745,34 @@ def normalize_parcel(
     other BU, and for a UK parcel the lookup hasn't resolved (yet, or ever).
     """
     description = _description(parcel)
-    delivered = description == DELIVERED_DESCRIPTION
+    status = map_parcel_status(parcel)
+    delivered = status is ParcelStatus.DELIVERED
     delivered_at: str | None = None
     if delivered:
         dt = shipment_delivery_dt(parcel)
         delivered_at = dt.isoformat() if dt else None
-    planned_from: str | None = None
-    planned_to: str | None = None
-    if not delivered:
-        start, end = shipment_planned_window(parcel)
-        planned_from = start.isoformat() if start else None
-        planned_to = end.isoformat() if end else None
-    is_pickup = (parcel.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+    start, end = shipment_planned_window(parcel)
+    zone = start.tzinfo if start and start.tzinfo else UTC
+    planned_from, planned_to = planned_for_status(
+        status, *planned_window(start, end, zone=zone)
+    )
+    is_shop = (parcel.get("status") or {}).get("deliveryType") == "PARCELSHOP"
+    pickup = is_pickup(
+        is_shop, status, (event.get("status") for event in history or [])
+    )
     return {
         "carrier": "DPD",
         "barcode": parcel.get("parcelNumber"),
         "sender": parcel.get("senderName"),
-        "receiver": None if is_pickup else receiver,
-        "status": map_parcel_status(parcel),
+        "receiver": None if is_shop else receiver,
+        "status": status,
         "raw_status": description,
         "delivered": delivered,
         "delivered_at": delivered_at,
         "planned_from": planned_from,
         "planned_to": planned_to,
-        "pickup": is_pickup,
-        "pickup_point": receiver if is_pickup else None,
+        "pickup": pickup,
+        "pickup_point": receiver if is_shop else None,
         "url": (
             f"{DPD_UK_TRACKING_URL}/{uk_tracking_code}"
             if uk_tracking_code

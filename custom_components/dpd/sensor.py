@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import DpdConfigEntry
 from .const import DOMAIN, ParcelStatus
@@ -342,13 +343,19 @@ class DpdNextDeliverySensor(CoordinatorEntity[DpdCoordinator], SensorEntity):
 
     def _delivery_moments(self) -> list[tuple[datetime, dict]]:
         result: list[tuple[datetime, dict]] = []
+        now = dt_util.utcnow()
         for parcel in (self.coordinator.data or {}).get("incoming_active", []):
             iso = parcel.get("planned_from")
             if not iso:
                 continue
             try:
                 dt = datetime.fromisoformat(iso)
+                end = datetime.fromisoformat(parcel.get("planned_to") or iso)
             except ValueError:
+                continue
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=now.tzinfo)
+            if end < now:
                 continue
             result.append((dt, parcel))
         return result
@@ -398,7 +405,9 @@ class DpdEnRouteToPickupPointSensor(CoordinatorEntity[DpdCoordinator], SensorEnt
         return [
             p
             for p in (self.coordinator.data or {}).get("incoming_active", [])
-            if p.get("pickup") and p.get("status") != ParcelStatus.AT_PICKUP_POINT
+            if p.get("pickup")
+            and p.get("status")
+            not in (ParcelStatus.AT_PICKUP_POINT, ParcelStatus.RETURNING)
         ]
 
     @property

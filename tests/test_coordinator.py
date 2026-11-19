@@ -549,7 +549,7 @@ async def test_coordinator_pl_merges_detail_payload_into_active_parcel(hass):
 
     result = await coordinator._async_update_data()
 
-    assert result["incoming_active"][0]["planned_from"] == "2026-09-10T00:00:00"
+    assert result["incoming_active"][0]["planned_from"] == "2026-09-10T00:00:00+02:00"
 
 
 async def test_coordinator_pl_falls_back_to_undetailed_parcel_on_detail_failure(hass):

@@ -458,11 +458,11 @@ def test_history_is_gated_by_the_option():
     )["history"]
 
 
-def test_history_with_no_dated_slot_is_none():
+def test_history_with_no_dated_slot_is_empty():
     result = normalize_parcel_de(
         _parcel("U", 1, _slots()), include_history=True, today=TODAY
     )
-    assert result["history"] is None
+    assert result["history"] == []
 
 
 def test_history_of_a_return_is_not_marked_delivered():

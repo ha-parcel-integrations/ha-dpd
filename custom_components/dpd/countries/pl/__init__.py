@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from ...const import ParcelStatus
+from ..contract import is_pickup, planned_for_status, planned_window
 
 _LOGGER = logging.getLogger(__name__)
+_WARSAW = ZoneInfo("Europe/Warsaw")
 _UNKNOWN: set[str] = set()
 _UNEXPECTED_SHAPES: set[str] = set()
 _BAD_TIMESTAMPS: set[str] = set()
@@ -116,6 +119,25 @@ def normalize_parcel_pl(
         else None
     )
     status = map_parcel_status_pl(raw_status)
+    delivered = status is ParcelStatus.DELIVERED
+    planned_from, planned_to = planned_for_status(
+        status,
+        *planned_window(
+            delivery.get("planned_delivery_date")
+            or parcel.get("planned_delivery_date"),
+            None,
+            zone=_WARSAW,
+        ),
+    )
+    pickup = is_pickup(
+        None,
+        status,
+        (
+            _STATUS_MAP.get(item.get("status") or "")
+            for item in statuses or []
+            if isinstance(item, dict)
+        ),
+    )
     return {
         "carrier": "DPD Polska",
         "barcode": parcel.get("waybill"),
@@ -123,17 +145,17 @@ def normalize_parcel_pl(
         "receiver": None,
         "status": status,
         "raw_status": raw_status,
-        "delivered": status is ParcelStatus.DELIVERED,
-        "planned_from": _timestamp(
-            delivery.get("planned_delivery_date") or parcel.get("planned_delivery_date")
+        "delivered": delivered,
+        "delivered_at": (
+            _timestamp(delivery.get("delivered_datetime")) if delivered else None
         ),
-        "planned_to": None,
-        "delivered_at": _timestamp(delivery.get("delivered_datetime")),
-        "pickup": False,
+        "planned_from": planned_from,
+        "planned_to": planned_to,
+        "pickup": pickup,
         "pickup_point": None,
+        "url": None,
         "weight": None,
         "dimensions": None,
         "history": history,
-        "url": None,
         "raw": parcel,
     }

@@ -389,10 +389,10 @@ because the transports genuinely populate different fields:
 | Variant | Never populated | Notes |
 |---|---|---|
 | `Other` | — | the full set |
-| `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) and `pickup_point` are implemented but pending a real parcel |
-| `Poland` | `url`, `weight`, `dimensions`, `pickup_point` | inbox payload carries none; does populate delivery_window via `planned_from` |
+| `Germany` | `dimensions` | weight, url and history; `delivery_window` (the out-for-delivery day) is implemented but pending a real parcel; `pickup` is derived, no point name is read, so `pickup_point` stays pending |
+| `Poland` | `url`, `weight`, `dimensions` | inbox payload carries none; does populate delivery_window via `planned_from`; `pickup` is derived but no point name exists yet, so `pickup_point` stays pending |
 | `Austria` | `weight`, `dimensions` | inbox carries neither; `delivery_window` and `pickup_point` are implemented but pending a real parcel |
-| `United Kingdom (app)` | `dimensions` | `weight` and `url`; `history` and `delivery_window` are implemented but pending a real value; `pickup_point` is pending a known field |
+| `United Kingdom (app)` | `dimensions` | `weight` and `url`; `history` and `delivery_window` are implemented but pending a real value; `pickup_point` is the pickup location code when there is one, pending a real parcel |
 
 This replaced the single flat `CAPABILITIES` on 2026-08-23, which used to
 overclaim `url` for DE. It feeds the comparison table on the docs site, so
@@ -407,7 +407,7 @@ The raw description lives on `raw_status`, never `status`; unmapped falls to
 both need updating on a new DPD lifecycle stage.
 
 **Pickup-point sensors**: `DpdEnRouteToPickupPointSensor` counts `pickup` parcels
-with `status != at_pickup_point`; `DpdAwaitingPickupSensor` counts
+with `status` neither `at_pickup_point` nor `returning`; `DpdAwaitingPickupSensor` counts
 `status == at_pickup_point`. Confirmed against a real DPD-CZ AlzaBox parcel
 (2026-08-20, maintainer-supplied diagnostics) — both counted and transitioned
 correctly end to end (`in_transit` → `at_pickup_point` → `delivered`).

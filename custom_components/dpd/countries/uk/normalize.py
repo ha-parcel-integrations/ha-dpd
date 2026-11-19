@@ -9,6 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ...const import DPD_UK_TRACKING_URL, HISTORY_MAX_EVENTS, ParcelStatus
+from ..contract import is_pickup, planned_for_status, planned_window
 from .fields import KNOWN_FIELDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -158,10 +159,11 @@ def _window(parcel: dict[str, Any]) -> tuple[str | None, str | None]:
     start = _clock(parcel.get("estimatedDeliveryStartTime"))
     end = _clock(parcel.get("estimatedDeliveryEndTime"))
     if start is None or end is None or end <= start:
-        start, end = time.min, _END_OF_DAY
-    return (
-        datetime.combine(day, start, _LONDON).isoformat(),
-        datetime.combine(day, end, _LONDON).isoformat(),
+        return planned_window(day, None, zone=_LONDON)
+    return planned_window(
+        datetime.combine(day, start, _LONDON),
+        datetime.combine(day, end, _LONDON),
+        zone=_LONDON,
     )
 
 
@@ -312,8 +314,16 @@ def normalize_parcel_uk(
     code = parcel.get("parcelCode")
     status = map_parcel_status_uk(parcel, inactive=inactive, history=history)
     delivered = status is ParcelStatus.DELIVERED
-    planned_from, planned_to = (None, None) if delivered else _window(parcel)
+    planned_from, planned_to = planned_for_status(status, *_window(parcel))
     text = parcel.get("trackingStatusCurrent")
+    location_code = parcel.get("pickupLocationCode")
+    pickup = is_pickup(
+        parcel.get("parcelStatusType") in (_ON_WAY_TO_PICKUP_SHOP, _PICKUP_PASS)
+        or parcel.get("collectedFromShop") is True
+        or bool(location_code),
+        status,
+        (entry["status"] for entry in history or []),
+    )
     return {
         "carrier": "DPD",
         "barcode": _barcode(parcel),
@@ -322,19 +332,18 @@ def normalize_parcel_uk(
         "status": status,
         "raw_status": text if isinstance(text, str) and text else None,
         "delivered": delivered,
+        "delivered_at": _delivered_at(parcel) if delivered else None,
         "planned_from": planned_from,
         "planned_to": planned_to,
-        "delivered_at": _delivered_at(parcel) if delivered else None,
-        "pickup": bool(
-            parcel.get("parcelStatusType") in (_ON_WAY_TO_PICKUP_SHOP, _PICKUP_PASS)
-            or parcel.get("pickupLocationCode")
+        "pickup": pickup,
+        "pickup_point": (
+            str(location_code) if pickup and isinstance(location_code, str) else None
         ),
-        "pickup_point": None,
-        "weight": _weight(parcel),
-        "dimensions": None,
-        "history": history,
         "url": (
             f"{DPD_UK_TRACKING_URL}/{code}" if isinstance(code, str) and code else None
         ),
+        "weight": _weight(parcel),
+        "dimensions": None,
+        "history": history,
         "raw": {key: value for key, value in parcel.items() if key not in _PASS_FIELDS},
     }

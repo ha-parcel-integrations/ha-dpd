@@ -31,7 +31,8 @@ def test_normalize_maps_canonical_fields_and_keeps_the_full_raw_response():
     assert parcel["barcode"] == "12345678901234"
     assert parcel["sender"] == "Example Shop"
     assert parcel["status"] is ParcelStatus.OUT_FOR_DELIVERY
-    assert parcel["planned_from"] == "2026-09-10T00:00:00"
+    assert parcel["planned_from"] == "2026-09-10T00:00:00+02:00"
+    assert parcel["planned_to"] == "2026-09-10T23:59:59+02:00"
     assert parcel["history"] is None
     assert parcel["raw"] == _parcel()
 

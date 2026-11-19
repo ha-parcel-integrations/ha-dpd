@@ -320,9 +320,9 @@ def test_delivered_sensor_attributes_pass_through_normalized_parcels():
 
 def test_next_delivery_picks_earliest_planned_from():
     parcels = [
-        _parcel("A", planned_from="2026-06-20T10:00:00+02:00"),
-        _parcel("B", planned_from="2026-06-17T08:00:00+02:00"),
-        _parcel("C", planned_from="2026-06-19T15:00:00+02:00"),
+        _parcel("A", planned_from="2099-06-20T10:00:00+02:00"),
+        _parcel("B", planned_from="2099-06-17T08:00:00+02:00"),
+        _parcel("C", planned_from="2099-06-19T15:00:00+02:00"),
     ]
     coordinator = _make_coordinator(
         {
@@ -334,13 +334,13 @@ def test_next_delivery_picks_earliest_planned_from():
     sensor = DpdNextDeliverySensor(coordinator, _make_entry())
     result = sensor.native_value
     assert result is not None
-    assert (result.year, result.month, result.day, result.hour) == (2026, 6, 17, 8)
+    assert (result.year, result.month, result.day, result.hour) == (2099, 6, 17, 8)
 
 
 def test_next_delivery_attributes_describe_earliest_parcel():
     parcels = [
-        _parcel("A", sender="Sender A", planned_from="2026-06-17T10:00:00+02:00"),
-        _parcel("B", sender="Sender B", planned_from="2026-06-20T10:00:00+02:00"),
+        _parcel("A", sender="Sender A", planned_from="2099-06-17T10:00:00+02:00"),
+        _parcel("B", sender="Sender B", planned_from="2099-06-20T10:00:00+02:00"),
     ]
     coordinator = _make_coordinator(
         {
@@ -358,7 +358,7 @@ def test_next_delivery_attributes_describe_earliest_parcel():
 def test_next_delivery_skips_parcels_without_planned_from():
     parcels = [
         _parcel("A", planned_from=None),
-        _parcel("B", planned_from="2026-06-17T10:00:00+02:00"),
+        _parcel("B", planned_from="2099-06-17T10:00:00+02:00"),
     ]
     coordinator = _make_coordinator(
         {
@@ -571,3 +571,42 @@ async def test_migration_collision_keeps_both_and_warns(
     assert old_id == old.entity_id
     assert new_id == new.entity_id
     assert "reconcile" in caplog.text
+
+
+def _active_data(parcels: list[dict]) -> MagicMock:
+    return _make_coordinator(
+        {"incoming_active": parcels, "incoming_delivered": [], "outgoing_active": []}
+    )
+
+
+def test_next_delivery_skips_a_window_that_has_ended():
+    parcels = [
+        _parcel("A", planned_from="2000-06-20T10:00:00+02:00"),
+        _parcel(
+            "B",
+            planned_from="2000-06-19T10:00:00+02:00",
+            planned_to="2000-06-19T12:00:00+02:00",
+        ),
+        _parcel("C", planned_from="2099-06-20T10:00:00+02:00"),
+    ]
+    sensor = DpdNextDeliverySensor(_active_data(parcels), _make_entry())
+    assert sensor.extra_state_attributes["barcode"] == "C"
+
+
+def test_next_delivery_keeps_a_window_that_is_still_running():
+    parcel = _parcel(
+        "A",
+        planned_from="2000-06-20T10:00:00+02:00",
+        planned_to="2099-06-20T12:00:00+02:00",
+    )
+    sensor = DpdNextDeliverySensor(_active_data([parcel]), _make_entry())
+    assert sensor.extra_state_attributes["barcode"] == "A"
+
+
+def test_en_route_leaves_out_a_returning_pickup_parcel():
+    parcels = [
+        _parcel("BACK", status=ParcelStatus.RETURNING, pickup=True),
+        _parcel("GOING", status=ParcelStatus.IN_TRANSIT, pickup=True),
+    ]
+    sensor = DpdEnRouteToPickupPointSensor(_active_data(parcels), _make_entry())
+    assert [p["barcode"] for p in sensor.extra_state_attributes["parcels"]] == ["GOING"]

@@ -229,9 +229,9 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `delivered` | bool | Whether the parcel has been delivered |
 | `delivered_at` | ISO 8601 \| null | Delivery moment, if known |
 | `planned_from` | ISO 8601 \| null | Expected delivery window start (the precise hour on delivery day, otherwise midnight on the planned date) |
-| `planned_to` | ISO 8601 \| null | Expected delivery window end |
-| `pickup` | bool | Destined for a pickup point rather than a home address |
-| `pickup_point` | string \| null | ParcelShop name when `pickup` is true (always `null` for now — DPD does not expose the field) |
+| `planned_to` | ISO 8601 \| null | Expected delivery window end; a single delivery time runs to the end of that day. Both are empty once the parcel is at a pickup point, returning or delivered |
+| `pickup` | bool | Destined for a pickup point rather than a home address; stays true after collection |
+| `pickup_point` | string \| null | ParcelShop name when `pickup` is true, where DPD gives one (NL and the other business units; Austria from a shop scan; the UK as its location code). `null` for Germany and Poland for now |
 | `url` | string \| null | Deep link to the parcel's tracking page |
 | `weight` | float \| null | Parcel weight in kilograms |
 | `dimensions` | dict \| null | Parcel dimensions in centimeters: `{length, width, height, text}` where `text` is a pre-formatted `"L x W x H cm"` string |

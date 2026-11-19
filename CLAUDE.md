@@ -217,6 +217,29 @@ and the tracking short code never enter `raw`. The barcode is the 14 digits
 before the `*` of `parcelCode`, not the spaced `parcelNumber`, so it matches the
 shared `DPD-UK` route and the aggregator's deduplication.
 
+**Parcel contract: window, pickup, delivered** — `countries/contract.py` holds
+the helpers every normaliser shares (`planned_window`, `planned_for_status`,
+`is_pickup`); never copy them into a country.
+- `planned_*` come from `planned_window` and are emptied at `at_pickup_point`,
+  `returning` and `delivered`; Poland's naive dates read in `Europe/Warsaw`.
+- `pickup` is the carrier's own field where there is one, else a status or
+  history entry that reached `at_pickup_point`, so it stays true once
+  collected. That fallback is a guess for PL, AT and DE until a real
+  pickup-point parcel is seen. Austria only counts an incoming parcel's shop
+  entries (a sender's drop-off can carry one too); Germany also reads the
+  pickup wording on any reached milestone text.
+- `delivered` is `status is DELIVERED` everywhere; no DPD transport has a
+  confirmed back-at-sender signal (Poland's `RETURNED_TO_SENDER` is unproven),
+  so a `returning` parcel stays `delivered: false`.
+- **Germany diverges on purpose:** the contract says a return that reached the
+  sender is finished; here it reads `returning` with `delivered: false`,
+  because a real return on a real account filled the Delivered milestone and
+  said "Geliefert" while it was still a return.
+- Germany's `history` is `[]` when the option is on and nothing is dated.
+- The active/delivered split on the general path follows the mapped status.
+- `next_delivery` skips a parcel whose window has ended; the calendar shows a
+  00:00:00–23:59:59 window as an all-day event.
+
 **`CAPABILITIES_BY_VARIANT` (not a flat `CAPABILITIES`)** — five keys,
 `Germany` / `Poland` / `Austria` / `United Kingdom (app)` / `Other`, because the transports populate
 different fields. It feeds the docs-site comparison table, so a wrong entry is a wrong
