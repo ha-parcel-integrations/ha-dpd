@@ -1,9 +1,9 @@
 """Sample DPD API payloads shared by the test modules.
 
-The shape of a ``my-parcels`` response, trimmed to the fields the integration
-reads. Keep them here rather than inline in each test module: when the payload
-shape turns out to differ from what we assumed, there is then exactly one place
-to fix.
+The shape of a ``my-parcels`` response and of a per-parcel detail answer,
+trimmed to the fields the integration reads. Keep them here rather than inline
+in each test module: when the payload shape turns out to differ from what we
+assumed, there is then exactly one place to fix.
 
 Every helper returns a **fresh** dict, so a test may mutate what it gets back
 without leaking into the next one.
@@ -59,6 +59,45 @@ def envelope(
     return {
         "incomingShipments": list(incoming),
         "sendingShipments": list(sending),
+    }
+
+
+def detail_sample(
+    parcel_number: str,
+    description: str = "IN_TRANSIT",
+    *,
+    parcels: Iterable[str] = (),
+    weight: float | None = None,
+    event_dt: str | None = None,
+) -> dict:
+    """One per-parcel detail answer, trimmed to what the integration reads.
+
+    ``parcels`` is the shipment's parcel list as DPD gives it: every parcel
+    number, this one included, the first being the one the shipment is
+    known by (``shipmentId``). The address blocks and coordinates are there
+    so a test can check they never reach a list-shaped record.
+    """
+    numbers = list(parcels) or [parcel_number]
+    status: dict = {
+        "description": description,
+        "eventDateAndTimeZoneId": "Europe/Amsterdam",
+    }
+    if event_dt is not None:
+        status["eventDateAndTime"] = event_dt
+    return {
+        "parcelNumber": parcel_number,
+        "shipmentId": numbers[0],
+        "status": status,
+        "sender": {"name": "Example Shop B.V.", "address": {"city": "Example City"}},
+        "receiver": {"name": "Jane Doe", "address": {"zipCode": "1234AB"}},
+        "geoPosition": {"lat": 52.0, "lon": 4.3},
+        "weight": weight,
+        "dimensions": None,
+        "parcels": numbers,
+        "parcelEvents": [],
+        "shipmentBUCode": "010",
+        "shipmentType": "SHIPMENT",
+        "refused": False,
     }
 
 
