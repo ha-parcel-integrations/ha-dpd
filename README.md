@@ -224,7 +224,7 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `barcode` | string | Parcel tracking number |
 | `sender` | string \| null | Sender name (e.g. webshop) |
 | `receiver` | string \| null | Recipient name. May briefly be `null` the first time a new barcode appears. |
-| `contents` | string \| null | What is in the parcel, in your own words; set it with `dpd.update_contents`. DPD never fills it. |
+| `contents` | string \| null | What is in the parcel, in your own words; set it with `dpd.update_contents`. DPD never fills it; it titles the calendar event and shows on the next-delivery sensor. |
 | `status` | `ParcelStatus` | Canonical status — see the [status reference](#parcel-status-reference) |
 | `raw_status` | string \| null | Original DPD status description |
 | `delivered` | bool | Whether the parcel has been delivered |
