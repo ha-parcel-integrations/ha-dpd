@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Konto",
           "description": "DPD konto, kuhu see lisada. Vajalik ainult siis, kui seadistatud on mitu kontot."
+        },
+        "contents": {
+          "name": "Sisu",
+          "description": "Mis pakis on, oma sõnadega. Jälgitava pakiga uuesti kutsumine asendab sisu; tühi tekst kustutab selle."
         }
       }
+    },
+    "update_contents": {
+      "name": "Uuenda paki sisu",
+      "description": "Määra oma sõnadega, mis pakis on, jälgimiskoodi järgi. Tühi tekst kustutab sisu.",
+      "fields": {
+        "tracking_code": {
+          "name": "Paki number",
+          "description": "14-kohaline DPD paki number. Tühikuid eiratakse."
+        },
+        "contents": {
+          "name": "Sisu",
+          "description": "Mis pakis on, oma sõnadega. Tühi tekst kustutab selle."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto, mille jaoks väärtus salvestatakse. Vajalik, kui ükski konto ei tunne koodi veel."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Ükski konto ei tunne seda koodi. Vali konto, mille jaoks see salvestada."
     }
   }
 }

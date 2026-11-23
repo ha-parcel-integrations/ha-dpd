@@ -58,6 +58,7 @@ TO_REDACT = {
     # Diagnostics must still be safe to attach to an issue.
     "sender",
     "receiver",
+    "contents",
     "address",
     "phone",
     "coordinates",

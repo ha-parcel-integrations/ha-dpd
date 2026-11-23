@@ -32,6 +32,7 @@ from .const import (
     STAGGER_MINUTES,
     ParcelStatus,
 )
+from .contents import ContentsStore, normalize_code
 from .countries.at import normalize_parcel_at
 from .countries.at.session import DpdAtSession
 from .countries.de import async_get_all_parcels_de
@@ -167,6 +168,10 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
         self._pl_session = pl_session
         self._at_session = at_session
         self._uk_session = uk_session
+        self.contents_store = ContentsStore(hass, entry.entry_id)
+        # Every code the account lists, delivered ones past the retention filter
+        # included: update_contents asks which account a code belongs to.
+        self.known_codes: frozenset[str] = frozenset()
         # barcode -> last seen ParcelStatus. ``None`` on the first refresh so
         # we can suppress events for parcels that already existed when the
         # integration started (we do not know their previous state).
@@ -215,6 +220,12 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
     def current_tier_minutes(self) -> int | None:
         """Tier minutes computed on the last refresh (diagnostics only)."""
         return self._current_tier_minutes
+
+    def _apply_contents(self, parcel: dict) -> None:
+        """Put the user's own contents text over the carrier's, when there is one."""
+        user_value = self.contents_store.get(parcel.get("barcode") or "")
+        if user_value is not None:
+            parcel["contents"] = user_value
 
     def knows_parcel(self, barcode: str) -> bool:
         """Whether the last poll saw this parcel on the account.
@@ -277,6 +288,14 @@ class DpdCoordinator(DataUpdateCoordinator[dict[str, list[dict]]]):
             incoming_all, outgoing_all = await self._async_fetch_uk()
         else:
             incoming_all, outgoing_all = await self._async_fetch_general()
+
+        for parcel in incoming_all + outgoing_all:
+            self._apply_contents(parcel)
+        self.known_codes = frozenset(
+            normalize_code(parcel["barcode"])
+            for parcel in incoming_all + outgoing_all
+            if parcel.get("barcode")
+        )
 
         # Events and remembered state cover every parcel; the retention option
         # only limits what the delivered sensors show.

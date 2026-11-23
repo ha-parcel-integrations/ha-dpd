@@ -36,6 +36,7 @@ from .const import (
     UK_SOURCE_APP,
     DpdCaptchaError,
 )
+from .contents import ContentsStore
 from .coordinator import DpdCoordinator
 from .countries.at.session import DpdAtSession
 from .countries.de.page import DpdPageError
@@ -185,6 +186,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
         uk_session=uk_session,
     )
 
+    await coordinator.contents_store.async_load()
+
     # Fetch initial data here, before forwarding to platforms. Raising
     # ConfigEntryNotReady from a forwarded platform is too late for HA to catch
     # cleanly (it logs a warning and half-sets-up the entry); doing the first
@@ -213,3 +216,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> bool:
     """Unload a DPD config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: DpdConfigEntry) -> None:
+    """Delete the contents the user set for the removed entry."""
+    await ContentsStore(hass, entry.entry_id).async_remove()

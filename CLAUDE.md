@@ -81,6 +81,12 @@ on the account** before it reports success: DPD answering 200 is not proof.
 General transport only; every other transport has `runtime_data.client is None`
 and is refused. Confirmed on one live DPD-NL parcel.
 
+**`contents`** — the carrier fills it nowhere (every normaliser emits `None`); the
+user sets it with `dpd.update_contents` (every account) or the `contents` field of
+`dpd.track_parcel`, and `DpdCoordinator._async_poll` overlays the stored value past
+the transport dispatch. The action goes to every account whose `known_codes` holds
+the code, else needs `config_entry_id`.
+
 **Business unit** — `DPD-DE` and `DPD-AT` are deliberately **not** in
 `BUSINESS_UNITS`; each runs its own stack, routed via `_DE_BU_VALUE` /
 `_AT_BU_VALUE` in `config_flow.py`.

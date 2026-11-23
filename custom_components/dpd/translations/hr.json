@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Račun",
           "description": "DPD račun kojem se dodaje. Potrebno samo ako je postavljeno više računa."
+        },
+        "contents": {
+          "name": "Sadržaj",
+          "description": "Što je u paketu, vlastitim riječima. Ponovni poziv za praćeni paket zamjenjuje sadržaj; prazan tekst ga briše."
         }
       }
+    },
+    "update_contents": {
+      "name": "Ažuriraj sadržaj paketa",
+      "description": "Vlastitim riječima postavite što je u paketu s ovim kodom za praćenje. Prazan tekst briše sadržaj.",
+      "fields": {
+        "tracking_code": {
+          "name": "Broj paketa",
+          "description": "DPD broj paketa od 14 znamenki. Razmaci se zanemaruju."
+        },
+        "contents": {
+          "name": "Sadržaj",
+          "description": "Što je u paketu, vlastitim riječima. Prazan tekst ga briše."
+        },
+        "config_entry_id": {
+          "name": "Račun",
+          "description": "Račun za koji se vrijednost sprema. Potreban kada nijedan račun još ne poznaje kod."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Nijedan račun ne poznaje ovaj kod. Odaberite račun za koji ga želite spremiti."
     }
   }
 }

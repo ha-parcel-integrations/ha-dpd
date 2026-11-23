@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Konto",
           "description": "Das DPD-Konto, dem es hinzugefügt wird. Nur nötig, wenn mehr als eines eingerichtet ist."
+        },
+        "contents": {
+          "name": "Inhalt",
+          "description": "Was im Paket ist, in deinen eigenen Worten. Ein erneuter Aufruf für ein verfolgtes Paket ersetzt den Inhalt; ein leerer Text löscht ihn."
         }
       }
+    },
+    "update_contents": {
+      "name": "Paketinhalt aktualisieren",
+      "description": "Lege für eine Sendungsnummer fest, was im Paket ist, in deinen eigenen Worten. Ein leerer Text löscht den Inhalt.",
+      "fields": {
+        "tracking_code": {
+          "name": "Paketnummer",
+          "description": "Die 14-stellige DPD-Paketnummer. Leerzeichen werden ignoriert."
+        },
+        "contents": {
+          "name": "Inhalt",
+          "description": "Was im Paket ist, in deinen eigenen Worten. Ein leerer Text löscht ihn."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Das Konto, für das dies gespeichert wird. Nötig, wenn noch kein Konto den Code kennt."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Kein Konto kennt diesen Code. Wähle das Konto, für das er gespeichert werden soll."
     }
   }
 }

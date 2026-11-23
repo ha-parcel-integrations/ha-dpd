@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Account",
           "description": "L'account DPD a cui aggiungerlo. Necessario solo se ne è configurato più di uno."
+        },
+        "contents": {
+          "name": "Contenuto",
+          "description": "Che cosa c'è nel pacco, con parole tue. Richiamando di nuovo l'azione per un pacco monitorato, il contenuto viene sostituito; un testo vuoto lo cancella."
         }
       }
+    },
+    "update_contents": {
+      "name": "Aggiorna il contenuto del pacco",
+      "description": "Imposta che cosa c'è in un pacco, con parole tue, per un codice di tracciamento. Un testo vuoto cancella il contenuto.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numero del pacco",
+          "description": "Il numero del pacco DPD di 14 cifre. Gli spazi vengono ignorati."
+        },
+        "contents": {
+          "name": "Contenuto",
+          "description": "Che cosa c'è nel pacco, con parole tue. Un testo vuoto lo cancella."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "L'account per cui salvare il valore. Necessario quando nessun account conosce ancora il codice."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Nessun account conosce questo codice. Scegli l'account per cui salvarlo."
     }
   }
 }

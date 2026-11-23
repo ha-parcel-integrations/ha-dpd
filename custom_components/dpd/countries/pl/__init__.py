@@ -143,6 +143,7 @@ def normalize_parcel_pl(
         "barcode": parcel.get("waybill"),
         "sender": ((parcel.get("sender") or {}).get("name")),
         "receiver": None,
+        "contents": None,
         "status": status,
         "raw_status": raw_status,
         "delivered": delivered,

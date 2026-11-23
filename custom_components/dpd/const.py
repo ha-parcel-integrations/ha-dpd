@@ -70,7 +70,15 @@ PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.CALENDAR, Platform.SENSOR
 # subset of this — it exists so a typo in CAPABILITIES fails a test instead of
 # silently dropping this carrier off a table on the docs site.
 KNOWN_CAPABILITIES = frozenset(
-    {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
+    {
+        "weight",
+        "dimensions",
+        "delivery_window",
+        "pickup_point",
+        "url",
+        "history",
+        "contents",
+    }
 )
 
 # Which optional contract fields each of this carrier's backends actually
@@ -161,6 +169,7 @@ DPD_BASIC_TOKEN = "bXlEUEQgTW9iaWxlIEFwcDpaMVdzeTQ4RGpseWcweDdVWjhvWTlYdmZIT2xIb
 USER_AGENT = "okhttp/4.12.0"
 
 CONF_BU = "bu"
+CONF_CONTENTS = "contents"
 
 BUSINESS_UNITS = [
     {"value": "DPD-NL", "label": "Netherlands"},

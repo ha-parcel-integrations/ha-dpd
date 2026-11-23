@@ -387,6 +387,7 @@ def normalize_parcel_de(
         "barcode": barcode,
         "sender": None,
         "receiver": None,
+        "contents": None,
         "status": status,
         "raw_status": parcel["status_sentence"],
         "delivered": delivered,

@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Paskyra",
           "description": "DPD paskyra, prie kurios pridėti. Reikia tik tada, kai nustatyta daugiau nei viena."
+        },
+        "contents": {
+          "name": "Turinys",
+          "description": "Kas yra siuntoje, savais žodžiais. Pakartotinai iškvietus sekamai siuntai, turinys pakeičiamas; tuščias tekstas jį ištrina."
         }
       }
+    },
+    "update_contents": {
+      "name": "Atnaujinti siuntos turinį",
+      "description": "Savais žodžiais nurodykite, kas yra siuntoje su šiuo sekimo kodu. Tuščias tekstas turinį ištrina.",
+      "fields": {
+        "tracking_code": {
+          "name": "Siuntos numeris",
+          "description": "14 skaitmenų DPD siuntos numeris. Tarpai ignoruojami."
+        },
+        "contents": {
+          "name": "Turinys",
+          "description": "Kas yra siuntoje, savais žodžiais. Tuščias tekstas jį ištrina."
+        },
+        "config_entry_id": {
+          "name": "Paskyra",
+          "description": "Paskyra, kuriai reikšmė išsaugoma. Reikalinga, kai nė viena paskyra dar nežino kodo."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Nė viena paskyra nežino šio kodo. Pasirinkite paskyrą, kuriai jį išsaugoti."
     }
   }
 }

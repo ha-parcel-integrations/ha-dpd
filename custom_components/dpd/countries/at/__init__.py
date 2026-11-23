@@ -456,6 +456,7 @@ def normalize_parcel_at(
         # sender name at all.
         "sender": None,
         "receiver": parcel.get("consignee_name1"),
+        "contents": None,
         "status": status,
         "raw_status": state_info if isinstance(state_info, str) else None,
         "delivered": delivered,

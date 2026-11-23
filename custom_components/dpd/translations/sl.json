@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Račun",
           "description": "Račun DPD, v katerega ga dodaš. Potrebno le, če je nastavljenih več računov."
+        },
+        "contents": {
+          "name": "Vsebina",
+          "description": "Kaj je v paketu, z lastnimi besedami. Ponoven klic za spremljan paket vsebino zamenja; prazno besedilo jo izbriše."
         }
       }
+    },
+    "update_contents": {
+      "name": "Posodobi vsebino paketa",
+      "description": "Z lastnimi besedami nastavite, kaj je v paketu s to sledilno kodo. Prazno besedilo vsebino izbriše.",
+      "fields": {
+        "tracking_code": {
+          "name": "Številka paketa",
+          "description": "14-mestna številka paketa DPD. Presledki se prezrejo."
+        },
+        "contents": {
+          "name": "Vsebina",
+          "description": "Kaj je v paketu, z lastnimi besedami. Prazno besedilo jo izbriše."
+        },
+        "config_entry_id": {
+          "name": "Račun",
+          "description": "Račun, za katerega se vrednost shrani. Potreben, ko kode še ne pozna noben račun."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Nobeden račun ne pozna te kode. Izberite račun, za katerega jo shranite."
     }
   }
 }

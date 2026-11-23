@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Conta",
           "description": "A conta DPD à qual adicionar. Só é necessária se houver mais de uma configurada."
+        },
+        "contents": {
+          "name": "Conteúdo",
+          "description": "O que está na encomenda, nas suas próprias palavras. Chamar novamente para uma encomenda acompanhada substitui o conteúdo; um texto vazio apaga-o."
         }
       }
+    },
+    "update_contents": {
+      "name": "Atualizar o conteúdo da encomenda",
+      "description": "Defina o que está numa encomenda, nas suas próprias palavras, para um código de seguimento. Um texto vazio apaga o conteúdo.",
+      "fields": {
+        "tracking_code": {
+          "name": "Número da encomenda",
+          "description": "O número de encomenda DPD com 14 dígitos. Os espaços são ignorados."
+        },
+        "contents": {
+          "name": "Conteúdo",
+          "description": "O que está na encomenda, nas suas próprias palavras. Um texto vazio apaga-o."
+        },
+        "config_entry_id": {
+          "name": "Conta",
+          "description": "A conta para a qual guardar isto. Necessária quando nenhuma conta conhece ainda o código."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Nenhuma conta conhece este código. Escolha a conta para a qual o guardar."
     }
   }
 }

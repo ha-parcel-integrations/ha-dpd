@@ -765,6 +765,7 @@ def normalize_parcel(
         "barcode": parcel.get("parcelNumber"),
         "sender": parcel.get("senderName"),
         "receiver": None if is_shop else receiver,
+        "contents": None,
         "status": status,
         "raw_status": description,
         "delivered": delivered,

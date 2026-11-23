@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Konts",
           "description": "DPD konts, kuram to pievienot. Nepieciešams tikai tad, ja iestatīts vairāk nekā viens."
+        },
+        "contents": {
+          "name": "Saturs",
+          "description": "Kas ir sūtījumā, saviem vārdiem. Atkārtota izsaukšana sekotam sūtījumam saturu aizstāj; tukšs teksts to izdzēš."
         }
       }
+    },
+    "update_contents": {
+      "name": "Atjaunināt sūtījuma saturu",
+      "description": "Saviem vārdiem norādiet, kas ir sūtījumā ar šo izsekošanas kodu. Tukšs teksts saturu izdzēš.",
+      "fields": {
+        "tracking_code": {
+          "name": "Sūtījuma numurs",
+          "description": "14 ciparu DPD sūtījuma numurs. Atstarpes tiek ignorētas."
+        },
+        "contents": {
+          "name": "Saturs",
+          "description": "Kas ir sūtījumā, saviem vārdiem. Tukšs teksts to izdzēš."
+        },
+        "config_entry_id": {
+          "name": "Konts",
+          "description": "Konts, kuram vērtību saglabāt. Nepieciešams, ja neviens konts vēl nepazīst kodu."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Neviens konts nepazīst šo kodu. Izvēlieties kontu, kuram to saglabāt."
     }
   }
 }

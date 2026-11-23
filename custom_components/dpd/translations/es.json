@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Cuenta",
           "description": "La cuenta DPD a la que añadirlo. Solo es necesaria si hay más de una configurada."
+        },
+        "contents": {
+          "name": "Contenido",
+          "description": "Lo que hay en el paquete, con tus propias palabras. Si vuelves a llamar a esta acción para un paquete en seguimiento, lo sustituye; un texto vacío lo borra."
         }
       }
+    },
+    "update_contents": {
+      "name": "Actualizar el contenido del paquete",
+      "description": "Indica lo que hay en un paquete, con tus propias palabras, para un código de seguimiento. Un texto vacío borra el contenido.",
+      "fields": {
+        "tracking_code": {
+          "name": "Número de paquete",
+          "description": "El número de paquete DPD de 14 dígitos. Se ignoran los espacios."
+        },
+        "contents": {
+          "name": "Contenido",
+          "description": "Lo que hay en el paquete, con tus propias palabras. Un texto vacío lo borra."
+        },
+        "config_entry_id": {
+          "name": "Cuenta",
+          "description": "La cuenta para la que guardar esto. Necesaria cuando ninguna cuenta conoce aún el código."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Ninguna cuenta conoce este código. Elige la cuenta para la que guardarlo."
     }
   }
 }

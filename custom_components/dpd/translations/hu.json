@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Fiók",
           "description": "A DPD-fiók, amelyhez hozzáadja. Csak akkor kell, ha több is be van állítva."
+        },
+        "contents": {
+          "name": "Tartalom",
+          "description": "Mi van a csomagban, saját szavaiddal. Egy követett csomagnál az újbóli meghívás lecseréli a tartalmat; az üres szöveg törli."
         }
       }
+    },
+    "update_contents": {
+      "name": "Csomag tartalmának frissítése",
+      "description": "Add meg saját szavaiddal, mi van a csomagban egy nyomkövetési kódhoz. Az üres szöveg törli a tartalmat.",
+      "fields": {
+        "tracking_code": {
+          "name": "Csomagszám",
+          "description": "A 14 jegyű DPD-csomagszám. A szóközöket figyelmen kívül hagyja."
+        },
+        "contents": {
+          "name": "Tartalom",
+          "description": "Mi van a csomagban, saját szavaiddal. Az üres szöveg törli."
+        },
+        "config_entry_id": {
+          "name": "Fiók",
+          "description": "A fiók, amelyhez az érték mentésre kerül. Akkor kell, ha egyik fiók sem ismeri még a kódot."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Egyik fiók sem ismeri ezt a kódot. Válaszd ki a fiókot, amelyhez menteni szeretnéd."
     }
   }
 }

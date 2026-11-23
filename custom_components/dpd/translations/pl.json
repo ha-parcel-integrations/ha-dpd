@@ -210,8 +210,35 @@
         "config_entry_id": {
           "name": "Konto",
           "description": "Konto DPD, do którego ją dodać. Potrzebne tylko, gdy skonfigurowano więcej niż jedno."
+        },
+        "contents": {
+          "name": "Zawartość",
+          "description": "Co jest w paczce, własnymi słowami. Ponowne wywołanie dla śledzonej paczki zastępuje zawartość; pusty tekst ją usuwa."
         }
       }
+    },
+    "update_contents": {
+      "name": "Zaktualizuj zawartość paczki",
+      "description": "Ustaw własnymi słowami, co jest w paczce o danym numerze śledzenia. Pusty tekst usuwa zawartość.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numer paczki",
+          "description": "14-cyfrowy numer paczki DPD. Spacje są pomijane."
+        },
+        "contents": {
+          "name": "Zawartość",
+          "description": "Co jest w paczce, własnymi słowami. Pusty tekst ją usuwa."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto, dla którego zapisać wartość. Wymagane, gdy żadne konto jeszcze nie zna kodu."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_contents_entry_required": {
+      "message": "Żadne konto nie zna tego kodu. Wybierz konto, dla którego go zapisać."
     }
   }
 }

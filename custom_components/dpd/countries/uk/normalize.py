@@ -329,6 +329,7 @@ def normalize_parcel_uk(
         "barcode": _barcode(parcel),
         "sender": _sender(parcel),
         "receiver": None,
+        "contents": None,
         "status": status,
         "raw_status": text if isinstance(text, str) and text else None,
         "delivered": delivered,

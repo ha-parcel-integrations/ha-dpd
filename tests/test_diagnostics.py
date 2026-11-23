@@ -278,3 +278,25 @@ def test_no_german_account_data_survives_the_reader_or_the_redaction():
     )
     for secret in ("user@example.de", "secret", "old-device-id", "Erika"):
         assert secret not in redacted
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_redacts_the_contents():
+    entry = _entry_with_runtime_data(
+        incoming_active=[{"barcode": "X", "contents": "Running shoes", "raw": {}}],
+        outgoing_delivered=[{"barcode": "Y", "contents": "Winter socks", "raw": {}}],
+    )
+    result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    assert result["incoming_active"][0]["contents"] == REDACTED
+    assert result["outgoing_delivered"][0]["contents"] == REDACTED
+    assert "contents" in TO_REDACT
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_redacts_the_contents_of_a_uk_parcel():
+    entry = _entry_with_runtime_data(
+        incoming_active=[{"barcode": "X", "contents": "Running shoes", "raw": {}}]
+    )
+    entry.data["country"] = "UK"
+    result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    assert result["incoming_active"][0]["contents"] == REDACTED

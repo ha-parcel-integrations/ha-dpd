@@ -224,6 +224,7 @@ Every parcel exposed on a sensor attribute uses a carrier-agnostic shape:
 | `barcode` | string | Parcel tracking number |
 | `sender` | string \| null | Sender name (e.g. webshop) |
 | `receiver` | string \| null | Recipient name. May briefly be `null` the first time a new barcode appears. |
+| `contents` | string \| null | What is in the parcel, in your own words; set it with `dpd.update_contents`. DPD never fills it. |
 | `status` | `ParcelStatus` | Canonical status — see the [status reference](#parcel-status-reference) |
 | `raw_status` | string \| null | Original DPD status description |
 | `delivered` | bool | Whether the parcel has been delivered |
@@ -308,6 +309,7 @@ number out of a shipping e-mail.
 |---|---|---|
 | `tracking_code` | yes | The DPD parcel number. Spaces are ignored. |
 | `config_entry_id` | no | The DPD account to add it to. Only needed when more than one is set up. |
+| `contents` | no | What is in the parcel, in your own words. |
 
 ```yaml
 action: dpd.track_parcel
@@ -325,6 +327,18 @@ Netherlands parcel; the other countries on that backend use the same call but
 have not been seen doing it yet. DPD Germany, Austria, Poland and the UK
 MyDPD app have no way to add a parcel by number that this integration knows
 of, so the action refuses them.
+
+### `dpd.update_contents`
+
+Sets what is in a parcel, in your own words, for any account. An empty or missing
+`contents` clears it. With several accounts it goes to every account that lists the
+code, or to the one named by `config_entry_id` (needed when none lists it yet).
+
+| Field | Required | Description |
+|---|---|---|
+| `tracking_code` | yes | The parcel's tracking code. |
+| `contents` | no | What is in the parcel; empty clears it. |
+| `config_entry_id` | no | The DPD account to store it for. |
 
 ## Examples
 

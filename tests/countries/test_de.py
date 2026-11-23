@@ -402,6 +402,7 @@ def test_the_contract_fields():
         "barcode",
         "sender",
         "receiver",
+        "contents",
         "status",
         "raw_status",
         "delivered",
