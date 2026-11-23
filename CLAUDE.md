@@ -85,7 +85,8 @@ and is refused. Confirmed on one live DPD-NL parcel.
 user sets it with `dpd.update_contents` (every account) or the `contents` field of
 `dpd.track_parcel`, and `DpdCoordinator._async_poll` overlays the stored value past
 the transport dispatch. The action goes to every account whose `known_codes` holds
-the code, else needs `config_entry_id`.
+the code, else needs `config_entry_id`. The calendar event title is `contents`,
+else `sender`, else the barcode fallback.
 
 **Business unit** — `DPD-DE` and `DPD-AT` are deliberately **not** in
 `BUSINESS_UNITS`; each runs its own stack, routed via `_DE_BU_VALUE` /
