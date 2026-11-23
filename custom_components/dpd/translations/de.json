@@ -222,8 +222,8 @@
       "description": "Lege für eine Sendungsnummer fest, was im Paket ist, in deinen eigenen Worten. Ein leerer Text löscht den Inhalt.",
       "fields": {
         "tracking_code": {
-          "name": "Paketnummer",
-          "description": "Die 14-stellige DPD-Paketnummer. Leerzeichen werden ignoriert."
+          "name": "Sendungsnummer",
+          "description": "Die Sendungsnummer des Pakets."
         },
         "contents": {
           "name": "Inhalt",

@@ -222,8 +222,8 @@
       "description": "Saviem vārdiem norādiet, kas ir sūtījumā ar šo izsekošanas kodu. Tukšs teksts saturu izdzēš.",
       "fields": {
         "tracking_code": {
-          "name": "Sūtījuma numurs",
-          "description": "14 ciparu DPD sūtījuma numurs. Atstarpes tiek ignorētas."
+          "name": "Izsekošanas kods",
+          "description": "Sūtījuma izsekošanas kods."
         },
         "contents": {
           "name": "Saturs",

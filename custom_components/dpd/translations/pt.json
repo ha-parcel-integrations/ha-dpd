@@ -222,8 +222,8 @@
       "description": "Defina o que está numa encomenda, nas suas próprias palavras, para um código de seguimento. Um texto vazio apaga o conteúdo.",
       "fields": {
         "tracking_code": {
-          "name": "Número da encomenda",
-          "description": "O número de encomenda DPD com 14 dígitos. Os espaços são ignorados."
+          "name": "Código de seguimento",
+          "description": "O código de seguimento da encomenda."
         },
         "contents": {
           "name": "Conteúdo",

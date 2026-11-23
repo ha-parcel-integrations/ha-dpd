@@ -222,8 +222,8 @@
       "description": "Z lastnimi besedami nastavite, kaj je v paketu s to sledilno kodo. Prazno besedilo vsebino izbriše.",
       "fields": {
         "tracking_code": {
-          "name": "Številka paketa",
-          "description": "14-mestna številka paketa DPD. Presledki se prezrejo."
+          "name": "Sledilna koda",
+          "description": "Sledilna koda paketa."
         },
         "contents": {
           "name": "Vsebina",

@@ -222,8 +222,8 @@
       "description": "Définissez ce que contient un colis, avec vos propres mots, pour un numéro de suivi. Un texte vide efface le contenu.",
       "fields": {
         "tracking_code": {
-          "name": "Numéro de colis",
-          "description": "Le numéro de colis DPD à 14 chiffres. Les espaces sont ignorés."
+          "name": "Numéro de suivi",
+          "description": "Le numéro de suivi du colis."
         },
         "contents": {
           "name": "Contenu",

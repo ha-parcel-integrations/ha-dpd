@@ -222,8 +222,8 @@
       "description": "Nastavte vlastními slovy, co je v balíku s daným sledovacím číslem. Prázdný text obsah smaže.",
       "fields": {
         "tracking_code": {
-          "name": "Číslo balíku",
-          "description": "Čtrnáctimístné číslo balíku DPD. Mezery se ignorují."
+          "name": "Sledovací číslo",
+          "description": "Sledovací číslo balíku."
         },
         "contents": {
           "name": "Obsah",

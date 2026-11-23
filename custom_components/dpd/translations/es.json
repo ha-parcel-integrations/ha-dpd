@@ -222,8 +222,8 @@
       "description": "Indica lo que hay en un paquete, con tus propias palabras, para un código de seguimiento. Un texto vacío borra el contenido.",
       "fields": {
         "tracking_code": {
-          "name": "Número de paquete",
-          "description": "El número de paquete DPD de 14 dígitos. Se ignoran los espacios."
+          "name": "Código de seguimiento",
+          "description": "El código de seguimiento del paquete."
         },
         "contents": {
           "name": "Contenido",

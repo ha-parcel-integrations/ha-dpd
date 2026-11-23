@@ -222,8 +222,8 @@
       "description": "Vlastitim riječima postavite što je u paketu s ovim kodom za praćenje. Prazan tekst briše sadržaj.",
       "fields": {
         "tracking_code": {
-          "name": "Broj paketa",
-          "description": "DPD broj paketa od 14 znamenki. Razmaci se zanemaruju."
+          "name": "Kod za praćenje",
+          "description": "Kod za praćenje paketa."
         },
         "contents": {
           "name": "Sadržaj",

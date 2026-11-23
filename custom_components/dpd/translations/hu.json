@@ -222,8 +222,8 @@
       "description": "Add meg saját szavaiddal, mi van a csomagban egy nyomkövetési kódhoz. Az üres szöveg törli a tartalmat.",
       "fields": {
         "tracking_code": {
-          "name": "Csomagszám",
-          "description": "A 14 jegyű DPD-csomagszám. A szóközöket figyelmen kívül hagyja."
+          "name": "Nyomkövetési kód",
+          "description": "A csomag nyomkövetési kódja."
         },
         "contents": {
           "name": "Tartalom",

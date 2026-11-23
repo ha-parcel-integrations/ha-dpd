@@ -222,8 +222,8 @@
       "description": "Imposta che cosa c'è in un pacco, con parole tue, per un codice di tracciamento. Un testo vuoto cancella il contenuto.",
       "fields": {
         "tracking_code": {
-          "name": "Numero del pacco",
-          "description": "Il numero del pacco DPD di 14 cifre. Gli spazi vengono ignorati."
+          "name": "Codice di tracciamento",
+          "description": "Il codice di tracciamento del pacco."
         },
         "contents": {
           "name": "Contenuto",

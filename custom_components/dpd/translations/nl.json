@@ -222,8 +222,8 @@
       "description": "Stel in wat er in een pakket zit, in je eigen woorden, voor een trackingcode. Een lege tekst wist de inhoud.",
       "fields": {
         "tracking_code": {
-          "name": "Pakketnummer",
-          "description": "Het DPD-pakketnummer van 14 cijfers. Spaties worden genegeerd."
+          "name": "Trackingcode",
+          "description": "De trackingcode van het pakket."
         },
         "contents": {
           "name": "Inhoud",

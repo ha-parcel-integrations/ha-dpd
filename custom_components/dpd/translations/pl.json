@@ -222,8 +222,8 @@
       "description": "Ustaw własnymi słowami, co jest w paczce o danym numerze śledzenia. Pusty tekst usuwa zawartość.",
       "fields": {
         "tracking_code": {
-          "name": "Numer paczki",
-          "description": "14-cyfrowy numer paczki DPD. Spacje są pomijane."
+          "name": "Numer śledzenia",
+          "description": "Numer śledzenia paczki."
         },
         "contents": {
           "name": "Zawartość",

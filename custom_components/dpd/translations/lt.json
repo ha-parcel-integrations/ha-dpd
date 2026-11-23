@@ -222,8 +222,8 @@
       "description": "Savais žodžiais nurodykite, kas yra siuntoje su šiuo sekimo kodu. Tuščias tekstas turinį ištrina.",
       "fields": {
         "tracking_code": {
-          "name": "Siuntos numeris",
-          "description": "14 skaitmenų DPD siuntos numeris. Tarpai ignoruojami."
+          "name": "Sekimo kodas",
+          "description": "Siuntos sekimo kodas."
         },
         "contents": {
           "name": "Turinys",

@@ -222,8 +222,8 @@
       "description": "Set what is in a parcel, in your own words, for a tracking code. An empty text clears it.",
       "fields": {
         "tracking_code": {
-          "name": "Parcel number",
-          "description": "The 14-digit DPD parcel number. Spaces are ignored."
+          "name": "Tracking code",
+          "description": "The tracking code of the parcel."
         },
         "contents": {
           "name": "Contents",

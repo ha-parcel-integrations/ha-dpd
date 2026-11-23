@@ -1,7 +1,8 @@
 """Tests for the contents action, the track_parcel field and the store lifecycle."""
 
+from contextlib import ExitStack
 from datetime import timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -13,7 +14,15 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.dpd.const import CONF_BU, DEFAULT_BU, DOMAIN
+from custom_components.dpd.const import (
+    CONF_BU,
+    CONF_COUNTRY,
+    CONF_DEVICE_ID,
+    CONF_REFRESH_TOKEN,
+    DEFAULT_BU,
+    DOMAIN,
+    ParcelStatus,
+)
 from custom_components.dpd.coordinator import DpdCoordinator
 from custom_components.dpd.services import SERVICE_TRACK_PARCEL, SERVICE_UPDATE_CONTENTS
 
@@ -400,3 +409,113 @@ async def test_track_parcel_replaces_the_contents_of_a_parcel_on_the_account(
         assert refresh.await_count == 1
 
     assert _stored(entry, LISTED) == "Running shoes"
+
+
+COUNTRY_CODE = "01234567890999"
+
+
+def _country_entry(country: str) -> MockConfigEntry:
+    data = {CONF_EMAIL: "user@example.test", CONF_PASSWORD: "secret"}
+    if country == "UK":
+        data = {CONF_REFRESH_TOKEN: "token", CONF_DEVICE_ID: "device"}
+    return MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{country}:user@example.test",
+        data={**data, CONF_COUNTRY: country},
+        options={"delivered_filter_type": "days", "delivered_filter_amount": 7},
+    )
+
+
+def _patch_country(country: str):
+    """Patch the one country's session so its entry lists COUNTRY_CODE."""
+    session = MagicMock()
+    session.async_login = AsyncMock(return_value=None)
+    session.refresh_token = "token"
+    if country == "DE":
+        parcel = {
+            "carrier": "DPD",
+            "barcode": COUNTRY_CODE,
+            "status": ParcelStatus.OUT_FOR_DELIVERY,
+            "delivered": False,
+            "delivered_at": None,
+            "planned_from": None,
+            "planned_to": None,
+            "contents": None,
+            "raw": {},
+        }
+        return (
+            patch("custom_components.dpd.DpdDeSession", return_value=session),
+            patch(
+                f"{DpdCoordinator.__module__}.async_get_all_parcels_de",
+                # A fresh dict per poll, as the real normaliser returns.
+                new=AsyncMock(side_effect=lambda *a, **k: ([dict(parcel)], [])),
+            ),
+        )
+    if country == "AT":
+        session.async_get_parcels = AsyncMock(
+            return_value={
+                "inc": [
+                    {
+                        "parcelno": COUNTRY_CODE,
+                        "type": "inc",
+                        "verified": True,
+                        "lifecycle": {"state": 2, "state_info": "", "entries": []},
+                    }
+                ],
+                "send": [],
+                "ret": [],
+            }
+        )
+        return (patch("custom_components.dpd.DpdAtSession", return_value=session),)
+    if country == "PL":
+        session.async_get_parcels = AsyncMock(
+            return_value=[
+                {
+                    "waybill": COUNTRY_CODE,
+                    "sender": {"name": "Example Shop"},
+                    "main_status": {
+                        "status": "HANDED_OVER_FOR_DELIVERY",
+                        "date": "2026-09-09T08:00:00Z",
+                    },
+                    "statuses": [],
+                    "delivery": {"planned_delivery_date": None},
+                }
+            ]
+        )
+        session.async_get_parcel_detail = AsyncMock(return_value={})
+        return (patch("custom_components.dpd.DpdPlSession", return_value=session),)
+    session.async_get_parcels = AsyncMock(
+        return_value=(
+            [
+                {
+                    "parcelNumber": COUNTRY_CODE,
+                    "parcelCode": f"{COUNTRY_CODE}*001",
+                    "deliveredToConsumer": False,
+                    "undelivered": False,
+                    "collectedFromShop": False,
+                }
+            ],
+            [],
+        )
+    )
+    return (patch("custom_components.dpd.DpdUkSession", return_value=session),)
+
+
+@pytest.mark.parametrize("country", ["DE", "AT", "PL", "UK"])
+async def test_update_contents_works_on_every_country_source(hass, country):
+    entry = _country_entry(country)
+    with ExitStack() as stack:
+        for patcher in _patch_country(country):
+            stack.enter_context(patcher)
+        await _setup(hass, entry)
+
+        assert _contents(entry, COUNTRY_CODE) is None
+
+        await _update(hass, tracking_code=COUNTRY_CODE, contents=" Running  shoes ")
+        assert _contents(entry, COUNTRY_CODE) == "Running shoes"
+
+        await _update(hass, tracking_code=COUNTRY_CODE, contents="Winter socks")
+        assert _contents(entry, COUNTRY_CODE) == "Winter socks"
+
+        await _update(hass, tracking_code=COUNTRY_CODE, contents="")
+        assert _contents(entry, COUNTRY_CODE) is None
