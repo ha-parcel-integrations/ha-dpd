@@ -355,6 +355,16 @@ def test_next_delivery_attributes_describe_earliest_parcel():
     assert attrs["sender"] == "Sender A"
 
 
+def test_next_delivery_carries_the_contents():
+    parcel = _parcel("A", planned_from="2099-06-17T10:00:00+02:00")
+    parcel["contents"] = "Running shoes"
+    coordinator = _make_coordinator(
+        {"incoming_active": [parcel], "incoming_delivered": [], "outgoing_active": []}
+    )
+    sensor = DpdNextDeliverySensor(coordinator, _make_entry())
+    assert sensor.extra_state_attributes["contents"] == "Running shoes"
+
+
 def test_next_delivery_skips_parcels_without_planned_from():
     parcels = [
         _parcel("A", planned_from=None),
